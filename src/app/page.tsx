@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { 
   Building2, 
   Wifi, 
@@ -9,14 +9,25 @@ import {
   Users, 
   FileSpreadsheet, 
   TrendingUp, 
+  TrendingDown,
   CheckCircle2, 
   Clock, 
   AlertCircle, 
   PlusCircle, 
   ArrowUpRight,
+  ArrowDownRight,
   ShieldCheck,
   ChevronRight,
-  Filter
+  Filter,
+  Calendar,
+  Layers,
+  Search,
+  ExternalLink,
+  Check,
+  X,
+  CreditCard,
+  Download,
+  AlertTriangle
 } from "lucide-react";
 import { 
   COMPANY_NAME, 
@@ -24,18 +35,59 @@ import {
   INITIAL_COST_CENTERS, 
   INITIAL_REQUESTS, 
   INITIAL_SUBSCRIBERS, 
-  INITIAL_INVOICES 
+  INITIAL_INVOICES,
+  INITIAL_TRANSACTIONS,
+  HISTORICAL_FINANCIAL_DATA,
+  INITIAL_PENDING_APPROVALS,
+  DIVISION_BUDGET_YEARS,
+  PendingApprovalItem
 } from "@/lib/constants";
 import { formatRupiah, formatDateIndo } from "@/lib/utils";
-import { BusinessUnit, BudgetRequest, RequestType, UserRole } from "@/types";
+import { BusinessUnit, BudgetRequest, RequestType, UserRole, FinancialTransaction } from "@/types";
+
+const MONTH_NAMES = [
+  { num: 1, name: "Januari", short: "Jan" },
+  { num: 2, name: "Februari", short: "Feb" },
+  { num: 3, name: "Maret", short: "Mar" },
+  { num: 4, name: "April", short: "Apr" },
+  { num: 5, name: "Mei", short: "Mei" },
+  { num: 6, name: "Juni", short: "Jun" },
+  { num: 7, name: "Juli", short: "Jul" },
+  { num: 8, name: "Agustus", short: "Agu" },
+  { num: 9, name: "September", short: "Sep" },
+  { num: 10, name: "Oktober", short: "Okt" },
+  { num: 11, name: "November", short: "Nov" },
+  { num: 12, name: "Desember", short: "Des" },
+];
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<"overview" | "requests" | "lpj" | "starlite" | "reports">("overview");
   const [selectedUnit, setSelectedUnit] = useState<BusinessUnit | "ALL">("ALL");
   const [requests, setRequests] = useState<BudgetRequest[]>(INITIAL_REQUESTS);
-  
-  // New request modal state
+  const [pendingApprovals, setPendingApprovals] = useState<PendingApprovalItem[]>(INITIAL_PENDING_APPROVALS);
+  const [transactions, setTransactions] = useState<FinancialTransaction[]>(INITIAL_TRANSACTIONS);
+
+  // Period Filter State (Monthly vs Yearly)
+  const [filterPeriodType, setFilterPeriodType] = useState<"MONTHLY" | "YEARLY">("MONTHLY");
+  const [selectedYear, setSelectedYear] = useState<number>(2026);
+  const [selectedMonth, setSelectedMonth] = useState<number>(11); // November
+
+  // Approval Shortcut Filter
+  const [approvalFilter, setApprovalFilter] = useState<"ALL" | "BUDGET_REQUEST" | "LPJ_REALIZATION">("ALL");
+  const [approvalNotification, setApprovalNotification] = useState<string | null>(null);
+
+  // Transaction Feed Filter & Search
+  const [txTypeFilter, setTxTypeFilter] = useState<"ALL" | "INCOME" | "EXPENSE">("ALL");
+  const [txSearch, setTxSearch] = useState<string>("");
+
+  // Chart View Mode
+  const [chartMode, setChartMode] = useState<"FLOW" | "DIVISION">("FLOW");
+
+  // Modals state
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
+  
+  // New request form state
   const [newTitle, setNewTitle] = useState("");
   const [newUnit, setNewUnit] = useState<BusinessUnit>("STARLITE_FTTH");
   const [newType, setNewType] = useState<RequestType>("CASH_ADVANCE");
@@ -43,20 +95,101 @@ export default function DashboardPage() {
   const [newPurpose, setNewPurpose] = useState("");
   const [requesterName, setRequesterName] = useState("Tim Lapangan");
 
+  // New Income form state
+  const [incomeTitle, setIncomeTitle] = useState("");
+  const [incomeUnit, setIncomeUnit] = useState<BusinessUnit>("ME_CORE");
+  const [incomeAmount, setIncomeAmount] = useState("");
+  const [incomeCategory, setIncomeCategory] = useState("Termin Kontrak Jasa ME");
+  const [incomePayer, setIncomePayer] = useState("");
+
+  // Filtered Financial Calculation based on Period
+  const periodData = useMemo(() => {
+    if (filterPeriodType === "YEARLY") {
+      const yearRows = HISTORICAL_FINANCIAL_DATA.filter((d) => d.year === selectedYear);
+      const totalIncome = yearRows.reduce((acc, row) => acc + row.income, 0);
+      const totalExpense = yearRows.reduce((acc, row) => acc + row.expense, 0);
+      const meExpense = yearRows.reduce((acc, row) => acc + row.meExpense, 0);
+      const ftthExpense = yearRows.reduce((acc, row) => acc + row.ftthExpense, 0);
+      const overheadExpense = yearRows.reduce((acc, row) => acc + row.overheadExpense, 0);
+      const netCashFlow = totalIncome - totalExpense;
+      const profitMargin = totalIncome > 0 ? (netCashFlow / totalIncome) * 100 : 0;
+
+      return {
+        totalIncome,
+        totalExpense,
+        meExpense,
+        ftthExpense,
+        overheadExpense,
+        netCashFlow,
+        profitMargin,
+        monthlySeries: yearRows,
+        periodLabel: `Tahun ${selectedYear}`,
+      };
+    } else {
+      // Monthly
+      const monthRow = HISTORICAL_FINANCIAL_DATA.find(
+        (d) => d.year === selectedYear && d.monthNum === selectedMonth
+      ) || {
+        month: MONTH_NAMES[selectedMonth - 1]?.short || "Nov",
+        monthNum: selectedMonth,
+        year: selectedYear,
+        income: 285000000,
+        expense: 195000000,
+        meExpense: 118000000,
+        ftthExpense: 61000000,
+        overheadExpense: 16000000,
+      };
+
+      const totalIncome = monthRow.income;
+      const totalExpense = monthRow.expense;
+      const netCashFlow = totalIncome - totalExpense;
+      const profitMargin = totalIncome > 0 ? (netCashFlow / totalIncome) * 100 : 0;
+      const monthName = MONTH_NAMES.find((m) => m.num === selectedMonth)?.name || "November";
+
+      return {
+        totalIncome,
+        totalExpense,
+        meExpense: monthRow.meExpense,
+        ftthExpense: monthRow.ftthExpense,
+        overheadExpense: monthRow.overheadExpense,
+        netCashFlow,
+        profitMargin,
+        monthlySeries: [monthRow],
+        periodLabel: `${monthName} ${selectedYear}`,
+      };
+    }
+  }, [filterPeriodType, selectedYear, selectedMonth]);
+
+  // Division Budgets for the selected year
+  const divisionBudgets = useMemo(() => {
+    const list = (DIVISION_BUDGET_YEARS as any)[selectedYear] || DIVISION_BUDGET_YEARS[2026];
+    return list;
+  }, [selectedYear]);
+
+  // Pending Approvals Handler
+  const handleApprove = (id: string, docNumber: string) => {
+    setPendingApprovals(prev => prev.filter(item => item.id !== id));
+    setApprovalNotification(`Dokumen ${docNumber} berhasil disetujui & diproses.`);
+    setTimeout(() => setApprovalNotification(null), 4000);
+  };
+
   const handleCreateRequest = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle || !newAmount) return;
 
+    const parsedAmount = parseFloat(newAmount);
+    const newDocNum = `${newType === "CASH_ADVANCE" ? "CA" : "PR"}-2026-${Math.floor(100 + Math.random() * 900)}`;
+
     const newReq: BudgetRequest = {
       id: `req-${Date.now()}`,
-      requestNumber: `${newType === "CASH_ADVANCE" ? "CA" : "PR"}-2026-${Math.floor(100 + Math.random() * 900)}`,
+      requestNumber: newDocNum,
       title: newTitle,
       unit: newUnit,
       costCenterId: newUnit === "STARLITE_FTTH" ? "cc-star-01" : "cc-me-01",
       requesterName: requesterName,
       requesterRole: newType === "CASH_ADVANCE" ? "FIELD_TECH" : "SITE_SPV",
       requestType: newType,
-      totalAmount: parseFloat(newAmount),
+      totalAmount: parsedAmount,
       status: "PENDING_SPV",
       purpose: newPurpose,
       createdAt: new Date().toISOString().split("T")[0],
@@ -66,31 +199,84 @@ export default function DashboardPage() {
           description: newTitle,
           quantity: 1,
           unit: "Paket",
-          estimatedPrice: parseFloat(newAmount),
-          totalPrice: parseFloat(newAmount),
+          estimatedPrice: parsedAmount,
+          totalPrice: parsedAmount,
         }
       ]
     };
 
+    // Add to requests
     setRequests([newReq, ...requests]);
+
+    // Also add to Pending Approvals queue
+    const newApproval: PendingApprovalItem = {
+      id: `appr-${Date.now()}`,
+      type: "BUDGET_REQUEST",
+      docNumber: newDocNum,
+      title: newTitle,
+      unit: newUnit,
+      requester: requesterName,
+      amount: parsedAmount,
+      submittedAt: new Date().toISOString().split("T")[0],
+      level: "SPV / Kasir",
+      urgent: parsedAmount > 10000000,
+    };
+    setPendingApprovals([newApproval, ...pendingApprovals]);
+
     setIsModalOpen(false);
     setNewTitle("");
     setNewAmount("");
     setNewPurpose("");
   };
 
-  // Metrics calculation
-  const totalBudget = INITIAL_COST_CENTERS.reduce((acc, c) => acc + c.budgetLimit, 0);
-  const totalSpent = INITIAL_COST_CENTERS.reduce((acc, c) => acc + c.spentAmount, 0);
+  const handleCreateIncome = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!incomeTitle || !incomeAmount) return;
+
+    const parsedAmount = parseFloat(incomeAmount);
+    const newTx: FinancialTransaction = {
+      id: `tx-in-${Date.now()}`,
+      transactionNumber: `TX-IN-${Date.now().toString().slice(-6)}`,
+      date: new Date().toISOString().split("T")[0],
+      description: incomeTitle,
+      unit: incomeUnit,
+      type: "INCOME",
+      category: incomeCategory,
+      amount: parsedAmount,
+      status: "COMPLETED",
+      paymentMethod: "Bank Mandiri / QRIS",
+      recipientOrPayer: incomePayer || "Klien / Pelanggan"
+    };
+
+    setTransactions([newTx, ...transactions]);
+    setIsIncomeModalOpen(false);
+    setIncomeTitle("");
+    setIncomeAmount("");
+    setIncomePayer("");
+  };
+
+  // Filtered Transactions
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(tx => {
+      const matchType = txTypeFilter === "ALL" || tx.type === txTypeFilter;
+      const matchSearch = txSearch === "" || 
+        tx.description.toLowerCase().includes(txSearch.toLowerCase()) ||
+        tx.recipientOrPayer.toLowerCase().includes(txSearch.toLowerCase()) ||
+        tx.transactionNumber.toLowerCase().includes(txSearch.toLowerCase());
+      return matchType && matchSearch;
+    });
+  }, [transactions, txTypeFilter, txSearch]);
+
+  // Overall Metrics
   const totalSubscribers = INITIAL_SUBSCRIBERS.length;
   const totalMonthlyAR = INITIAL_SUBSCRIBERS.reduce((acc, s) => acc + s.monthlyFee, 0);
   const paidInvoicesCount = INITIAL_INVOICES.filter(i => i.paymentStatus === "PAID").length;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       {/* Top Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-700 via-blue-600 to-fuchsia-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 font-bold text-xl">
               J
@@ -98,8 +284,8 @@ export default function DashboardPage() {
             <div>
               <div className="text-sm font-semibold text-slate-900 tracking-tight flex items-center gap-2">
                 {COMPANY_NAME}
-                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-100 text-blue-700 uppercase">
-                  Enterprise
+                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-100 text-blue-700 uppercase tracking-wider">
+                  ERP & Billing
                 </span>
               </div>
               <p className="text-xs text-slate-500">
@@ -108,13 +294,20 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsIncomeModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition"
+            >
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>+ Catat Pemasukan</span>
+            </button>
             <button
               onClick={() => setIsModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition shadow-sm"
             >
-              <PlusCircle className="w-4 h-4" />
-              <span>Pengajuan Baru</span>
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span>+ Pengajuan Dana</span>
             </button>
           </div>
         </div>
@@ -125,25 +318,25 @@ export default function DashboardPage() {
             onClick={() => setActiveTab("overview")}
             className={`py-3 px-3.5 border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
               activeTab === "overview"
-                ? "border-blue-600 text-blue-700 font-semibold"
+                ? "border-blue-600 text-blue-700 font-bold"
                 : "border-transparent text-slate-600 hover:text-slate-900"
             }`}
           >
             <Building2 className="w-4 h-4" />
-            Ringkasan Eksekutif
+            Dashboard Utama
           </button>
 
           <button
             onClick={() => setActiveTab("requests")}
             className={`py-3 px-3.5 border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
               activeTab === "requests"
-                ? "border-blue-600 text-blue-700 font-semibold"
+                ? "border-blue-600 text-blue-700 font-bold"
                 : "border-transparent text-slate-600 hover:text-slate-900"
             }`}
           >
             <Wallet className="w-4 h-4" />
             Pengajuan Anggaran & Kas Bon
-            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-amber-100 text-amber-800 font-bold">
+            <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-800 font-bold">
               {requests.filter(r => r.status.startsWith("PENDING")).length}
             </span>
           </button>
@@ -152,7 +345,7 @@ export default function DashboardPage() {
             onClick={() => setActiveTab("lpj")}
             className={`py-3 px-3.5 border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
               activeTab === "lpj"
-                ? "border-blue-600 text-blue-700 font-semibold"
+                ? "border-blue-600 text-blue-700 font-bold"
                 : "border-transparent text-slate-600 hover:text-slate-900"
             }`}
           >
@@ -164,13 +357,13 @@ export default function DashboardPage() {
             onClick={() => setActiveTab("starlite")}
             className={`py-3 px-3.5 border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
               activeTab === "starlite"
-                ? "border-fuchsia-600 text-fuchsia-700 font-semibold"
+                ? "border-fuchsia-600 text-fuchsia-700 font-bold"
                 : "border-transparent text-slate-600 hover:text-slate-900"
             }`}
           >
             <Wifi className="w-4 h-4 text-fuchsia-600" />
             Starlite FTTH (Billing & AR)
-            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-fuchsia-100 text-fuchsia-800 font-bold">
+            <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-fuchsia-100 text-fuchsia-800 font-bold">
               {totalSubscribers} Klien
             </span>
           </button>
@@ -179,7 +372,7 @@ export default function DashboardPage() {
             onClick={() => setActiveTab("reports")}
             className={`py-3 px-3.5 border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
               activeTab === "reports"
-                ? "border-blue-600 text-blue-700 font-semibold"
+                ? "border-blue-600 text-blue-700 font-bold"
                 : "border-transparent text-slate-600 hover:text-slate-900"
             }`}
           >
@@ -191,135 +384,693 @@ export default function DashboardPage() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* TAB 1: OVERVIEW */}
+        {/* ========================================================================= */}
+        {/* TAB 1: REVAMPED EXECUTIVE DASHBOARD WITH PERIOD FILTER & WIDGETS           */}
+        {/* ========================================================================= */}
         {activeTab === "overview" && (
           <div className="space-y-6">
-            {/* Top KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                <div className="flex items-center justify-between text-slate-500 mb-2">
-                  <span className="text-xs font-medium uppercase tracking-wider">Total Pagu Anggaran</span>
-                  <Wallet className="w-4 h-4 text-blue-600" />
+            {/* Notification Banner for Approval Action */}
+            {approvalNotification && (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs px-4 py-2.5 rounded-xl flex items-center justify-between shadow-xs animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span className="font-semibold">{approvalNotification}</span>
                 </div>
-                <div className="text-xl font-bold text-slate-900">{formatRupiah(totalBudget)}</div>
-                <div className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                  <span>Realisasi terserap:</span>
-                  <span className="font-semibold text-slate-700">{formatRupiah(totalSpent)}</span>
-                </div>
-                <div className="w-full bg-slate-100 rounded-full h-1.5 mt-3 overflow-hidden">
-                  <div 
-                    className="bg-blue-600 h-1.5 rounded-full" 
-                    style={{ width: `${Math.round((totalSpent / totalBudget) * 100)}%` }}
-                  ></div>
-                </div>
+                <button onClick={() => setApprovalNotification(null)} className="text-emerald-600 hover:text-emerald-900">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Top Toolbar: Filter Periode & Header Title */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <h1 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <span>Dashboard Keuangan & Operasional</span>
+                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                    Periode: {periodData.periodLabel}
+                  </span>
+                </h1>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Pantau pemasukan, pengeluaran, serapan pagu anggaran per divisi, serta antrean persetujuan.
+                </p>
               </div>
 
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                <div className="flex items-center justify-between text-slate-500 mb-2">
-                  <span className="text-xs font-medium uppercase tracking-wider">Jasa ME (Cost Realization)</span>
-                  <Building2 className="w-4 h-4 text-indigo-600" />
+              {/* Filter Control Section */}
+              <div className="flex flex-wrap items-center gap-2 self-stretch md:self-auto">
+                {/* Switch Bulanan vs Tahunan */}
+                <div className="bg-slate-100 p-1 rounded-xl flex items-center text-xs font-semibold">
+                  <button
+                    onClick={() => setFilterPeriodType("MONTHLY")}
+                    className={`px-3 py-1.5 rounded-lg transition ${
+                      filterPeriodType === "MONTHLY"
+                        ? "bg-white text-blue-700 shadow-xs font-bold"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    Bulanan
+                  </button>
+                  <button
+                    onClick={() => setFilterPeriodType("YEARLY")}
+                    className={`px-3 py-1.5 rounded-lg transition ${
+                      filterPeriodType === "YEARLY"
+                        ? "bg-white text-blue-700 shadow-xs font-bold"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    Tahunan
+                  </button>
                 </div>
-                <div className="text-xl font-bold text-slate-900">
-                  {formatRupiah(INITIAL_COST_CENTERS.filter(c => c.unit === "ME_CORE").reduce((a, b) => a + b.spentAmount, 0))}
-                </div>
-                <p className="text-xs text-slate-500 mt-1">2 Proyek Aktif (KIIC & Menara)</p>
-              </div>
 
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                <div className="flex items-center justify-between text-slate-500 mb-2">
-                  <span className="text-xs font-medium uppercase tracking-wider">Starlite FTTH Capex</span>
-                  <Wifi className="w-4 h-4 text-fuchsia-600" />
-                </div>
-                <div className="text-xl font-bold text-fuchsia-700">
-                  {formatRupiah(INITIAL_COST_CENTERS.filter(c => c.unit === "STARLITE_FTTH").reduce((a, b) => a + b.spentAmount, 0))}
-                </div>
-                <p className="text-xs text-slate-500 mt-1">Rollout Sentul & Pasang Baru</p>
-              </div>
+                {/* Dropdown Bulan (Active when MONTHLY) */}
+                {filterPeriodType === "MONTHLY" && (
+                  <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                      className="bg-transparent font-semibold text-slate-800 focus:outline-hidden cursor-pointer"
+                    >
+                      {MONTH_NAMES.map((m) => (
+                        <option key={m.num} value={m.num}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                <div className="flex items-center justify-between text-slate-500 mb-2">
-                  <span className="text-xs font-medium uppercase tracking-wider">Potensi Omset FTTH / Bln</span>
-                  <TrendingUp className="w-4 h-4 text-emerald-600" />
-                </div>
-                <div className="text-xl font-bold text-emerald-700">{formatRupiah(totalMonthlyAR)}</div>
-                <div className="text-xs text-slate-500 mt-1 flex items-center justify-between">
-                  <span>Terbayar bulan ini:</span>
-                  <span className="font-bold text-emerald-600">{paidInvoicesCount} / {INITIAL_INVOICES.length}</span>
+                {/* Dropdown Tahun (2026, 2025, 2024) */}
+                <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs">
+                  <span className="text-slate-400 font-mono">Thn:</span>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(Number(e.target.value))}
+                    className="bg-transparent font-bold text-slate-800 focus:outline-hidden cursor-pointer"
+                  >
+                    <option value={2026}>2026 (Aktif)</option>
+                    <option value={2025}>2025</option>
+                    <option value={2024}>2024</option>
+                  </select>
                 </div>
               </div>
             </div>
 
-            {/* Business Units Split */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {BUSINESS_UNITS.slice(0, 2).map((unit) => {
-                const centers = INITIAL_COST_CENTERS.filter(c => c.unit === unit.key);
-                const unitBudget = centers.reduce((a, b) => a + b.budgetLimit, 0);
-                const unitSpent = centers.reduce((a, b) => a + b.spentAmount, 0);
+            {/* Financial Overview Cards: Pemasukan, Pengeluaran, Net Cash Flow, AR Health */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Card 1: Total Pemasukan */}
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs relative overflow-hidden">
+                <div className="flex items-center justify-between text-slate-500 mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-800">Total Pemasukan</span>
+                  <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                    <ArrowDownRight className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-xl font-extrabold text-slate-900 tracking-tight">
+                  {formatRupiah(periodData.totalIncome)}
+                </div>
+                <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                  <span>Termin ME & FTTH</span>
+                  <span className="font-semibold text-emerald-600 flex items-center">
+                    <TrendingUp className="w-3 h-3 mr-0.5" /> +12.4% vs lalu
+                  </span>
+                </div>
+              </div>
 
-                return (
-                  <div key={unit.key} className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        {unit.key === "ME_CORE" ? (
-                          <Building2 className="w-5 h-5 text-blue-600" />
-                        ) : (
-                          <Wifi className="w-5 h-5 text-fuchsia-600" />
-                        )}
-                        <h3 className="font-bold text-slate-900 text-sm">{unit.label}</h3>
-                      </div>
-                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                        {Math.round((unitSpent / unitBudget) * 100)}% Terpakai
-                      </span>
-                    </div>
+              {/* Card 2: Total Pengeluaran */}
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs relative overflow-hidden">
+                <div className="flex items-center justify-between text-slate-500 mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-rose-800">Total Pengeluaran</span>
+                  <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                    <ArrowUpRight className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-xl font-extrabold text-slate-900 tracking-tight">
+                  {formatRupiah(periodData.totalExpense)}
+                </div>
+                <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                  <span>Realisasi Kas & PO</span>
+                  <span className="font-semibold text-slate-700">
+                    {Math.round((periodData.totalExpense / periodData.totalIncome) * 100)}% Rasio Biaya
+                  </span>
+                </div>
+              </div>
 
-                    <p className="text-xs text-slate-500 mb-4">{unit.desc}</p>
+              {/* Card 3: Arus Kas Bersih (Net Cash Flow) */}
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs relative overflow-hidden">
+                <div className="flex items-center justify-between text-slate-500 mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-blue-800">Arus Kas Bersih</span>
+                  <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <Wallet className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className={`text-xl font-extrabold tracking-tight ${periodData.netCashFlow >= 0 ? "text-blue-700" : "text-rose-600"}`}>
+                  {formatRupiah(periodData.netCashFlow)}
+                </div>
+                <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                  <span>Margin Bersih</span>
+                  <span className="font-bold text-blue-600">
+                    {periodData.profitMargin.toFixed(1)}% (Surplus)
+                  </span>
+                </div>
+              </div>
 
+              {/* Card 4: Starlite FTTH Collection & Piutang */}
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs relative overflow-hidden">
+                <div className="flex items-center justify-between text-slate-500 mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-fuchsia-800">Tagihan FTTH</span>
+                  <div className="w-7 h-7 rounded-lg bg-fuchsia-50 text-fuchsia-600 flex items-center justify-center">
+                    <Wifi className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-xl font-extrabold text-fuchsia-700 tracking-tight">
+                  {formatRupiah(totalMonthlyAR)}
+                </div>
+                <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                  <span>Penagihan Berjalan</span>
+                  <span className="font-bold text-emerald-600">
+                    {paidInvoicesCount} / {INITIAL_INVOICES.length} Lunas
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 1: VISUAL BAR CHART (PEMASUKAN & PENGELUARAN) */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5 pb-3 border-b border-slate-100">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-blue-600" />
+                    Grafik Komparasi Pemasukan vs Pengeluaran ({periodData.periodLabel})
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Visualisasi dinamika arus dana dan proporsi serapan biaya operasional.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 text-xs font-medium">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-xs bg-emerald-500"></span> Pemasukan
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-xs bg-blue-600"></span> Pengeluaran
+                    </span>
+                  </div>
+
+                  <div className="bg-slate-100 p-0.5 rounded-lg text-[11px] font-semibold flex">
+                    <button
+                      onClick={() => setChartMode("FLOW")}
+                      className={`px-2.5 py-1 rounded-md transition ${chartMode === "FLOW" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600"}`}
+                    >
+                      Tren Arus Kas
+                    </button>
+                    <button
+                      onClick={() => setChartMode("DIVISION")}
+                      className={`px-2.5 py-1 rounded-md transition ${chartMode === "DIVISION" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600"}`}
+                    >
+                      Breakdown Divisi
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Chart Render */}
+              {chartMode === "FLOW" ? (
+                <div>
+                  {filterPeriodType === "YEARLY" ? (
+                    // 12 Months Bar Chart for Selected Year
                     <div className="space-y-3">
-                      {centers.map(center => (
-                        <div key={center.id} className="p-3 rounded-lg bg-slate-50 border border-slate-150">
-                          <div className="flex justify-between items-start mb-1">
-                            <div>
-                              <div className="text-xs font-semibold text-slate-900">{center.name}</div>
-                              <div className="text-[11px] text-slate-500 font-mono">
-                                {center.projectCode || center.clusterCode}
+                      <div className="h-56 flex items-end gap-2 sm:gap-3 pt-6 pb-2 px-1 border-b border-slate-200">
+                        {periodData.monthlySeries.map((item) => {
+                          const maxVal = Math.max(...periodData.monthlySeries.map(m => Math.max(m.income, m.expense)));
+                          const incHeight = Math.round((item.income / maxVal) * 100);
+                          const expHeight = Math.round((item.expense / maxVal) * 100);
+
+                          return (
+                            <div key={item.month} className="flex-1 flex flex-col items-center h-full justify-end group">
+                              <div className="w-full flex justify-center items-end gap-1 sm:gap-1.5 h-full">
+                                {/* Income Bar */}
+                                <div
+                                  style={{ height: `${incHeight}%` }}
+                                  className="w-1/2 max-w-[18px] bg-emerald-500 rounded-t-sm transition-all hover:bg-emerald-600 relative group/bar"
+                                >
+                                  <div className="opacity-0 group-hover/bar:opacity-100 transition absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] py-0.5 px-1.5 rounded-xs whitespace-nowrap z-20 pointer-events-none">
+                                    Masuk: {formatRupiah(item.income)}
+                                  </div>
+                                </div>
+                                {/* Expense Bar */}
+                                <div
+                                  style={{ height: `${expHeight}%` }}
+                                  className="w-1/2 max-w-[18px] bg-blue-600 rounded-t-sm transition-all hover:bg-blue-700 relative group/bar"
+                                >
+                                  <div className="opacity-0 group-hover/bar:opacity-100 transition absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] py-0.5 px-1.5 rounded-xs whitespace-nowrap z-20 pointer-events-none">
+                                    Keluar: {formatRupiah(item.expense)}
+                                  </div>
+                                </div>
                               </div>
+                              <span className="text-[11px] font-semibold text-slate-500 mt-2">
+                                {item.month}
+                              </span>
                             </div>
-                            <div className="text-right">
-                              <div className="text-xs font-bold text-slate-900">{formatRupiah(center.spentAmount)}</div>
-                              <div className="text-[10px] text-slate-500">Pagu: {formatRupiah(center.budgetLimit)}</div>
-                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="flex justify-between items-center text-xs text-slate-400 px-1 pt-1">
+                        <span>Skala Min: Rp 0</span>
+                        <span className="font-medium text-slate-600">
+                          Rata-rata Pengeluaran/Bln: {formatRupiah(Math.round(periodData.totalExpense / 12))}
+                        </span>
+                        <span>Maks: {formatRupiah(Math.max(...periodData.monthlySeries.map(m => Math.max(m.income, m.expense))))}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    // Single Month Detailed Visual Gauge & Breakdown
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-4 items-center">
+                      <div className="md:col-span-2 space-y-4">
+                        <div>
+                          <div className="flex justify-between text-xs font-semibold mb-1">
+                            <span className="text-emerald-700 flex items-center gap-1">
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Total Pemasukan
+                            </span>
+                            <span className="text-slate-900 font-bold">{formatRupiah(periodData.totalIncome)}</span>
                           </div>
-                          <div className="w-full bg-slate-200 rounded-full h-1 mt-2">
+                          <div className="w-full bg-slate-100 h-4 rounded-full overflow-hidden">
+                            <div className="bg-emerald-500 h-full rounded-full transition-all duration-500" style={{ width: "100%" }}></div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between text-xs font-semibold mb-1">
+                            <span className="text-blue-700 flex items-center gap-1">
+                              <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span> Total Pengeluaran
+                            </span>
+                            <span className="text-slate-900 font-bold">{formatRupiah(periodData.totalExpense)}</span>
+                          </div>
+                          <div className="w-full bg-slate-100 h-4 rounded-full overflow-hidden">
                             <div 
-                              className={`h-1 rounded-full ${unit.key === "ME_CORE" ? "bg-blue-600" : "bg-fuchsia-600"}`}
-                              style={{ width: `${Math.min(100, (center.spentAmount / center.budgetLimit) * 100)}%` }}
+                              className="bg-blue-600 h-full rounded-full transition-all duration-500" 
+                              style={{ width: `${Math.min(100, (periodData.totalExpense / periodData.totalIncome) * 100)}%` }}
                             ></div>
                           </div>
                         </div>
-                      ))}
+
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 flex justify-between items-center">
+                          <span>Efisiensi Anggaran: Biaya operasional menyerap <strong>{Math.round((periodData.totalExpense / periodData.totalIncome) * 100)}%</strong> dari total penerimaan kas.</span>
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                            Sehat (Surplus)
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-blue-900 to-indigo-900 text-white p-5 rounded-2xl flex flex-col justify-between shadow-sm">
+                        <div>
+                          <div className="text-[11px] uppercase tracking-wider text-blue-200 font-semibold">Net Surplus Kas</div>
+                          <div className="text-2xl font-bold mt-1 text-white">{formatRupiah(periodData.netCashFlow)}</div>
+                          <p className="text-xs text-blue-200 mt-2">
+                            Penerimaan bulan {periodData.periodLabel} mencatat surplus margin operasional sebesar {periodData.profitMargin.toFixed(1)}%.
+                          </p>
+                        </div>
+                        <div className="pt-3 border-t border-blue-800/80 mt-4 flex justify-between items-center text-xs">
+                          <span className="text-blue-300">Rasio Margin</span>
+                          <span className="font-bold text-emerald-300">+{periodData.profitMargin.toFixed(1)}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                // Division Breakdown View
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                  <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/50">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-blue-900">Jasa ME Core</span>
+                      <Building2 className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <div className="text-lg font-bold text-slate-900">{formatRupiah(periodData.meExpense)}</div>
+                    <div className="text-[11px] text-slate-500 mt-1">
+                      Porsi: {Math.round((periodData.meExpense / periodData.totalExpense) * 100)}% dari total beban
+                    </div>
+                    <div className="w-full bg-blue-200 h-1.5 rounded-full mt-2">
+                      <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: `${Math.round((periodData.meExpense / periodData.totalExpense) * 100)}%` }}></div>
                     </div>
                   </div>
-                );
-              })}
+
+                  <div className="p-4 rounded-xl border border-fuchsia-200 bg-fuchsia-50/50">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-fuchsia-900">Starlite FTTH (Capex & Opex)</span>
+                      <Wifi className="w-4 h-4 text-fuchsia-600" />
+                    </div>
+                    <div className="text-lg font-bold text-slate-900">{formatRupiah(periodData.ftthExpense)}</div>
+                    <div className="text-[11px] text-slate-500 mt-1">
+                      Porsi: {Math.round((periodData.ftthExpense / periodData.totalExpense) * 100)}% dari total beban
+                    </div>
+                    <div className="w-full bg-fuchsia-200 h-1.5 rounded-full mt-2">
+                      <div className="bg-fuchsia-600 h-1.5 rounded-full" style={{ width: `${Math.round((periodData.ftthExpense / periodData.totalExpense) * 100)}%` }}></div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-slate-800">Overhead & Umum</span>
+                      <ShieldCheck className="w-4 h-4 text-slate-600" />
+                    </div>
+                    <div className="text-lg font-bold text-slate-900">{formatRupiah(periodData.overheadExpense)}</div>
+                    <div className="text-[11px] text-slate-500 mt-1">
+                      Porsi: {Math.round((periodData.overheadExpense / periodData.totalExpense) * 100)}% dari total beban
+                    </div>
+                    <div className="w-full bg-slate-200 h-1.5 rounded-full mt-2">
+                      <div className="bg-slate-600 h-1.5 rounded-full" style={{ width: `${Math.round((periodData.overheadExpense / periodData.totalExpense) * 100)}%` }}></div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Quick Status Bar */}
-            <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white rounded-xl p-5 shadow-md flex flex-col md:flex-row items-center justify-between gap-4">
-              <div>
-                <h4 className="font-bold text-base flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                  Alur Keuangan Berjalan Otomatis & Terintegrasi
-                </h4>
-                <p className="text-xs text-blue-200 mt-1 max-w-2xl">
-                  Setiap pengajuan kas bon lapangan dan pengadaan langsung dipetakan ke cost center proyek atau cluster Starlite FTTH. Setelah diverifikasi nota realisasinya, jurnal otomatis langsung terisi.
-                </p>
+            {/* SECTION 2: PAGU ANGGARAN PER DIVISI (TRACK CAPAIAN ANGGARAN & PREVIEW) */}
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-indigo-600" />
+                    Pagu Anggaran per Divisi (Track Capaian Tahun {selectedYear})
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Monitoring batas pagu, realisasi serapan anggaran, dan sisa alokasi dana per unit operasional.
+                  </p>
+                </div>
+                <span className="text-xs text-slate-400 font-mono">Tahun Buku: {selectedYear}</span>
               </div>
-              <button
-                onClick={() => setActiveTab("requests")}
-                className="px-4 py-2 bg-white text-blue-900 rounded-lg text-xs font-bold hover:bg-blue-50 transition whitespace-nowrap shadow-sm"
-              >
-                Tinjau Pengajuan Masuk &rarr;
-              </button>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {divisionBudgets.map((div: any) => {
+                  const percentage = Math.round((div.terpakai / div.pagu) * 100);
+                  const sisa = div.pagu - div.terpakai;
+                  const isWarning = percentage >= 80 && percentage < 92;
+                  const isDanger = percentage >= 92;
+
+                  return (
+                    <div key={div.code} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between hover:border-slate-300 transition">
+                      <div>
+                        {/* Header Divisi */}
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm ${
+                              div.unit === "ME_CORE" 
+                                ? "bg-blue-100 text-blue-700" 
+                                : div.unit === "STARLITE_FTTH" 
+                                ? "bg-fuchsia-100 text-fuchsia-700" 
+                                : "bg-slate-100 text-slate-700"
+                            }`}>
+                              {div.unit === "ME_CORE" ? <Building2 className="w-4 h-4" /> : div.unit === "STARLITE_FTTH" ? <Wifi className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
+                            </div>
+                            <div>
+                              <h3 className="font-bold text-slate-900 text-xs">{div.name}</h3>
+                              <span className="text-[10px] font-mono text-slate-400">{div.code}</span>
+                            </div>
+                          </div>
+
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            isDanger 
+                              ? "bg-rose-100 text-rose-800" 
+                              : isWarning 
+                              ? "bg-amber-100 text-amber-800" 
+                              : "bg-emerald-100 text-emerald-800"
+                          }`}>
+                            {isDanger ? "Mendekati Batas" : isWarning ? "Perhatian" : "Terkendali"}
+                          </span>
+                        </div>
+
+                        {/* Angka Pagu & Realisasi */}
+                        <div className="grid grid-cols-2 gap-2 my-3 p-3 bg-slate-50 rounded-xl">
+                          <div>
+                            <span className="text-[10px] text-slate-500 font-medium uppercase">Pagu Total</span>
+                            <div className="text-xs font-bold text-slate-900">{formatRupiah(div.pagu)}</div>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-500 font-medium uppercase">Terserap ({percentage}%)</span>
+                            <div className="text-xs font-bold text-blue-700">{formatRupiah(div.terpakai)}</div>
+                          </div>
+                        </div>
+
+                        {/* Progress Bar Capaian */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-slate-500">Sisa Pagu Anggaran:</span>
+                            <span className="font-bold text-slate-900">{formatRupiah(sisa)}</span>
+                          </div>
+                          <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                            <div
+                              className={`h-2.5 rounded-full transition-all duration-500 ${
+                                isDanger ? "bg-rose-500" : isWarning ? "bg-amber-500" : "bg-blue-600"
+                              }`}
+                              style={{ width: `${Math.min(100, percentage)}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Footer Preview Info */}
+                      <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-[11px] text-slate-500">
+                        <span>Komitmen PO Berjalan:</span>
+                        <span className="font-mono font-medium text-slate-700">{formatRupiah(div.terencana)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* SECTION 3: SHORTCUT ANTREAN PERSETUJUAN (PENDING APPROVALS) */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      Antrean Persetujuan (Pending Approvals)
+                      <span className="px-2 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-800 font-bold">
+                        {pendingApprovals.length} Dokumen Menunggu
+                      </span>
+                    </h2>
+                    <p className="text-xs text-slate-500">
+                      Shortcut cepat untuk meninjau pengajuan kas bon, PR material, dan LPJ nota yang membutuhkan persetujuan.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Filter Sub-Tabs */}
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+                  <button
+                    onClick={() => setApprovalFilter("ALL")}
+                    className={`px-2.5 py-1 rounded-lg transition ${approvalFilter === "ALL" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600"}`}
+                  >
+                    Semua ({pendingApprovals.length})
+                  </button>
+                  <button
+                    onClick={() => setApprovalFilter("BUDGET_REQUEST")}
+                    className={`px-2.5 py-1 rounded-lg transition ${approvalFilter === "BUDGET_REQUEST" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600"}`}
+                  >
+                    Pengajuan Dana ({pendingApprovals.filter(p => p.type === "BUDGET_REQUEST").length})
+                  </button>
+                  <button
+                    onClick={() => setApprovalFilter("LPJ_REALIZATION")}
+                    className={`px-2.5 py-1 rounded-lg transition ${approvalFilter === "LPJ_REALIZATION" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600"}`}
+                  >
+                    Realisasi LPJ ({pendingApprovals.filter(p => p.type === "LPJ_REALIZATION").length})
+                  </button>
+                </div>
+              </div>
+
+              {pendingApprovals.length === 0 ? (
+                <div className="py-8 text-center text-slate-400">
+                  <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-500 mb-2" />
+                  <p className="text-xs font-semibold text-slate-700">Semua dokumen telah disetujui!</p>
+                  <p className="text-[11px] text-slate-400">Tidak ada pengajuan atau LPJ yang tertunda saat ini.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {pendingApprovals
+                    .filter(item => approvalFilter === "ALL" || item.type === approvalFilter)
+                    .map((item) => (
+                      <div
+                        key={item.id}
+                        className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-white hover:border-blue-300 transition shadow-2xs flex flex-col justify-between"
+                      >
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between items-start">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                item.type === "BUDGET_REQUEST" 
+                                  ? "bg-blue-100 text-blue-800" 
+                                  : "bg-purple-100 text-purple-800"
+                              }`}>
+                                {item.type === "BUDGET_REQUEST" ? "Pengajuan Dana" : "LPJ Nota Realisasi"}
+                              </span>
+                              <span className="font-mono text-[11px] font-bold text-slate-900">{item.docNumber}</span>
+                            </div>
+
+                            {item.urgent && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-extrabold bg-rose-100 text-rose-700 animate-pulse">
+                                Urgent
+                              </span>
+                            )}
+                          </div>
+
+                          <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{item.title}</h4>
+
+                          <div className="flex justify-between items-center text-[11px] text-slate-500">
+                            <span>Pemohon: <strong className="text-slate-700">{item.requester}</strong></span>
+                            <span className="text-slate-400 font-mono">{formatDateIndo(item.submittedAt)}</span>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 pt-2.5 border-t border-slate-200 flex justify-between items-center">
+                          <div>
+                            <span className="text-[10px] text-slate-400 block">Nominal Diajukan</span>
+                            <span className="text-xs font-extrabold text-slate-900">{formatRupiah(item.amount)}</span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => {
+                                if (item.type === "BUDGET_REQUEST") setActiveTab("requests");
+                                else setActiveTab("lpj");
+                              }}
+                              className="px-2.5 py-1 text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg text-xs font-medium transition"
+                            >
+                              Detail
+                            </button>
+                            <button
+                              onClick={() => handleApprove(item.id, item.docNumber)}
+                              className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1 shadow-xs"
+                            >
+                              <Check className="w-3.5 h-3.5" /> Setujui
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+
+            {/* SECTION 4: TRANSAKSI TERBARU (PEMASUKAN & PENGELUARAN) */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 pb-3 border-b border-slate-100">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-slate-700" />
+                    Transaksi Kas Terbaru (Arus Masuk & Keluar)
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Pencatatan real-time penerimaan termin proyek, tagihan internet, dan pengeluaran belanja.
+                  </p>
+                </div>
+
+                {/* Filter and Search Bar */}
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                  <div className="relative flex-1 sm:w-56">
+                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Cari transaksi, klien, nomor..."
+                      value={txSearch}
+                      onChange={(e) => setTxSearch(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+                    <button
+                      onClick={() => setTxTypeFilter("ALL")}
+                      className={`px-2.5 py-1 rounded-lg transition ${txTypeFilter === "ALL" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600"}`}
+                    >
+                      Semua
+                    </button>
+                    <button
+                      onClick={() => setTxTypeFilter("INCOME")}
+                      className={`px-2.5 py-1 rounded-lg transition ${txTypeFilter === "INCOME" ? "bg-white text-emerald-700 shadow-xs" : "text-slate-600"}`}
+                    >
+                      Pemasukan (+)
+                    </button>
+                    <button
+                      onClick={() => setTxTypeFilter("EXPENSE")}
+                      className={`px-2.5 py-1 rounded-lg transition ${txTypeFilter === "EXPENSE" ? "bg-white text-rose-700 shadow-xs" : "text-slate-600"}`}
+                    >
+                      Pengeluaran (-)
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Transactions Table */}
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
+                  <thead className="bg-slate-50 font-semibold text-slate-600">
+                    <tr>
+                      <th className="px-4 py-2.5">No. Transaksi / Tgl</th>
+                      <th className="px-4 py-2.5">Uraian Transaksi</th>
+                      <th className="px-4 py-2.5">Divisi / Unit</th>
+                      <th className="px-4 py-2.5">Pihak Terkait</th>
+                      <th className="px-4 py-2.5">Metode Bayar</th>
+                      <th className="px-4 py-2.5 text-right">Nominal</th>
+                      <th className="px-4 py-2.5 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {filteredTransactions.slice(0, 7).map((tx) => (
+                      <tr key={tx.id} className="hover:bg-slate-50 transition">
+                        <td className="px-4 py-3">
+                          <div className="font-mono font-bold text-slate-900">{tx.transactionNumber}</div>
+                          <div className="text-[10px] text-slate-400">{formatDateIndo(tx.date)}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-slate-900">{tx.description}</div>
+                          <div className="text-[10px] text-slate-500">{tx.category}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            tx.unit === "ME_CORE" 
+                              ? "bg-blue-100 text-blue-700" 
+                              : tx.unit === "STARLITE_FTTH" 
+                              ? "bg-fuchsia-100 text-fuchsia-700" 
+                              : "bg-slate-100 text-slate-700"
+                          }`}>
+                            {tx.unit === "ME_CORE" ? "ME Core" : tx.unit === "STARLITE_FTTH" ? "Starlite FTTH" : "Overhead"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-700 font-medium">{tx.recipientOrPayer}</td>
+                        <td className="px-4 py-3 text-slate-500 text-[11px]">{tx.paymentMethod}</td>
+                        <td className="px-4 py-3 text-right">
+                          <span className={`font-mono font-bold text-xs ${
+                            tx.type === "INCOME" ? "text-emerald-600" : "text-rose-600"
+                          }`}>
+                            {tx.type === "INCOME" ? "+" : "-"}{formatRupiah(tx.amount)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <CheckCircle2 className="w-3 h-3" /> Berhasil
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500">
+                <span>Menampilkan <strong>{filteredTransactions.length}</strong> transaksi terbaru</span>
+                <button
+                  onClick={() => setActiveTab("reports")}
+                  className="text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1"
+                >
+                  Lihat Buku Kas & Rekapitulasi Lengkap &rarr;
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -339,7 +1090,7 @@ export default function DashboardPage() {
                 <select
                   value={selectedUnit}
                   onChange={(e) => setSelectedUnit(e.target.value as any)}
-                  className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-50 text-slate-700"
+                  className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-50 text-slate-700 cursor-pointer"
                 >
                   <option value="ALL">Semua Divisi / Unit</option>
                   <option value="ME_CORE">Jasa ME Core</option>
@@ -348,7 +1099,7 @@ export default function DashboardPage() {
 
                 <button
                   onClick={() => setIsModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition"
                 >
                   <PlusCircle className="w-4 h-4" />
                   <span>Buat Pengajuan</span>
@@ -641,7 +1392,7 @@ export default function DashboardPage() {
         )}
       </main>
 
-      {/* Modal: Buat Pengajuan Baru */}
+      {/* Modal 1: Buat Pengajuan Baru (Kas Bon / PR) */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 animate-in fade-in duration-200">
@@ -737,6 +1488,99 @@ export default function DashboardPage() {
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition"
                 >
                   Kirim Pengajuan
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 2: Catat Pemasukan / Termin Baru */}
+      {isIncomeModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 animate-in fade-in duration-200">
+            <h3 className="font-bold text-slate-900 text-base mb-1">Catat Pemasukan Kas / Termin Proyek</h3>
+            <p className="text-xs text-slate-500 mb-4">
+              Rekam penerimaan pembayaran termin kontrak proyek ME atau penerimaan tagihan internet Starlite.
+            </p>
+
+            <form onSubmit={handleCreateIncome} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Unit Usaha Penerima</label>
+                <select
+                  value={incomeUnit}
+                  onChange={(e) => setIncomeUnit(e.target.value as BusinessUnit)}
+                  className="w-full border border-slate-300 rounded-lg p-2 bg-white"
+                >
+                  <option value="ME_CORE">Jasa ME Core (Termin Kontrak / SPK)</option>
+                  <option value="STARLITE_FTTH">Starlite FTTH (Langganan Internet / PSB)</option>
+                  <option value="OVERHEAD_OPERASIONAL">Overhead / Pendapatan Lain-lain</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Kategori Pemasukan</label>
+                <select
+                  value={incomeCategory}
+                  onChange={(e) => setIncomeCategory(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-2 bg-white"
+                >
+                  <option value="Termin Kontrak Jasa ME">Termin Kontrak Jasa ME</option>
+                  <option value="Pendapatan Langganan FTTH">Pendapatan Langganan FTTH</option>
+                  <option value="Biaya Pasang Baru (PSB)">Biaya Pasang Baru (PSB)</option>
+                  <option value="Jasa Maintenance Khusus">Jasa Maintenance Khusus</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Klien / Pembayar</label>
+                <input
+                  type="text"
+                  value={incomePayer}
+                  onChange={(e) => setIncomePayer(e.target.value)}
+                  placeholder="Misal: PT. Astra Otoparts / Pelanggan Sentul"
+                  className="w-full border border-slate-300 rounded-lg p-2"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Deskripsi Pemasukan</label>
+                <input
+                  type="text"
+                  value={incomeTitle}
+                  onChange={(e) => setIncomeTitle(e.target.value)}
+                  placeholder="Misal: Pembayaran Termin 1 Proyek Instalasi Listrik"
+                  className="w-full border border-slate-300 rounded-lg p-2"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Nominal Penerimaan (Rp)</label>
+                <input
+                  type="number"
+                  value={incomeAmount}
+                  onChange={(e) => setIncomeAmount(e.target.value)}
+                  placeholder="Contoh: 50000000"
+                  className="w-full border border-slate-300 rounded-lg p-2 font-mono"
+                  required
+                />
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsIncomeModalOpen(false)}
+                  className="px-3.5 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition"
+                >
+                  Simpan Transaksi
                 </button>
               </div>
             </form>

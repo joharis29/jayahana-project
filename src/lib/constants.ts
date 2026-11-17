@@ -187,3 +187,322 @@ export const INITIAL_INVOICES: StarliteInvoice[] = [
     paymentStatus: "OVERDUE"
   }
 ];
+
+// Recent Multi-Channel Transactions (Income & Expense)
+export const INITIAL_TRANSACTIONS: import("@/types").FinancialTransaction[] = [
+  {
+    id: "tx-001",
+    transactionNumber: "TX-IN-20261118-01",
+    date: "2026-11-18",
+    description: "Pembayaran Termin II Proyek Mekanikal & Elektrikal Pabrik KIIC",
+    unit: "ME_CORE",
+    type: "INCOME",
+    category: "Termin Kontrak Jasa ME",
+    amount: 175000000,
+    status: "COMPLETED",
+    paymentMethod: "Bank Mandiri (VA)",
+    recipientOrPayer: "PT. Global Chemindo Industri (Klien)"
+  },
+  {
+    id: "tx-002",
+    transactionNumber: "TX-OUT-20261117-02",
+    date: "2026-11-17",
+    description: "Pengadaan Kabel Fiber Optik Drop Core 1000m & Splitter PLC ODP",
+    unit: "STARLITE_FTTH",
+    type: "EXPENSE",
+    category: "Capex Rollout Jaringan",
+    amount: 14200000,
+    status: "COMPLETED",
+    paymentMethod: "Bank BCA Bisnis",
+    recipientOrPayer: "PT. Fiberindo Mandiri Sukses"
+  },
+  {
+    id: "tx-003",
+    transactionNumber: "TX-IN-20261116-03",
+    date: "2026-11-16",
+    description: "Penerimaan Tagihan Internet Starlite Cluster Sentul (Batch 1)",
+    unit: "STARLITE_FTTH",
+    type: "INCOME",
+    category: "Pendapatan Langganan FTTH",
+    amount: 8640000,
+    status: "COMPLETED",
+    paymentMethod: "Payment Gateway QRIS/BCA",
+    recipientOrPayer: "18 Pelanggan Residensial"
+  },
+  {
+    id: "tx-004",
+    transactionNumber: "TX-OUT-20261115-04",
+    date: "2026-11-15",
+    description: "Kas Bon Operasional Penarikan Kabel Feeder OLT Sentul",
+    unit: "STARLITE_FTTH",
+    type: "EXPENSE",
+    category: "Kas Bon Operasional",
+    amount: 3500000,
+    status: "COMPLETED",
+    paymentMethod: "Kas Bon Kasir Lapangan",
+    recipientOrPayer: "Rudi Haryanto (Teknisi)"
+  },
+  {
+    id: "tx-005",
+    transactionNumber: "TX-OUT-20261114-05",
+    date: "2026-11-14",
+    description: "Beban Upstream Bandwidth 1 Gbps Dedicated Dedicated Internet",
+    unit: "STARLITE_FTTH",
+    type: "EXPENSE",
+    category: "Opex Bandwidth Upstream",
+    amount: 18500000,
+    status: "COMPLETED",
+    paymentMethod: "Bank BCA",
+    recipientOrPayer: "PT. Lintas Data Jaringan (NAP)"
+  },
+  {
+    id: "tx-006",
+    transactionNumber: "TX-OUT-20261112-06",
+    date: "2026-11-12",
+    description: "Pembelian MCB Schneider & Panel Distribusi Proyek Menara",
+    unit: "ME_CORE",
+    type: "EXPENSE",
+    category: "Material Proyek",
+    amount: 22800000,
+    status: "COMPLETED",
+    paymentMethod: "Transfer Mandiri",
+    recipientOrPayer: "Toko Sinar Elektrik Jaya"
+  },
+  {
+    id: "tx-007",
+    transactionNumber: "TX-IN-20261110-07",
+    date: "2026-11-10",
+    description: "Biaya Pasang Baru (PSB) Pelanggan Bisnis Sentul Niaga",
+    unit: "STARLITE_FTTH",
+    type: "INCOME",
+    category: "Pendapatan PSB & Registrasi",
+    amount: 2500000,
+    status: "COMPLETED",
+    paymentMethod: "Transfer BCA",
+    recipientOrPayer: "CV. Abadi Surya"
+  },
+  {
+    id: "tx-008",
+    transactionNumber: "TX-OUT-20261108-08",
+    date: "2026-11-08",
+    description: "Utilitas Kantor Pusat, Internet Backup, & Konsumsi Meeting",
+    unit: "OVERHEAD_OPERASIONAL",
+    type: "EXPENSE",
+    category: "Overhead Umum & GA",
+    amount: 6750000,
+    status: "COMPLETED",
+    paymentMethod: "Petty Cash Kantor",
+    recipientOrPayer: "Divisi GA & HR"
+  }
+];
+
+// Historical Monthly Summary Data for Filtering (2024, 2025, 2026)
+export const HISTORICAL_FINANCIAL_DATA: import("@/types").MonthlyFinancialSummary[] = [
+  // Tahun 2026
+  { month: "Jan", monthNum: 1, year: 2026, income: 145000000, expense: 98000000, meExpense: 65000000, ftthExpense: 23000000, overheadExpense: 10000000 },
+  { month: "Feb", monthNum: 2, year: 2026, income: 160000000, expense: 112000000, meExpense: 72000000, ftthExpense: 28000000, overheadExpense: 12000000 },
+  { month: "Mar", monthNum: 3, year: 2026, income: 185000000, expense: 130000000, meExpense: 85000000, ftthExpense: 33000000, overheadExpense: 12000000 },
+  { month: "Apr", monthNum: 4, year: 2026, income: 170000000, expense: 125000000, meExpense: 80000000, ftthExpense: 32000000, overheadExpense: 13000000 },
+  { month: "Mei", monthNum: 5, year: 2026, income: 210000000, expense: 148000000, meExpense: 95000000, ftthExpense: 40000000, overheadExpense: 13000000 },
+  { month: "Jun", monthNum: 6, year: 2026, income: 230000000, expense: 165000000, meExpense: 105000000, ftthExpense: 45000000, overheadExpense: 15000000 },
+  { month: "Jul", monthNum: 7, year: 2026, income: 245000000, expense: 172000000, meExpense: 110000000, ftthExpense: 47000000, overheadExpense: 15000000 },
+  { month: "Agu", monthNum: 8, year: 2026, income: 260000000, expense: 188000000, meExpense: 115000000, ftthExpense: 58000000, overheadExpense: 15000000 },
+  { month: "Sep", monthNum: 9, year: 2026, income: 290000000, expense: 205000000, meExpense: 125000000, ftthExpense: 64000000, overheadExpense: 16000000 },
+  { month: "Okt", monthNum: 10, year: 2026, income: 310000000, expense: 220000000, meExpense: 130000000, ftthExpense: 72000000, overheadExpense: 18000000 },
+  { month: "Nov", monthNum: 11, year: 2026, income: 285000000, expense: 195000000, meExpense: 118000000, ftthExpense: 61000000, overheadExpense: 16000000 },
+  { month: "Des", monthNum: 12, year: 2026, income: 340000000, expense: 235000000, meExpense: 140000000, ftthExpense: 75000000, overheadExpense: 20000000 },
+
+  // Tahun 2025
+  { month: "Jan", monthNum: 1, year: 2025, income: 110000000, expense: 80000000, meExpense: 55000000, ftthExpense: 15000000, overheadExpense: 10000000 },
+  { month: "Feb", monthNum: 2, year: 2025, income: 125000000, expense: 90000000, meExpense: 65000000, ftthExpense: 15000000, overheadExpense: 10000000 },
+  { month: "Mar", monthNum: 3, year: 2025, income: 140000000, expense: 102000000, meExpense: 75000000, ftthExpense: 17000000, overheadExpense: 10000000 },
+  { month: "Apr", monthNum: 4, year: 2025, income: 135000000, expense: 98000000, meExpense: 70000000, ftthExpense: 18000000, overheadExpense: 10000000 },
+  { month: "Mei", monthNum: 5, year: 2025, income: 150000000, expense: 110000000, meExpense: 80000000, ftthExpense: 19000000, overheadExpense: 11000000 },
+  { month: "Jun", monthNum: 6, year: 2025, income: 165000000, expense: 120000000, meExpense: 85000000, ftthExpense: 23000000, overheadExpense: 12000000 },
+  { month: "Jul", monthNum: 7, year: 2025, income: 175000000, expense: 128000000, meExpense: 90000000, ftthExpense: 26000000, overheadExpense: 12000000 },
+  { month: "Agu", monthNum: 8, year: 2025, income: 180000000, expense: 135000000, meExpense: 95000000, ftthExpense: 28000000, overheadExpense: 12000000 },
+  { month: "Sep", monthNum: 9, year: 2025, income: 195000000, expense: 142000000, meExpense: 100000000, ftthExpense: 30000000, overheadExpense: 12000000 },
+  { month: "Okt", monthNum: 10, year: 2025, income: 210000000, expense: 155000000, meExpense: 110000000, ftthExpense: 32000000, overheadExpense: 13000000 },
+  { month: "Nov", monthNum: 11, year: 2025, income: 220000000, expense: 160000000, meExpense: 112000000, ftthExpense: 34000000, overheadExpense: 14000000 },
+  { month: "Des", monthNum: 12, year: 2025, income: 240000000, expense: 178000000, meExpense: 120000000, ftthExpense: 42000000, overheadExpense: 16000000 },
+
+  // Tahun 2024
+  { month: "Jan", monthNum: 1, year: 2024, income: 80000000, expense: 60000000, meExpense: 48000000, ftthExpense: 5000000, overheadExpense: 7000000 },
+  { month: "Feb", monthNum: 2, year: 2024, income: 85000000, expense: 64000000, meExpense: 51000000, ftthExpense: 6000000, overheadExpense: 7000000 },
+  { month: "Mar", monthNum: 3, year: 2024, income: 95000000, expense: 70000000, meExpense: 56000000, ftthExpense: 6000000, overheadExpense: 8000000 },
+  { month: "Apr", monthNum: 4, year: 2024, income: 90000000, expense: 68000000, meExpense: 54000000, ftthExpense: 6000000, overheadExpense: 8000000 },
+  { month: "Mei", monthNum: 5, year: 2024, income: 100000000, expense: 75000000, meExpense: 60000000, ftthExpense: 7000000, overheadExpense: 8000000 },
+  { month: "Jun", monthNum: 6, year: 2024, income: 110000000, expense: 82000000, meExpense: 66000000, ftthExpense: 8000000, overheadExpense: 8000000 },
+  { month: "Jul", monthNum: 7, year: 2024, income: 115000000, expense: 85000000, meExpense: 68000000, ftthExpense: 9000000, overheadExpense: 8000000 },
+  { month: "Agu", monthNum: 8, year: 2024, income: 120000000, expense: 89000000, meExpense: 71000000, ftthExpense: 10000000, overheadExpense: 8000000 },
+  { month: "Sep", monthNum: 9, year: 2024, income: 130000000, expense: 95000000, meExpense: 76000000, ftthExpense: 10000000, overheadExpense: 9000000 },
+  { month: "Okt", monthNum: 10, year: 2024, income: 135000000, expense: 99000000, meExpense: 78000000, ftthExpense: 11000000, overheadExpense: 10000000 },
+  { month: "Nov", monthNum: 11, year: 2024, income: 140000000, expense: 102000000, meExpense: 80000000, ftthExpense: 12000000, overheadExpense: 10000000 },
+  { month: "Des", monthNum: 12, year: 2024, income: 150000000, expense: 112000000, meExpense: 88000000, ftthExpense: 13000000, overheadExpense: 11000000 }
+];
+
+// Pending Approvals Queue (Budget Requests & LPJ Realizations)
+export interface PendingApprovalItem {
+  id: string;
+  type: 'BUDGET_REQUEST' | 'LPJ_REALIZATION';
+  docNumber: string;
+  title: string;
+  unit: import("@/types").BusinessUnit;
+  requester: string;
+  amount: number;
+  submittedAt: string;
+  level: string; // e.g. "SPV Operasional", "Finance / Kasir", "Direksi"
+  urgent: boolean;
+}
+
+export const INITIAL_PENDING_APPROVALS: PendingApprovalItem[] = [
+  {
+    id: "appr-01",
+    type: "BUDGET_REQUEST",
+    docNumber: "CA-2026-STAR-042",
+    title: "Kas Bon Operasional Penarikan Kabel ODP Sentul",
+    unit: "STARLITE_FTTH",
+    requester: "Rudi Haryanto (Teknisi Lapangan)",
+    amount: 3500000,
+    submittedAt: "2026-11-16",
+    level: "Finance / Kasir",
+    urgent: true
+  },
+  {
+    id: "appr-02",
+    type: "BUDGET_REQUEST",
+    docNumber: "PR-2026-ME-020",
+    title: "Pengadaan Pipa Konduit & Cable Tray Gedung Menara",
+    unit: "ME_CORE",
+    requester: "Agus Pratama (Site SPV)",
+    amount: 14750000,
+    submittedAt: "2026-11-17",
+    level: "Division Head ME",
+    urgent: false
+  },
+  {
+    id: "appr-03",
+    type: "LPJ_REALIZATION",
+    docNumber: "LPJ-2026-ME-015",
+    title: "LPJ Pembelian Solar Genset Proyek KIIC (Nota Terlampir)",
+    unit: "ME_CORE",
+    requester: "Sandi Kurnia (Logistik)",
+    amount: 5200000,
+    submittedAt: "2026-11-17",
+    level: "Verifikasi Kasir",
+    urgent: true
+  },
+  {
+    id: "appr-04",
+    type: "LPJ_REALIZATION",
+    docNumber: "LPJ-2026-STAR-039",
+    title: "LPJ Splicer Maintenance & Transport Teknisi",
+    unit: "STARLITE_FTTH",
+    requester: "Fajar Nugraha (Teknisi FTTH)",
+    amount: 2800000,
+    submittedAt: "2026-11-18",
+    level: "Verifikasi Kasir",
+    urgent: false
+  }
+];
+
+// Division Budget Capaian Data Helper per Year
+export const DIVISION_BUDGET_YEARS = {
+  2026: [
+    {
+      unit: "ME_CORE" as import("@/types").BusinessUnit,
+      name: "Divisi Jasa Mekanik & Elektronik (ME)",
+      code: "DIV-ME",
+      pagu: 850000000,
+      terpakai: 625000000,
+      terencana: 120000000,
+      iconName: "Building2",
+      color: "blue"
+    },
+    {
+      unit: "STARLITE_FTTH" as import("@/types").BusinessUnit,
+      name: "Divisi Ekspansi Starlite FTTH",
+      code: "DIV-STARLITE",
+      pagu: 950000000,
+      terpakai: 742000000,
+      terencana: 150000000,
+      iconName: "Wifi",
+      color: "fuchsia"
+    },
+    {
+      unit: "OVERHEAD_OPERASIONAL" as import("@/types").BusinessUnit,
+      name: "Divisi Operasional & Umum (GA/HR)",
+      code: "DIV-OPS",
+      pagu: 220000000,
+      terpakai: 165000000,
+      terencana: 30000000,
+      iconName: "ShieldCheck",
+      color: "slate"
+    }
+  ],
+  2025: [
+    {
+      unit: "ME_CORE" as import("@/types").BusinessUnit,
+      name: "Divisi Jasa Mekanik & Elektronik (ME)",
+      code: "DIV-ME",
+      pagu: 720000000,
+      terpakai: 680000000,
+      terencana: 20000000,
+      iconName: "Building2",
+      color: "blue"
+    },
+    {
+      unit: "STARLITE_FTTH" as import("@/types").BusinessUnit,
+      name: "Divisi Ekspansi Starlite FTTH",
+      code: "DIV-STARLITE",
+      pagu: 500000000,
+      terpakai: 460000000,
+      terencana: 25000000,
+      iconName: "Wifi",
+      color: "fuchsia"
+    },
+    {
+      unit: "OVERHEAD_OPERASIONAL" as import("@/types").BusinessUnit,
+      name: "Divisi Operasional & Umum (GA/HR)",
+      code: "DIV-OPS",
+      pagu: 180000000,
+      terpakai: 162000000,
+      terencana: 10000000,
+      iconName: "ShieldCheck",
+      color: "slate"
+    }
+  ],
+  2024: [
+    {
+      unit: "ME_CORE" as import("@/types").BusinessUnit,
+      name: "Divisi Jasa Mekanik & Elektronik (ME)",
+      code: "DIV-ME",
+      pagu: 550000000,
+      terpakai: 512000000,
+      terencana: 15000000,
+      iconName: "Building2",
+      color: "blue"
+    },
+    {
+      unit: "STARLITE_FTTH" as import("@/types").BusinessUnit,
+      name: "Divisi Ekspansi Starlite FTTH",
+      code: "DIV-STARLITE",
+      pagu: 200000000,
+      terpakai: 185000000,
+      terencana: 10000000,
+      iconName: "Wifi",
+      color: "fuchsia"
+    },
+    {
+      unit: "OVERHEAD_OPERASIONAL" as import("@/types").BusinessUnit,
+      name: "Divisi Operasional & Umum (GA/HR)",
+      code: "DIV-OPS",
+      pagu: 140000000,
+      terpakai: 132000000,
+      terencana: 5000000,
+      iconName: "ShieldCheck",
+      color: "slate"
+    }
+  ]
+};
+

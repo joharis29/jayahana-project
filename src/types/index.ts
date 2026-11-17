@@ -124,3 +124,30 @@ export interface JournalEntry {
   creditAccount: string;
   amount: number;
 }
+
+// Financial Transaction for Dashboard Feed
+export interface FinancialTransaction {
+  id: string;
+  transactionNumber: string;
+  date: string;
+  description: string;
+  unit: BusinessUnit;
+  type: 'INCOME' | 'EXPENSE';
+  category: string;
+  amount: number;
+  status: 'COMPLETED' | 'PENDING' | 'VERIFIED';
+  paymentMethod: string;
+  recipientOrPayer: string;
+}
+
+export interface MonthlyFinancialSummary {
+  month: string; // e.g. "Jan", "Feb", ...
+  monthNum: number; // 1-12
+  year: number;
+  income: number;
+  expense: number;
+  meExpense: number;
+  ftthExpense: number;
+  overheadExpense: number;
+}
+
