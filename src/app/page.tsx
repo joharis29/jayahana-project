@@ -27,7 +27,11 @@ import {
   X,
   CreditCard,
   Download,
-  AlertTriangle
+  AlertTriangle,
+  RotateCw,
+  MoreVertical,
+  CircleDot,
+  Activity
 } from "lucide-react";
 import { 
   COMPANY_NAME, 
@@ -40,6 +44,12 @@ import {
   HISTORICAL_FINANCIAL_DATA,
   INITIAL_PENDING_APPROVALS,
   DIVISION_BUDGET_YEARS,
+  WEEKLY_SALES_TREND,
+  ANNUAL_PROFIT_LOSS_ACCURATE,
+  COMPANY_EXPENSE_ACCURATE,
+  SALES_SUMMARY_ACCURATE,
+  PURCHASE_SUMMARY_ACCURATE,
+  USER_ACTIVITY_ACCURATE,
   type PendingApprovalItem
 } from "@/lib/constants";
 import { formatRupiah, formatDateIndo } from "@/lib/utils";
@@ -82,6 +92,14 @@ export default function DashboardPage() {
 
   // Chart View Mode
   const [chartMode, setChartMode] = useState<"FLOW" | "DIVISION">("FLOW");
+
+  // Accurate Widgets State
+  const [hoveredTrendDay, setHoveredTrendDay] = useState<string>("Hari ini");
+  const [widgetRefreshAnim, setWidgetRefreshAnim] = useState<boolean>(false);
+  const handleRefreshWidgets = () => {
+    setWidgetRefreshAnim(true);
+    setTimeout(() => setWidgetRefreshAnim(false), 600);
+  };
 
   // Modals state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -551,6 +569,486 @@ export default function DashboardPage() {
                   <span className="font-bold text-emerald-600">
                     {paidInvoicesCount} / {INITIAL_INVOICES.length} Lunas
                   </span>
+                </div>
+              </div>
+            </div>
+
+            {/* ========================================================================= */}
+            {/* SECTION: ACCURATE ERP WIDGETS (TREN PENJUALAN, LABA/RUGI, BEBAN, DLL)   */}
+            {/* ========================================================================= */}
+            <div className="space-y-4">
+              {/* Header Widget Bar */}
+              <div className="flex justify-between items-center px-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Activity className="w-3.5 h-3.5 text-blue-600" />
+                    Panel Finansial & Operasional (Standard Accurate ERP)
+                  </span>
+                  <span className="text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-semibold">
+                    Live Data
+                  </span>
+                </div>
+                <button
+                  onClick={handleRefreshWidgets}
+                  className="flex items-center gap-1 text-xs text-slate-600 hover:text-blue-600 transition"
+                  title="Refresh Widgets"
+                >
+                  <RotateCw className={`w-3.5 h-3.5 ${widgetRefreshAnim ? "animate-spin text-blue-600" : ""}`} />
+                  <span>Refresh Widget</span>
+                </button>
+              </div>
+
+              {/* ROW 1: Aktifitas Terakhir, Kegiatan Mendatang, Tren Penjualan */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* Widget 1: Aktifitas Terakhir Anda */}
+                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between">
+                  <div className="flex justify-between items-start pb-2 border-b border-slate-100">
+                    <h3 className="text-xs font-bold text-slate-900">Aktifitas Terakhir Anda ({USER_ACTIVITY_ACCURATE.userName})</h3>
+                    <div className="flex items-center gap-1 text-slate-400">
+                      <button onClick={handleRefreshWidgets} className="hover:text-slate-600 p-0.5"><RotateCw className="w-3.5 h-3.5" /></button>
+                      <button className="hover:text-slate-600 p-0.5"><MoreVertical className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </div>
+                  <div className="py-4 flex items-center gap-4">
+                    <div className="text-center px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
+                      <div className="text-2xl font-black text-slate-900 leading-tight">18</div>
+                      <div className="text-[10px] uppercase font-bold text-slate-500">Nov</div>
+                    </div>
+                    <div className="text-xs">
+                      <div className="flex items-center gap-1.5 text-slate-500 font-medium">
+                        <Clock className="w-3.5 h-3.5 text-blue-500" />
+                        <span>Hari ini &bull; {USER_ACTIVITY_ACCURATE.lastActivityTime}</span>
+                      </div>
+                      <div className="font-bold text-slate-800 mt-1 text-xs">
+                        {USER_ACTIVITY_ACCURATE.lastActivityDesc}
+                      </div>
+                      <div className="text-[11px] text-emerald-600 font-semibold mt-0.5 flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" /> Preferensi Akun Tersimpan
+                      </div>
+                    </div>
+                  </div>
+                  <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 flex justify-between">
+                    <span>Sesi: Administrator Utama</span>
+                    <span>IP: 192.168.1.31</span>
+                  </div>
+                </div>
+
+                {/* Widget 2: Kegiatan Mendatang */}
+                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between">
+                  <div className="flex justify-between items-start pb-2 border-b border-slate-100">
+                    <h3 className="text-xs font-bold text-slate-900">Kegiatan Mendatang</h3>
+                    <div className="flex items-center gap-1 text-slate-400">
+                      <button onClick={handleRefreshWidgets} className="hover:text-slate-600 p-0.5"><RotateCw className="w-3.5 h-3.5" /></button>
+                      <button className="hover:text-slate-600 p-0.5"><MoreVertical className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </div>
+                  <div className="py-2 space-y-2">
+                    {USER_ACTIVITY_ACCURATE.upcomingEvents.map((ev) => (
+                      <div key={ev.id} className="p-2 rounded-lg bg-slate-50 border border-slate-150 flex items-start justify-between text-xs">
+                        <div>
+                          <div className="font-semibold text-slate-800 line-clamp-1">{ev.title}</div>
+                          <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+                            <Calendar className="w-3 h-3 text-slate-400" /> {ev.date}
+                          </div>
+                        </div>
+                        <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-xs ${
+                          ev.division === "STARLITE_FTTH" ? "bg-fuchsia-100 text-fuchsia-700" : "bg-blue-100 text-blue-700"
+                        }`}>
+                          {ev.division === "STARLITE_FTTH" ? "Starlite" : "ME Core"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="pt-2 border-t border-slate-100 text-[10px] text-blue-600 font-semibold text-right cursor-pointer hover:underline">
+                    Lihat Semua Jadwal &rarr;
+                  </div>
+                </div>
+
+                {/* Widget 3: Tren Penjualan (Seminggu terakhir) */}
+                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between">
+                  <div className="flex justify-between items-start pb-2 border-b border-slate-100">
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-900">Tren Penjualan</h3>
+                      <span className="text-[10px] text-slate-400">(Seminggu terakhir)</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-slate-400">
+                      <button onClick={handleRefreshWidgets} className="hover:text-slate-600 p-0.5"><RotateCw className="w-3.5 h-3.5" /></button>
+                      <button className="hover:text-slate-600 p-0.5"><MoreVertical className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </div>
+
+                  {/* SVG Line Chart for Tren Penjualan */}
+                  <div className="py-2">
+                    <div className="flex justify-between items-center text-[11px] mb-1">
+                      <span className="text-slate-500">Dipilih: <strong className="text-blue-700">{hoveredTrendDay}</strong></span>
+                      <span className="font-bold text-slate-900">
+                        {formatRupiah(WEEKLY_SALES_TREND.find(d => d.day === hoveredTrendDay)?.value || 55440000)}
+                      </span>
+                    </div>
+                    <div className="h-28 w-full relative">
+                      <svg className="w-full h-full overflow-visible" viewBox="0 0 280 80" preserveAspectRatio="none">
+                        <defs>
+                          <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.25" />
+                            <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
+                          </linearGradient>
+                        </defs>
+                        {/* Area Fill */}
+                        <polygon
+                          fill="url(#salesGrad)"
+                          points="10,80 10,60 50,48 90,68 130,74 170,25 210,20 270,8 270,80"
+                        />
+                        {/* Grid Line 0 */}
+                        <line x1="0" y1="78" x2="280" y2="78" stroke="#e2e8f0" strokeWidth="1" />
+                        {/* Line Path */}
+                        <polyline
+                          fill="none"
+                          stroke="#3b82f6"
+                          strokeWidth="2.5"
+                          points="10,60 50,48 90,68 130,74 170,25 210,20 270,8"
+                        />
+                        {/* Data Points */}
+                        {[
+                          { cx: 10, cy: 60, day: "Kam" },
+                          { cx: 50, cy: 48, day: "Jum" },
+                          { cx: 90, cy: 68, day: "Sab" },
+                          { cx: 130, cy: 74, day: "Min" },
+                          { cx: 170, cy: 25, day: "Sen" },
+                          { cx: 210, cy: 20, day: "Kemarin" },
+                          { cx: 270, cy: 8, day: "Hari ini" }
+                        ].map((pt) => (
+                          <circle
+                            key={pt.day}
+                            cx={pt.cx}
+                            cy={pt.cy}
+                            r={hoveredTrendDay === pt.day ? "5" : "3.5"}
+                            className="cursor-pointer transition-all"
+                            fill={hoveredTrendDay === pt.day ? "#1d4ed8" : "#3b82f6"}
+                            stroke="#ffffff"
+                            strokeWidth="2"
+                            onMouseEnter={() => setHoveredTrendDay(pt.day)}
+                          />
+                        ))}
+                      </svg>
+                    </div>
+
+                    {/* Day Labels */}
+                    <div className="flex justify-between text-[10px] text-slate-500 font-medium px-1 mt-1">
+                      {WEEKLY_SALES_TREND.map(item => (
+                        <span
+                          key={item.day}
+                          onClick={() => setHoveredTrendDay(item.day)}
+                          className={`cursor-pointer transition ${hoveredTrendDay === item.day ? "font-bold text-blue-600" : "hover:text-slate-900"}`}
+                        >
+                          {item.day}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-[10px] text-slate-400">
+                    <span>Baseline: Rp 0</span>
+                    <span className="text-emerald-600 font-semibold">+18.5% Tren Positif</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* ROW 2: Laba/Rugi Tahun ini, Beban Perusahaan, Arus Kas */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* Widget 4: Laba/Rugi Tahun ini */}
+                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between">
+                  <div>
+                    <div className="flex justify-between items-start pb-2 border-b border-slate-100">
+                      <h3 className="text-xs font-bold text-slate-900">Laba/Rugi Tahun ini</h3>
+                      <div className="flex items-center gap-1 text-slate-400">
+                        <button onClick={handleRefreshWidgets} className="hover:text-slate-600 p-0.5"><RotateCw className="w-3.5 h-3.5" /></button>
+                        <button className="hover:text-slate-600 p-0.5"><MoreVertical className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </div>
+
+                    <div className="py-1 text-center text-[11px] text-slate-500 font-mono flex items-center justify-center gap-2">
+                      <span className="cursor-pointer hover:text-slate-800">&lt;</span>
+                      <span>{ANNUAL_PROFIT_LOSS_ACCURATE.periodLabel}</span>
+                      <span className="cursor-pointer hover:text-slate-800">&gt;</span>
+                    </div>
+
+                    {/* Gauge / Donut + Legend */}
+                    <div className="flex items-center gap-3 py-3">
+                      {/* Circular Gauge */}
+                      <div className="relative w-20 h-20 shrink-0 flex items-center justify-center">
+                        <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                          <circle cx="18" cy="18" r="15.5" fill="none" stroke="#f1f5f9" strokeWidth="3.5" />
+                          <circle
+                            cx="18"
+                            cy="18"
+                            r="15.5"
+                            fill="none"
+                            stroke="#10b981"
+                            strokeWidth="3.5"
+                            strokeDasharray="97.4"
+                            strokeDashoffset={97.4 - (97.4 * ANNUAL_PROFIT_LOSS_ACCURATE.profitMarginPercent) / 100}
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                        <div className="absolute text-center">
+                          <span className="text-xs font-black text-slate-900">{ANNUAL_PROFIT_LOSS_ACCURATE.profitMarginPercent}%</span>
+                          <span className="block text-[8px] text-slate-400 uppercase font-bold">Margin</span>
+                        </div>
+                      </div>
+
+                      {/* Legend Items */}
+                      <div className="flex-1 space-y-1.5 text-[11px]">
+                        <div className="flex justify-between items-center">
+                          <span className="flex items-center gap-1.5 text-slate-600">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Pendapatan
+                          </span>
+                          <span className="font-bold text-slate-900">{formatRupiah(ANNUAL_PROFIT_LOSS_ACCURATE.pendapatan)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="flex items-center gap-1.5 text-slate-600">
+                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Nilai HPP
+                          </span>
+                          <span className="font-semibold text-slate-700">{formatRupiah(ANNUAL_PROFIT_LOSS_ACCURATE.hpp)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="flex items-center gap-1.5 text-slate-600">
+                            <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Pengeluaran
+                          </span>
+                          <span className="font-semibold text-slate-700">{formatRupiah(ANNUAL_PROFIT_LOSS_ACCURATE.pengeluaran)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-[10px]">
+                    <span className="text-slate-400">
+                      Dibanding 1 Jan - 18 Nov 2025: <strong className="text-slate-600">{formatRupiah(ANNUAL_PROFIT_LOSS_ACCURATE.bandingTahunLalu)}</strong>
+                    </span>
+                    <span className="font-bold text-emerald-600 text-xs">
+                      Laba: {formatRupiah(ANNUAL_PROFIT_LOSS_ACCURATE.labaBersih)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Widget 5: Beban Perusahaan */}
+                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between">
+                  <div>
+                    <div className="flex justify-between items-start pb-2 border-b border-slate-100">
+                      <h3 className="text-xs font-bold text-slate-900">Beban Perusahaan</h3>
+                      <div className="flex items-center gap-1 text-slate-400">
+                        <button onClick={handleRefreshWidgets} className="hover:text-slate-600 p-0.5"><RotateCw className="w-3.5 h-3.5" /></button>
+                        <button className="hover:text-slate-600 p-0.5"><MoreVertical className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </div>
+
+                    <div className="py-1 text-center text-[11px] text-slate-500 font-mono flex items-center justify-center gap-2">
+                      <span className="cursor-pointer hover:text-slate-800">&lt;</span>
+                      <span>{COMPANY_EXPENSE_ACCURATE.periodLabel}</span>
+                      <span className="cursor-pointer hover:text-slate-800">&gt;</span>
+                    </div>
+
+                    <div className="flex items-center gap-3 py-3">
+                      {/* Donut Beban */}
+                      <div className="relative w-20 h-20 shrink-0 flex items-center justify-center">
+                        <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                          <circle cx="18" cy="18" r="15.5" fill="none" stroke="#f1f5f9" strokeWidth="3.5" />
+                          <circle
+                            cx="18"
+                            cy="18"
+                            r="15.5"
+                            fill="none"
+                            stroke="#3b82f6"
+                            strokeWidth="3.5"
+                            strokeDasharray="97.4"
+                            strokeDashoffset="56"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                        <div className="absolute text-center">
+                          <span className="text-xs font-black text-slate-900">42%</span>
+                          <span className="block text-[8px] text-slate-400 uppercase font-bold">ME Mat</span>
+                        </div>
+                      </div>
+
+                      {/* Beban Total & Breakdown */}
+                      <div className="flex-1 space-y-1 text-[11px]">
+                        <div className="text-xs font-bold text-slate-900 mb-1">
+                          Beban: {formatRupiah(COMPANY_EXPENSE_ACCURATE.totalBeban)}
+                        </div>
+                        {COMPANY_EXPENSE_ACCURATE.breakdown.map((b) => (
+                          <div key={b.name} className="flex justify-between items-center text-[10px] text-slate-600">
+                            <span className="truncate max-w-[110px]">{b.name}</span>
+                            <span className="font-semibold text-slate-800">{b.percent}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-[10px]">
+                    <span className="text-slate-400">
+                      Dibanding 1 Okt - 31 Okt 2026: <strong className="text-slate-600">{formatRupiah(COMPANY_EXPENSE_ACCURATE.bandingBulanLalu)}</strong>
+                    </span>
+                    <span className="text-emerald-600 font-semibold">-{COMPANY_EXPENSE_ACCURATE.efisiensiPercent}% Efisien</span>
+                  </div>
+                </div>
+
+                {/* Widget 6: Arus Kas */}
+                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between">
+                  <div className="flex justify-between items-start pb-2 border-b border-slate-100">
+                    <h3 className="text-xs font-bold text-slate-900">Arus Kas</h3>
+                    <div className="flex items-center gap-1 text-slate-400">
+                      <button onClick={handleRefreshWidgets} className="hover:text-slate-600 p-0.5"><RotateCw className="w-3.5 h-3.5" /></button>
+                      <button className="hover:text-slate-600 p-0.5"><MoreVertical className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </div>
+
+                  <div className="py-2">
+                    {/* Tooltip Badge */}
+                    <div className="flex justify-end mb-1">
+                      <div className="bg-blue-50 border border-blue-200 text-blue-800 text-[10px] px-2 py-0.5 rounded-md font-semibold">
+                        Rata-rata 18 Nov: Rp 36.800.000
+                      </div>
+                    </div>
+
+                    <div className="h-28 w-full relative">
+                      <svg className="w-full h-full overflow-visible" viewBox="0 0 280 80" preserveAspectRatio="none">
+                        <line x1="0" y1="50" x2="280" y2="50" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="3 3" />
+                        <line x1="0" y1="78" x2="280" y2="78" stroke="#cbd5e1" strokeWidth="1" />
+                        <polyline
+                          fill="none"
+                          stroke="#0284c7"
+                          strokeWidth="2.5"
+                          points="10,50 50,50 90,50 130,50 170,50 210,50 250,50"
+                        />
+                        {[10, 50, 90, 130, 170, 210, 250].map((cx, i) => (
+                          <circle
+                            key={cx}
+                            cx={cx}
+                            cy={50}
+                            r={i === 6 ? "5" : "3.5"}
+                            fill={i === 6 ? "#0369a1" : "#0284c7"}
+                            stroke="#ffffff"
+                            strokeWidth="2"
+                          />
+                        ))}
+                      </svg>
+                    </div>
+
+                    <div className="flex justify-between text-[10px] text-slate-400 font-mono mt-1">
+                      <span>12 Nov</span>
+                      <span>13 Nov</span>
+                      <span>14 Nov</span>
+                      <span>15 Nov</span>
+                      <span>16 Nov</span>
+                      <span>17 Nov</span>
+                      <span className="font-bold text-sky-700">18 Nov</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-[10px] text-slate-400">
+                    <span>Baseline: 0</span>
+                    <span className="flex items-center gap-1 font-medium text-slate-500">
+                      <Clock className="w-3 h-3 text-slate-400" /> Data per jam 05:35
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* ROW 3: Penjualan & Pembelian (Status Faktur) */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Widget 7: Penjualan */}
+                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs">
+                  <div className="flex justify-between items-start pb-2 border-b border-slate-100">
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-900">Penjualan</h3>
+                      <span className="text-[10px] text-slate-400 font-mono">&lt; {SALES_SUMMARY_ACCURATE.periodLabel} &gt;</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-slate-400">
+                      <button onClick={handleRefreshWidgets} className="hover:text-slate-600 p-0.5"><RotateCw className="w-3.5 h-3.5" /></button>
+                      <button className="hover:text-slate-600 p-0.5"><MoreVertical className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 py-3 border-b border-slate-100">
+                    <div>
+                      <span className="text-[10px] text-slate-500 font-semibold uppercase">Pendapatan</span>
+                      <div className="text-base font-extrabold text-slate-900">{formatRupiah(SALES_SUMMARY_ACCURATE.pendapatan)}</div>
+                      <span className="text-[10px] text-slate-400">Hari ini: {formatRupiah(SALES_SUMMARY_ACCURATE.hariIni)}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 font-semibold uppercase">Belum Lunas (Piutang AR)</span>
+                      <div className="text-base font-extrabold text-amber-600">{formatRupiah(SALES_SUMMARY_ACCURATE.belumLunas)}</div>
+                      <span className="text-[10px] text-slate-400">Kolektibilitas: 77.2%</span>
+                    </div>
+                  </div>
+
+                  {/* 4 Box Breakdown */}
+                  <div className="grid grid-cols-4 gap-2 pt-3 text-center text-xs">
+                    <div className="p-2 rounded-lg bg-emerald-50/70 border border-emerald-100">
+                      <span className="text-[10px] text-emerald-800 font-semibold block">Faktur Lunas</span>
+                      <span className="font-bold text-emerald-700 text-[11px]">{formatRupiah(SALES_SUMMARY_ACCURATE.fakturLunas)}</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-[10px] text-slate-600 font-semibold block">Belum Lunas</span>
+                      <span className="font-bold text-slate-800 text-[11px]">{formatRupiah(SALES_SUMMARY_ACCURATE.belumLunas)}</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-amber-50/70 border border-amber-100">
+                      <span className="text-[10px] text-amber-800 font-semibold block">Belum Jth Tempo</span>
+                      <span className="font-bold text-amber-700 text-[11px]">{formatRupiah(SALES_SUMMARY_ACCURATE.belumJatuhTempo)}</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-rose-50/70 border border-rose-100">
+                      <span className="text-[10px] text-rose-800 font-semibold block">Lewat Tempo</span>
+                      <span className="font-bold text-rose-700 text-[11px]">{formatRupiah(SALES_SUMMARY_ACCURATE.lewatJatuhTempo)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Widget 8: Pembelian */}
+                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs">
+                  <div className="flex justify-between items-start pb-2 border-b border-slate-100">
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-900">Pembelian</h3>
+                      <span className="text-[10px] text-slate-400 font-mono">&lt; {PURCHASE_SUMMARY_ACCURATE.periodLabel} &gt;</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-slate-400">
+                      <button onClick={handleRefreshWidgets} className="hover:text-slate-600 p-0.5"><RotateCw className="w-3.5 h-3.5" /></button>
+                      <button className="hover:text-slate-600 p-0.5"><MoreVertical className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 py-3 border-b border-slate-100">
+                    <div>
+                      <span className="text-[10px] text-slate-500 font-semibold uppercase">Pembelian</span>
+                      <div className="text-base font-extrabold text-slate-900">{formatRupiah(PURCHASE_SUMMARY_ACCURATE.pembelian)}</div>
+                      <span className="text-[10px] text-slate-400">Hari ini: {formatRupiah(PURCHASE_SUMMARY_ACCURATE.hariIni)}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 font-semibold uppercase">Belum Lunas (Hutang AP)</span>
+                      <div className="text-base font-extrabold text-slate-700">{formatRupiah(PURCHASE_SUMMARY_ACCURATE.belumLunas)}</div>
+                      <span className="text-[10px] text-slate-400">PO Aktif: 4 Dokumen</span>
+                    </div>
+                  </div>
+
+                  {/* 4 Box Breakdown */}
+                  <div className="grid grid-cols-4 gap-2 pt-3 text-center text-xs">
+                    <div className="p-2 rounded-lg bg-emerald-50/70 border border-emerald-100">
+                      <span className="text-[10px] text-emerald-800 font-semibold block">Faktur Lunas</span>
+                      <span className="font-bold text-emerald-700 text-[11px]">{formatRupiah(PURCHASE_SUMMARY_ACCURATE.fakturLunas)}</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-[10px] text-slate-600 font-semibold block">Belum Lunas</span>
+                      <span className="font-bold text-slate-800 text-[11px]">{formatRupiah(PURCHASE_SUMMARY_ACCURATE.belumLunas)}</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-amber-50/70 border border-amber-100">
+                      <span className="text-[10px] text-amber-800 font-semibold block">Belum Jth Tempo</span>
+                      <span className="font-bold text-amber-700 text-[11px]">{formatRupiah(PURCHASE_SUMMARY_ACCURATE.belumJatuhTempo)}</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-rose-50/70 border border-rose-100">
+                      <span className="text-[10px] text-rose-800 font-semibold block">Lewat Tempo</span>
+                      <span className="font-bold text-rose-700 text-[11px]">{formatRupiah(PURCHASE_SUMMARY_ACCURATE.lewatJatuhTempo)}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

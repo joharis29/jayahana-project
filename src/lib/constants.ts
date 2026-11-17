@@ -523,3 +523,71 @@ export const DIVISION_BUDGET_YEARS: Record<number, Array<{
   ]
 };
 
+// Accurate-Style ERP Widgets Data
+export const WEEKLY_SALES_TREND = [
+  { day: "Kam", date: "12 Nov", value: 14500000 },
+  { day: "Jum", date: "13 Nov", value: 22000000 },
+  { day: "Sab", date: "14 Nov", value: 9200000 },
+  { day: "Min", date: "15 Nov", value: 4500000 },
+  { day: "Sen", date: "16 Nov", value: 38500000 },
+  { day: "Kemarin", date: "17 Nov", value: 42000000 },
+  { day: "Hari ini", date: "18 Nov", value: 55440000 },
+];
+
+export const ANNUAL_PROFIT_LOSS_ACCURATE = {
+  periodLabel: "1 Jan - 18 Nov 2026",
+  pendapatan: 2470000000,
+  hpp: 1180000000,
+  pengeluaran: 485000000,
+  labaBersih: 805000000,
+  profitMarginPercent: 32.6,
+  bandingTahunLalu: 620000000, // 2025: 620 jt
+  pertumbuhanPercent: 29.8
+};
+
+export const COMPANY_EXPENSE_ACCURATE = {
+  periodLabel: "1 Nov - 18 Nov 2026",
+  totalBeban: 114250000,
+  breakdown: [
+    { name: "Material & Kabel ME", amount: 48500000, percent: 42.5 },
+    { name: "Bandwidth & OLT FTTH", amount: 32700000, percent: 28.6 },
+    { name: "Gaji & Lembur Teknisi", amount: 22000000, percent: 19.3 },
+    { name: "Operasional & GA", amount: 11050000, percent: 9.6 }
+  ],
+  bandingBulanLalu: 128000000,
+  efisiensiPercent: 10.7
+};
+
+export const SALES_SUMMARY_ACCURATE = {
+  periodLabel: "1 Nov - 18 Nov 2026",
+  pendapatan: 186140000,
+  hariIni: 55440000,
+  belumLunas: 42500000,
+  fakturLunas: 143640000,
+  belumJatuhTempo: 33500000,
+  lewatJatuhTempo: 9000000
+};
+
+export const PURCHASE_SUMMARY_ACCURATE = {
+  periodLabel: "1 Nov - 18 Nov 2026",
+  pembelian: 84600000,
+  hariIni: 14200000,
+  belumLunas: 21000000,
+  fakturLunas: 63600000,
+  belumJatuhTempo: 17500000,
+  lewatJatuhTempo: 3500000
+};
+
+export const USER_ACTIVITY_ACCURATE = {
+  userName: "Sidqi Alaudin Johari",
+  todayDate: "18 Nov",
+  lastActivityTime: "05:35",
+  lastActivityDesc: "Buat Preferensi & Konfigurasi Sistem",
+  upcomingEvents: [
+    { id: "ev-1", date: "20 Nov 2026", title: "Roll-out ODP Cluster Sentul City Tahap 3", division: "STARLITE_FTTH" },
+    { id: "ev-2", date: "22 Nov 2026", title: "Testing Panel Listrik & Pipa ME Proyek KIIC", division: "ME_CORE" },
+    { id: "ev-3", date: "25 Nov 2026", title: "Jatuh Tempo Faktur Termin II Gedung Menara", division: "ME_CORE" }
+  ]
+};
+
+
