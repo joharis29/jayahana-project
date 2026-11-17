@@ -1,4 +1,12 @@
-import { BusinessUnit, CostCenter, StarliteSubscriber, StarliteInvoice, BudgetRequest } from "@/types";
+import { 
+  BusinessUnit, 
+  CostCenter, 
+  StarliteSubscriber, 
+  StarliteInvoice, 
+  BudgetRequest,
+  FinancialTransaction,
+  MonthlyFinancialSummary 
+} from "@/types";
 
 export const COMPANY_NAME = "PT. Jayahana Manaura Mekanika Selaras";
 
@@ -189,7 +197,7 @@ export const INITIAL_INVOICES: StarliteInvoice[] = [
 ];
 
 // Recent Multi-Channel Transactions (Income & Expense)
-export const INITIAL_TRANSACTIONS: import("@/types").FinancialTransaction[] = [
+export const INITIAL_TRANSACTIONS: FinancialTransaction[] = [
   {
     id: "tx-001",
     transactionNumber: "TX-IN-20261118-01",
@@ -297,7 +305,7 @@ export const INITIAL_TRANSACTIONS: import("@/types").FinancialTransaction[] = [
 ];
 
 // Historical Monthly Summary Data for Filtering (2024, 2025, 2026)
-export const HISTORICAL_FINANCIAL_DATA: import("@/types").MonthlyFinancialSummary[] = [
+export const HISTORICAL_FINANCIAL_DATA: MonthlyFinancialSummary[] = [
   // Tahun 2026
   { month: "Jan", monthNum: 1, year: 2026, income: 145000000, expense: 98000000, meExpense: 65000000, ftthExpense: 23000000, overheadExpense: 10000000 },
   { month: "Feb", monthNum: 2, year: 2026, income: 160000000, expense: 112000000, meExpense: 72000000, ftthExpense: 28000000, overheadExpense: 12000000 },
@@ -347,7 +355,7 @@ export interface PendingApprovalItem {
   type: 'BUDGET_REQUEST' | 'LPJ_REALIZATION';
   docNumber: string;
   title: string;
-  unit: import("@/types").BusinessUnit;
+  unit: BusinessUnit;
   requester: string;
   amount: number;
   submittedAt: string;
@@ -407,10 +415,19 @@ export const INITIAL_PENDING_APPROVALS: PendingApprovalItem[] = [
 ];
 
 // Division Budget Capaian Data Helper per Year
-export const DIVISION_BUDGET_YEARS = {
+export const DIVISION_BUDGET_YEARS: Record<number, Array<{
+  unit: BusinessUnit;
+  name: string;
+  code: string;
+  pagu: number;
+  terpakai: number;
+  terencana: number;
+  iconName: string;
+  color: string;
+}>> = {
   2026: [
     {
-      unit: "ME_CORE" as import("@/types").BusinessUnit,
+      unit: "ME_CORE",
       name: "Divisi Jasa Mekanik & Elektronik (ME)",
       code: "DIV-ME",
       pagu: 850000000,
@@ -420,7 +437,7 @@ export const DIVISION_BUDGET_YEARS = {
       color: "blue"
     },
     {
-      unit: "STARLITE_FTTH" as import("@/types").BusinessUnit,
+      unit: "STARLITE_FTTH",
       name: "Divisi Ekspansi Starlite FTTH",
       code: "DIV-STARLITE",
       pagu: 950000000,
@@ -430,7 +447,7 @@ export const DIVISION_BUDGET_YEARS = {
       color: "fuchsia"
     },
     {
-      unit: "OVERHEAD_OPERASIONAL" as import("@/types").BusinessUnit,
+      unit: "OVERHEAD_OPERASIONAL",
       name: "Divisi Operasional & Umum (GA/HR)",
       code: "DIV-OPS",
       pagu: 220000000,
@@ -442,7 +459,7 @@ export const DIVISION_BUDGET_YEARS = {
   ],
   2025: [
     {
-      unit: "ME_CORE" as import("@/types").BusinessUnit,
+      unit: "ME_CORE",
       name: "Divisi Jasa Mekanik & Elektronik (ME)",
       code: "DIV-ME",
       pagu: 720000000,
@@ -452,7 +469,7 @@ export const DIVISION_BUDGET_YEARS = {
       color: "blue"
     },
     {
-      unit: "STARLITE_FTTH" as import("@/types").BusinessUnit,
+      unit: "STARLITE_FTTH",
       name: "Divisi Ekspansi Starlite FTTH",
       code: "DIV-STARLITE",
       pagu: 500000000,
@@ -462,7 +479,7 @@ export const DIVISION_BUDGET_YEARS = {
       color: "fuchsia"
     },
     {
-      unit: "OVERHEAD_OPERASIONAL" as import("@/types").BusinessUnit,
+      unit: "OVERHEAD_OPERASIONAL",
       name: "Divisi Operasional & Umum (GA/HR)",
       code: "DIV-OPS",
       pagu: 180000000,
@@ -474,7 +491,7 @@ export const DIVISION_BUDGET_YEARS = {
   ],
   2024: [
     {
-      unit: "ME_CORE" as import("@/types").BusinessUnit,
+      unit: "ME_CORE",
       name: "Divisi Jasa Mekanik & Elektronik (ME)",
       code: "DIV-ME",
       pagu: 550000000,
@@ -484,7 +501,7 @@ export const DIVISION_BUDGET_YEARS = {
       color: "blue"
     },
     {
-      unit: "STARLITE_FTTH" as import("@/types").BusinessUnit,
+      unit: "STARLITE_FTTH",
       name: "Divisi Ekspansi Starlite FTTH",
       code: "DIV-STARLITE",
       pagu: 200000000,
@@ -494,7 +511,7 @@ export const DIVISION_BUDGET_YEARS = {
       color: "fuchsia"
     },
     {
-      unit: "OVERHEAD_OPERASIONAL" as import("@/types").BusinessUnit,
+      unit: "OVERHEAD_OPERASIONAL",
       name: "Divisi Operasional & Umum (GA/HR)",
       code: "DIV-OPS",
       pagu: 140000000,

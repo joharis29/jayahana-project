@@ -40,7 +40,7 @@ import {
   HISTORICAL_FINANCIAL_DATA,
   INITIAL_PENDING_APPROVALS,
   DIVISION_BUDGET_YEARS,
-  PendingApprovalItem
+  type PendingApprovalItem
 } from "@/lib/constants";
 import { formatRupiah, formatDateIndo } from "@/lib/utils";
 import { BusinessUnit, BudgetRequest, RequestType, UserRole, FinancialTransaction } from "@/types";
