@@ -93,8 +93,9 @@ export default function DashboardPage() {
   // Chart View Mode
   const [chartMode, setChartMode] = useState<"FLOW" | "DIVISION">("FLOW");
 
-  // Accurate Widgets State
-  const [hoveredTrendDay, setHoveredTrendDay] = useState<string>("Hari ini");
+  // Accurate Widgets State (Synchronized per month with active filter)
+  const [activeTrendMonth, setActiveTrendMonth] = useState<number | null>(null);
+  const [activeCashMonth, setActiveCashMonth] = useState<number | null>(null);
   const [widgetRefreshAnim, setWidgetRefreshAnim] = useState<boolean>(false);
   const handleRefreshWidgets = () => {
     setWidgetRefreshAnim(true);
@@ -177,6 +178,42 @@ export default function DashboardPage() {
       };
     }
   }, [filterPeriodType, selectedYear, selectedMonth]);
+
+  // Synchronized Monthly Series for Selected Year (12 Bulan Jan - Des)
+  const yearlySeries = useMemo(() => {
+    return HISTORICAL_FINANCIAL_DATA.filter((d) => d.year === selectedYear);
+  }, [selectedYear]);
+
+  const maxIncome = useMemo(() => Math.max(...yearlySeries.map(m => m.income), 1), [yearlySeries]);
+  const minIncome = useMemo(() => Math.min(...yearlySeries.map(m => m.income), 0), [yearlySeries]);
+
+  const maxNet = useMemo(() => Math.max(...yearlySeries.map(m => m.income - m.expense), 1), [yearlySeries]);
+  const minNet = useMemo(() => Math.min(...yearlySeries.map(m => m.income - m.expense), 0), [yearlySeries]);
+
+  const trendPoints = useMemo(() => {
+    return yearlySeries.map((item, i) => {
+      const cx = 14 + i * 27.27;
+      const cy = 68 - Math.round(((item.income - minIncome) / (maxIncome - minIncome || 1)) * 48);
+      return { ...item, cx, cy };
+    });
+  }, [yearlySeries, minIncome, maxIncome]);
+
+  const cashPoints = useMemo(() => {
+    return yearlySeries.map((item, i) => {
+      const cx = 14 + i * 27.27;
+      const net = item.income - item.expense;
+      const cy = 68 - Math.round(((net - minNet) / (maxNet - minNet || 1)) * 48);
+      return { ...item, net, cx, cy };
+    });
+  }, [yearlySeries, minNet, maxNet]);
+
+  // Active display items for widgets
+  const displayTrendMonth = activeTrendMonth || selectedMonth;
+  const currentTrendItem = yearlySeries.find(m => m.monthNum === displayTrendMonth) || yearlySeries[0];
+
+  const displayCashMonth = activeCashMonth || selectedMonth;
+  const currentCashItem = yearlySeries.find(m => m.monthNum === displayCashMonth) || yearlySeries[0];
+  const currentCashNet = currentCashItem ? currentCashItem.income - currentCashItem.expense : 0;
 
   // Division Budgets for the selected year
   const divisionBudgets = useMemo(() => {
@@ -664,12 +701,12 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* Widget 3: Tren Penjualan (Seminggu terakhir) */}
+                {/* Widget 3: Tren Penjualan (Per Bulan - Sinkron Filter) */}
                 <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between">
                   <div className="flex justify-between items-start pb-2 border-b border-slate-100">
                     <div>
                       <h3 className="text-xs font-bold text-slate-900">Tren Penjualan</h3>
-                      <span className="text-[10px] text-slate-400">(Seminggu terakhir)</span>
+                      <span className="text-[10px] text-slate-400 font-mono">(Per Bulan &bull; Thn {selectedYear})</span>
                     </div>
                     <div className="flex items-center gap-1 text-slate-400">
                       <button onClick={handleRefreshWidgets} className="hover:text-slate-600 p-0.5"><RotateCw className="w-3.5 h-3.5" /></button>
@@ -677,78 +714,85 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  {/* SVG Line Chart for Tren Penjualan */}
+                  {/* SVG Line Chart for Tren Penjualan (12 Bulan) */}
                   <div className="py-2">
                     <div className="flex justify-between items-center text-[11px] mb-1">
-                      <span className="text-slate-500">Dipilih: <strong className="text-blue-700">{hoveredTrendDay}</strong></span>
+                      <span className="text-slate-500">
+                        Bulan: <strong className="text-blue-700">{MONTH_NAMES[displayTrendMonth - 1]?.name} {selectedYear}</strong>
+                      </span>
                       <span className="font-bold text-slate-900">
-                        {formatRupiah(WEEKLY_SALES_TREND.find(d => d.day === hoveredTrendDay)?.value || 55440000)}
+                        {formatRupiah(currentTrendItem?.income || 0)}
                       </span>
                     </div>
                     <div className="h-28 w-full relative">
-                      <svg className="w-full h-full overflow-visible" viewBox="0 0 280 80" preserveAspectRatio="none">
+                      <svg className="w-full h-full overflow-visible" viewBox="0 0 330 80" preserveAspectRatio="none">
                         <defs>
-                          <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.25" />
+                          <linearGradient id="salesMonthGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.28" />
                             <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
                           </linearGradient>
                         </defs>
                         {/* Area Fill */}
                         <polygon
-                          fill="url(#salesGrad)"
-                          points="10,80 10,60 50,48 90,68 130,74 170,25 210,20 270,8 270,80"
+                          fill="url(#salesMonthGrad)"
+                          points={`14,78 ${trendPoints.map(p => `${p.cx},${p.cy}`).join(" ")} 314,78`}
                         />
                         {/* Grid Line 0 */}
-                        <line x1="0" y1="78" x2="280" y2="78" stroke="#e2e8f0" strokeWidth="1" />
+                        <line x1="0" y1="78" x2="330" y2="78" stroke="#e2e8f0" strokeWidth="1" />
                         {/* Line Path */}
                         <polyline
                           fill="none"
                           stroke="#3b82f6"
                           strokeWidth="2.5"
-                          points="10,60 50,48 90,68 130,74 170,25 210,20 270,8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          points={trendPoints.map(p => `${p.cx},${p.cy}`).join(" ")}
                         />
                         {/* Data Points */}
-                        {[
-                          { cx: 10, cy: 60, day: "Kam" },
-                          { cx: 50, cy: 48, day: "Jum" },
-                          { cx: 90, cy: 68, day: "Sab" },
-                          { cx: 130, cy: 74, day: "Min" },
-                          { cx: 170, cy: 25, day: "Sen" },
-                          { cx: 210, cy: 20, day: "Kemarin" },
-                          { cx: 270, cy: 8, day: "Hari ini" }
-                        ].map((pt) => (
-                          <circle
-                            key={pt.day}
-                            cx={pt.cx}
-                            cy={pt.cy}
-                            r={hoveredTrendDay === pt.day ? "5" : "3.5"}
-                            className="cursor-pointer transition-all"
-                            fill={hoveredTrendDay === pt.day ? "#1d4ed8" : "#3b82f6"}
-                            stroke="#ffffff"
-                            strokeWidth="2"
-                            onMouseEnter={() => setHoveredTrendDay(pt.day)}
-                          />
-                        ))}
+                        {trendPoints.map((pt) => {
+                          const isActive = displayTrendMonth === pt.monthNum;
+                          return (
+                            <circle
+                              key={pt.month}
+                              cx={pt.cx}
+                              cy={pt.cy}
+                              r={isActive ? "5.5" : "3.5"}
+                              className="cursor-pointer transition-all"
+                              fill={isActive ? "#1d4ed8" : "#3b82f6"}
+                              stroke="#ffffff"
+                              strokeWidth={isActive ? "2.5" : "1.5"}
+                              onMouseEnter={() => setActiveTrendMonth(pt.monthNum)}
+                              onClick={() => setSelectedMonth(pt.monthNum)}
+                            />
+                          );
+                        })}
                       </svg>
                     </div>
 
-                    {/* Day Labels */}
-                    <div className="flex justify-between text-[10px] text-slate-500 font-medium px-1 mt-1">
-                      {WEEKLY_SALES_TREND.map(item => (
-                        <span
-                          key={item.day}
-                          onClick={() => setHoveredTrendDay(item.day)}
-                          className={`cursor-pointer transition ${hoveredTrendDay === item.day ? "font-bold text-blue-600" : "hover:text-slate-900"}`}
+                    {/* 12 Month Labels (Clickable to sync filter!) */}
+                    <div className="flex justify-between text-[9px] text-slate-500 font-medium px-0.5 mt-1.5">
+                      {yearlySeries.map(item => (
+                        <button
+                          key={item.month}
+                          type="button"
+                          onClick={() => setSelectedMonth(item.monthNum)}
+                          onMouseEnter={() => setActiveTrendMonth(item.monthNum)}
+                          onMouseLeave={() => setActiveTrendMonth(null)}
+                          className={`px-1 py-0.5 rounded-xs transition ${
+                            displayTrendMonth === item.monthNum 
+                              ? "font-bold text-blue-700 bg-blue-100/70" 
+                              : "hover:text-slate-900"
+                          }`}
                         >
-                          {item.day}
-                        </span>
+                          {item.month}
+                        </button>
                       ))}
                     </div>
                   </div>
 
                   <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-[10px] text-slate-400">
-                    <span>Baseline: Rp 0</span>
-                    <span className="text-emerald-600 font-semibold">+18.5% Tren Positif</span>
+                    <span>Min: {formatRupiah(minIncome)}</span>
+                    <span className="text-emerald-600 font-semibold">Maks: {formatRupiah(maxIncome)}</span>
                   </div>
                 </div>
               </div>
@@ -893,10 +937,13 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* Widget 6: Arus Kas */}
+                {/* Widget 6: Arus Kas (Per Bulan - Sinkron Filter) */}
                 <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between">
                   <div className="flex justify-between items-start pb-2 border-b border-slate-100">
-                    <h3 className="text-xs font-bold text-slate-900">Arus Kas</h3>
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-900">Arus Kas</h3>
+                      <span className="text-[10px] text-slate-400 font-mono">(Per Bulan &bull; Thn {selectedYear})</span>
+                    </div>
                     <div className="flex items-center gap-1 text-slate-400">
                       <button onClick={handleRefreshWidgets} className="hover:text-slate-600 p-0.5"><RotateCw className="w-3.5 h-3.5" /></button>
                       <button className="hover:text-slate-600 p-0.5"><MoreVertical className="w-3.5 h-3.5" /></button>
@@ -905,52 +952,81 @@ export default function DashboardPage() {
 
                   <div className="py-2">
                     {/* Tooltip Badge */}
-                    <div className="flex justify-end mb-1">
-                      <div className="bg-blue-50 border border-blue-200 text-blue-800 text-[10px] px-2 py-0.5 rounded-md font-semibold">
-                        Rata-rata 18 Nov: Rp 36.800.000
-                      </div>
+                    <div className="flex justify-between items-center text-[11px] mb-1">
+                      <span className="text-slate-500">
+                        Bulan: <strong className="text-sky-700">{MONTH_NAMES[displayCashMonth - 1]?.name} {selectedYear}</strong>
+                      </span>
+                      <span className={`font-bold ${currentCashNet >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                        Net: {formatRupiah(currentCashNet)}
+                      </span>
                     </div>
 
                     <div className="h-28 w-full relative">
-                      <svg className="w-full h-full overflow-visible" viewBox="0 0 280 80" preserveAspectRatio="none">
-                        <line x1="0" y1="50" x2="280" y2="50" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="3 3" />
-                        <line x1="0" y1="78" x2="280" y2="78" stroke="#cbd5e1" strokeWidth="1" />
+                      <svg className="w-full h-full overflow-visible" viewBox="0 0 330 80" preserveAspectRatio="none">
+                        <defs>
+                          <linearGradient id="cashMonthGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#0284c7" stopOpacity="0.25" />
+                            <stop offset="100%" stopColor="#0284c7" stopOpacity="0.0" />
+                          </linearGradient>
+                        </defs>
+                        {/* Area Fill */}
+                        <polygon
+                          fill="url(#cashMonthGrad)"
+                          points={`14,78 ${cashPoints.map(p => `${p.cx},${p.cy}`).join(" ")} 314,78`}
+                        />
+                        <line x1="0" y1="78" x2="330" y2="78" stroke="#cbd5e1" strokeWidth="1" />
                         <polyline
                           fill="none"
                           stroke="#0284c7"
                           strokeWidth="2.5"
-                          points="10,50 50,50 90,50 130,50 170,50 210,50 250,50"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          points={cashPoints.map(p => `${p.cx},${p.cy}`).join(" ")}
                         />
-                        {[10, 50, 90, 130, 170, 210, 250].map((cx, i) => (
-                          <circle
-                            key={cx}
-                            cx={cx}
-                            cy={50}
-                            r={i === 6 ? "5" : "3.5"}
-                            fill={i === 6 ? "#0369a1" : "#0284c7"}
-                            stroke="#ffffff"
-                            strokeWidth="2"
-                          />
-                        ))}
+                        {cashPoints.map((pt) => {
+                          const isActive = displayCashMonth === pt.monthNum;
+                          return (
+                            <circle
+                              key={pt.month}
+                              cx={pt.cx}
+                              cy={pt.cy}
+                              r={isActive ? "5.5" : "3.5"}
+                              className="cursor-pointer transition-all"
+                              fill={isActive ? "#0369a1" : "#0284c7"}
+                              stroke="#ffffff"
+                              strokeWidth={isActive ? "2.5" : "1.5"}
+                              onMouseEnter={() => setActiveCashMonth(pt.monthNum)}
+                              onClick={() => setSelectedMonth(pt.monthNum)}
+                            />
+                          );
+                        })}
                       </svg>
                     </div>
 
-                    <div className="flex justify-between text-[10px] text-slate-400 font-mono mt-1">
-                      <span>12 Nov</span>
-                      <span>13 Nov</span>
-                      <span>14 Nov</span>
-                      <span>15 Nov</span>
-                      <span>16 Nov</span>
-                      <span>17 Nov</span>
-                      <span className="font-bold text-sky-700">18 Nov</span>
+                    {/* 12 Month Labels (Clickable to sync filter!) */}
+                    <div className="flex justify-between text-[9px] text-slate-500 font-medium px-0.5 mt-1.5">
+                      {yearlySeries.map(item => (
+                        <button
+                          key={item.month}
+                          type="button"
+                          onClick={() => setSelectedMonth(item.monthNum)}
+                          onMouseEnter={() => setActiveCashMonth(item.monthNum)}
+                          onMouseLeave={() => setActiveCashMonth(null)}
+                          className={`px-1 py-0.5 rounded-xs transition ${
+                            displayCashMonth === item.monthNum 
+                              ? "font-bold text-sky-700 bg-sky-100/70" 
+                              : "hover:text-slate-900"
+                          }`}
+                        >
+                          {item.month}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
                   <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-[10px] text-slate-400">
-                    <span>Baseline: 0</span>
-                    <span className="flex items-center gap-1 font-medium text-slate-500">
-                      <Clock className="w-3 h-3 text-slate-400" /> Data per jam 05:35
-                    </span>
+                    <span>Min Net: {formatRupiah(minNet)}</span>
+                    <span className="text-sky-700 font-semibold">Maks Net: {formatRupiah(maxNet)}</span>
                   </div>
                 </div>
               </div>
