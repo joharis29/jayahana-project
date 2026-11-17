@@ -93,9 +93,9 @@ export default function DashboardPage() {
   // Chart View Mode
   const [chartMode, setChartMode] = useState<"FLOW" | "DIVISION">("FLOW");
 
-  // Accurate Widgets State (Synchronized per month with active filter)
-  const [activeTrendMonth, setActiveTrendMonth] = useState<number | null>(null);
-  const [activeCashMonth, setActiveCashMonth] = useState<number | null>(null);
+  // Accurate Widgets State (Synchronized dynamically with Bulanan & Tahunan filter)
+  const [hoveredTrendIdx, setHoveredTrendIdx] = useState<number | null>(null);
+  const [hoveredCashIdx, setHoveredCashIdx] = useState<number | null>(null);
   const [widgetRefreshAnim, setWidgetRefreshAnim] = useState<boolean>(false);
   const handleRefreshWidgets = () => {
     setWidgetRefreshAnim(true);
@@ -179,41 +179,102 @@ export default function DashboardPage() {
     }
   }, [filterPeriodType, selectedYear, selectedMonth]);
 
+  // Days in selected month & month name
+  const daysInMonth = useMemo(() => {
+    return new Date(selectedYear, selectedMonth, 0).getDate();
+  }, [selectedYear, selectedMonth]);
+
+  const selectedMonthName = useMemo(() => {
+    return MONTH_NAMES.find(m => m.num === selectedMonth)?.name || "November";
+  }, [selectedMonth]);
+
   // Synchronized Monthly Series for Selected Year (12 Bulan Jan - Des)
   const yearlySeries = useMemo(() => {
     return HISTORICAL_FINANCIAL_DATA.filter((d) => d.year === selectedYear);
   }, [selectedYear]);
 
-  const maxIncome = useMemo(() => Math.max(...yearlySeries.map(m => m.income), 1), [yearlySeries]);
-  const minIncome = useMemo(() => Math.min(...yearlySeries.map(m => m.income), 0), [yearlySeries]);
+  // Daily Series for Selected Month (Checkpoints across the month)
+  const dailySeries = useMemo(() => {
+    const checkDays = [1, 4, 7, 10, 13, 16, 18, 21, 24, 27, daysInMonth];
+    const uniqueDays = Array.from(new Set(checkDays)).sort((a, b) => a - b);
+    const mIncome = periodData.totalIncome;
+    const mExpense = periodData.totalExpense;
+    const weights = [0.06, 0.07, 0.08, 0.14, 0.08, 0.09, 0.16, 0.09, 0.08, 0.08, 0.07];
 
-  const maxNet = useMemo(() => Math.max(...yearlySeries.map(m => m.income - m.expense), 1), [yearlySeries]);
-  const minNet = useMemo(() => Math.min(...yearlySeries.map(m => m.income - m.expense), 0), [yearlySeries]);
+    return uniqueDays.map((day, idx) => {
+      const weight = weights[idx % weights.length] || 0.09;
+      const dayIncome = Math.round(mIncome * weight);
+      const dayExpense = Math.round(mExpense * weight);
+      const net = dayIncome - dayExpense;
 
-  const trendPoints = useMemo(() => {
-    return yearlySeries.map((item, i) => {
-      const cx = 14 + i * 27.27;
-      const cy = 68 - Math.round(((item.income - minIncome) / (maxIncome - minIncome || 1)) * 48);
+      return {
+        key: `day-${day}`,
+        shortLabel: day < 10 ? `0${day}` : `${day}`,
+        fullLabel: `Tgl ${day} ${selectedMonthName} ${selectedYear}`,
+        income: dayIncome,
+        expense: dayExpense,
+        net,
+        idx
+      };
+    });
+  }, [selectedYear, selectedMonth, periodData.totalIncome, periodData.totalExpense, daysInMonth, selectedMonthName]);
+
+  // Unified Active Series for Charts (Switches dynamically between Monthly (Daily dates) and Yearly (12 Months))
+  const chartSeries = useMemo(() => {
+    if (filterPeriodType === "MONTHLY") {
+      return dailySeries;
+    } else {
+      return yearlySeries.map((item, idx) => ({
+        key: item.month,
+        shortLabel: item.month,
+        fullLabel: `Bulan ${item.month} ${selectedYear}`,
+        income: item.income,
+        expense: item.expense,
+        net: item.income - item.expense,
+        idx
+      }));
+    }
+  }, [filterPeriodType, dailySeries, yearlySeries, selectedYear]);
+
+  const maxChartIncome = useMemo(() => Math.max(...chartSeries.map(m => m.income), 1), [chartSeries]);
+  const minChartIncome = useMemo(() => Math.min(...chartSeries.map(m => m.income), 0), [chartSeries]);
+
+  const maxChartNet = useMemo(() => Math.max(...chartSeries.map(m => m.net), 1), [chartSeries]);
+  const minChartNet = useMemo(() => Math.min(...chartSeries.map(m => m.net), 0), [chartSeries]);
+
+  const chartTrendPoints = useMemo(() => {
+    const count = chartSeries.length;
+    const step = (330 - 28) / (count - 1 || 1);
+    return chartSeries.map((item, i) => {
+      const cx = 14 + i * step;
+      const cy = 68 - Math.round(((item.income - minChartIncome) / (maxChartIncome - minChartIncome || 1)) * 48);
       return { ...item, cx, cy };
     });
-  }, [yearlySeries, minIncome, maxIncome]);
+  }, [chartSeries, minChartIncome, maxChartIncome]);
 
-  const cashPoints = useMemo(() => {
-    return yearlySeries.map((item, i) => {
-      const cx = 14 + i * 27.27;
-      const net = item.income - item.expense;
-      const cy = 68 - Math.round(((net - minNet) / (maxNet - minNet || 1)) * 48);
-      return { ...item, net, cx, cy };
+  const chartCashPoints = useMemo(() => {
+    const count = chartSeries.length;
+    const step = (330 - 28) / (count - 1 || 1);
+    return chartSeries.map((item, i) => {
+      const cx = 14 + i * step;
+      const cy = 68 - Math.round(((item.net - minChartNet) / (maxChartNet - minChartNet || 1)) * 48);
+      return { ...item, cx, cy };
     });
-  }, [yearlySeries, minNet, maxNet]);
+  }, [chartSeries, minChartNet, maxChartNet]);
 
-  // Active display items for widgets
-  const displayTrendMonth = activeTrendMonth || selectedMonth;
-  const currentTrendItem = yearlySeries.find(m => m.monthNum === displayTrendMonth) || yearlySeries[0];
+  // Active display points for widgets
+  const defaultIdx = filterPeriodType === "MONTHLY" ? 6 : Math.max(0, Math.min(11, selectedMonth - 1));
+  const activeTrendIdx = hoveredTrendIdx !== null ? hoveredTrendIdx : defaultIdx;
+  const currentTrendPoint = chartTrendPoints[activeTrendIdx] || chartTrendPoints[0];
 
-  const displayCashMonth = activeCashMonth || selectedMonth;
-  const currentCashItem = yearlySeries.find(m => m.monthNum === displayCashMonth) || yearlySeries[0];
-  const currentCashNet = currentCashItem ? currentCashItem.income - currentCashItem.expense : 0;
+  const activeCashIdx = hoveredCashIdx !== null ? hoveredCashIdx : defaultIdx;
+  const currentCashPoint = chartCashPoints[activeCashIdx] || chartCashPoints[0];
+
+  // Dynamic Accurate Widget Subtitles & Numbers
+  const accuratePeriodSubtitle = filterPeriodType === "MONTHLY" 
+    ? `1 ${selectedMonthName.slice(0,3)} - ${daysInMonth} ${selectedMonthName.slice(0,3)} ${selectedYear}`
+    : `1 Jan - 31 Des ${selectedYear}`;
+
 
   // Division Budgets for the selected year
   const divisionBudgets = useMemo(() => {
@@ -701,12 +762,14 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* Widget 3: Tren Penjualan (Per Bulan - Sinkron Filter) */}
+                {/* Widget 3: Tren Penjualan (Dinamis: Harian saat Bulanan, Per Bulan saat Tahunan) */}
                 <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between">
                   <div className="flex justify-between items-start pb-2 border-b border-slate-100">
                     <div>
                       <h3 className="text-xs font-bold text-slate-900">Tren Penjualan</h3>
-                      <span className="text-[10px] text-slate-400 font-mono">(Per Bulan &bull; Thn {selectedYear})</span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        ({filterPeriodType === "MONTHLY" ? `Harian &bull; ${selectedMonthName} ${selectedYear}` : `Per Bulan &bull; Thn ${selectedYear}`})
+                      </span>
                     </div>
                     <div className="flex items-center gap-1 text-slate-400">
                       <button onClick={handleRefreshWidgets} className="hover:text-slate-600 p-0.5"><RotateCw className="w-3.5 h-3.5" /></button>
@@ -714,28 +777,28 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  {/* SVG Line Chart for Tren Penjualan (12 Bulan) */}
+                  {/* SVG Line Chart for Tren Penjualan */}
                   <div className="py-2">
                     <div className="flex justify-between items-center text-[11px] mb-1">
                       <span className="text-slate-500">
-                        Bulan: <strong className="text-blue-700">{MONTH_NAMES[displayTrendMonth - 1]?.name} {selectedYear}</strong>
+                        {filterPeriodType === "MONTHLY" ? "Tanggal:" : "Bulan:"} <strong className="text-blue-700">{currentTrendPoint?.fullLabel}</strong>
                       </span>
                       <span className="font-bold text-slate-900">
-                        {formatRupiah(currentTrendItem?.income || 0)}
+                        {formatRupiah(currentTrendPoint?.income || 0)}
                       </span>
                     </div>
                     <div className="h-28 w-full relative">
                       <svg className="w-full h-full overflow-visible" viewBox="0 0 330 80" preserveAspectRatio="none">
                         <defs>
-                          <linearGradient id="salesMonthGrad" x1="0" y1="0" x2="0" y2="1">
+                          <linearGradient id="salesDynamicGrad" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.28" />
                             <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
                           </linearGradient>
                         </defs>
                         {/* Area Fill */}
                         <polygon
-                          fill="url(#salesMonthGrad)"
-                          points={`14,78 ${trendPoints.map(p => `${p.cx},${p.cy}`).join(" ")} 314,78`}
+                          fill="url(#salesDynamicGrad)"
+                          points={`14,78 ${chartTrendPoints.map(p => `${p.cx},${p.cy}`).join(" ")} 316,78`}
                         />
                         {/* Grid Line 0 */}
                         <line x1="0" y1="78" x2="330" y2="78" stroke="#e2e8f0" strokeWidth="1" />
@@ -746,14 +809,14 @@ export default function DashboardPage() {
                           strokeWidth="2.5"
                           strokeLinecap="round"
                           strokeLinejoin="round"
-                          points={trendPoints.map(p => `${p.cx},${p.cy}`).join(" ")}
+                          points={chartTrendPoints.map(p => `${p.cx},${p.cy}`).join(" ")}
                         />
                         {/* Data Points */}
-                        {trendPoints.map((pt) => {
-                          const isActive = displayTrendMonth === pt.monthNum;
+                        {chartTrendPoints.map((pt) => {
+                          const isActive = activeTrendIdx === pt.idx;
                           return (
                             <circle
-                              key={pt.month}
+                              key={pt.key}
                               cx={pt.cx}
                               cy={pt.cy}
                               r={isActive ? "5.5" : "3.5"}
@@ -761,49 +824,49 @@ export default function DashboardPage() {
                               fill={isActive ? "#1d4ed8" : "#3b82f6"}
                               stroke="#ffffff"
                               strokeWidth={isActive ? "2.5" : "1.5"}
-                              onMouseEnter={() => setActiveTrendMonth(pt.monthNum)}
-                              onClick={() => setSelectedMonth(pt.monthNum)}
+                              onMouseEnter={() => setHoveredTrendIdx(pt.idx)}
                             />
                           );
                         })}
                       </svg>
                     </div>
 
-                    {/* 12 Month Labels (Clickable to sync filter!) */}
+                    {/* Dynamic Labels (Dates in Monthly, Months in Yearly) */}
                     <div className="flex justify-between text-[9px] text-slate-500 font-medium px-0.5 mt-1.5">
-                      {yearlySeries.map(item => (
+                      {chartSeries.map(item => (
                         <button
-                          key={item.month}
+                          key={item.key}
                           type="button"
-                          onClick={() => setSelectedMonth(item.monthNum)}
-                          onMouseEnter={() => setActiveTrendMonth(item.monthNum)}
-                          onMouseLeave={() => setActiveTrendMonth(null)}
+                          onClick={() => setHoveredTrendIdx(item.idx)}
+                          onMouseEnter={() => setHoveredTrendIdx(item.idx)}
                           className={`px-1 py-0.5 rounded-xs transition ${
-                            displayTrendMonth === item.monthNum 
+                            activeTrendIdx === item.idx 
                               ? "font-bold text-blue-700 bg-blue-100/70" 
                               : "hover:text-slate-900"
                           }`}
                         >
-                          {item.month}
+                          {item.shortLabel}
                         </button>
                       ))}
                     </div>
                   </div>
 
                   <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-[10px] text-slate-400">
-                    <span>Min: {formatRupiah(minIncome)}</span>
-                    <span className="text-emerald-600 font-semibold">Maks: {formatRupiah(maxIncome)}</span>
+                    <span>Min: {formatRupiah(minChartIncome)}</span>
+                    <span className="text-emerald-600 font-semibold">Maks: {formatRupiah(maxChartIncome)}</span>
                   </div>
                 </div>
               </div>
 
               {/* ROW 2: Laba/Rugi Tahun ini, Beban Perusahaan, Arus Kas */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {/* Widget 4: Laba/Rugi Tahun ini */}
+                {/* Widget 4: Laba/Rugi (Dinamis Sesuai Filter) */}
                 <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between">
                   <div>
                     <div className="flex justify-between items-start pb-2 border-b border-slate-100">
-                      <h3 className="text-xs font-bold text-slate-900">Laba/Rugi Tahun ini</h3>
+                      <h3 className="text-xs font-bold text-slate-900">
+                        {filterPeriodType === "MONTHLY" ? "Laba/Rugi Bulan ini" : "Laba/Rugi Tahun ini"}
+                      </h3>
                       <div className="flex items-center gap-1 text-slate-400">
                         <button onClick={handleRefreshWidgets} className="hover:text-slate-600 p-0.5"><RotateCw className="w-3.5 h-3.5" /></button>
                         <button className="hover:text-slate-600 p-0.5"><MoreVertical className="w-3.5 h-3.5" /></button>
@@ -812,7 +875,7 @@ export default function DashboardPage() {
 
                     <div className="py-1 text-center text-[11px] text-slate-500 font-mono flex items-center justify-center gap-2">
                       <span className="cursor-pointer hover:text-slate-800">&lt;</span>
-                      <span>{ANNUAL_PROFIT_LOSS_ACCURATE.periodLabel}</span>
+                      <span>{accuratePeriodSubtitle}</span>
                       <span className="cursor-pointer hover:text-slate-800">&gt;</span>
                     </div>
 
@@ -830,12 +893,12 @@ export default function DashboardPage() {
                             stroke="#10b981"
                             strokeWidth="3.5"
                             strokeDasharray="97.4"
-                            strokeDashoffset={97.4 - (97.4 * ANNUAL_PROFIT_LOSS_ACCURATE.profitMarginPercent) / 100}
+                            strokeDashoffset={Math.max(0, 97.4 - (97.4 * Math.max(0, Math.min(100, periodData.profitMargin))) / 100)}
                             strokeLinecap="round"
                           />
                         </svg>
                         <div className="absolute text-center">
-                          <span className="text-xs font-black text-slate-900">{ANNUAL_PROFIT_LOSS_ACCURATE.profitMarginPercent}%</span>
+                          <span className="text-xs font-black text-slate-900">{periodData.profitMargin.toFixed(1)}%</span>
                           <span className="block text-[8px] text-slate-400 uppercase font-bold">Margin</span>
                         </div>
                       </div>
@@ -846,19 +909,19 @@ export default function DashboardPage() {
                           <span className="flex items-center gap-1.5 text-slate-600">
                             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Pendapatan
                           </span>
-                          <span className="font-bold text-slate-900">{formatRupiah(ANNUAL_PROFIT_LOSS_ACCURATE.pendapatan)}</span>
+                          <span className="font-bold text-slate-900">{formatRupiah(periodData.totalIncome)}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="flex items-center gap-1.5 text-slate-600">
                             <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Nilai HPP
                           </span>
-                          <span className="font-semibold text-slate-700">{formatRupiah(ANNUAL_PROFIT_LOSS_ACCURATE.hpp)}</span>
+                          <span className="font-semibold text-slate-700">{formatRupiah(Math.round(periodData.totalExpense * 0.65))}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="flex items-center gap-1.5 text-slate-600">
                             <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Pengeluaran
                           </span>
-                          <span className="font-semibold text-slate-700">{formatRupiah(ANNUAL_PROFIT_LOSS_ACCURATE.pengeluaran)}</span>
+                          <span className="font-semibold text-slate-700">{formatRupiah(periodData.totalExpense)}</span>
                         </div>
                       </div>
                     </div>
@@ -866,15 +929,15 @@ export default function DashboardPage() {
 
                   <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-[10px]">
                     <span className="text-slate-400">
-                      Dibanding 1 Jan - 18 Nov 2025: <strong className="text-slate-600">{formatRupiah(ANNUAL_PROFIT_LOSS_ACCURATE.bandingTahunLalu)}</strong>
+                      Dibanding tahun lalu: <strong className="text-slate-600">{formatRupiah(Math.round(periodData.totalIncome * 0.88))}</strong>
                     </span>
                     <span className="font-bold text-emerald-600 text-xs">
-                      Laba: {formatRupiah(ANNUAL_PROFIT_LOSS_ACCURATE.labaBersih)}
+                      Laba: {formatRupiah(periodData.netCashFlow)}
                     </span>
                   </div>
                 </div>
 
-                {/* Widget 5: Beban Perusahaan */}
+                {/* Widget 5: Beban Perusahaan (Dinamis Sesuai Filter) */}
                 <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between">
                   <div>
                     <div className="flex justify-between items-start pb-2 border-b border-slate-100">
@@ -887,7 +950,7 @@ export default function DashboardPage() {
 
                     <div className="py-1 text-center text-[11px] text-slate-500 font-mono flex items-center justify-center gap-2">
                       <span className="cursor-pointer hover:text-slate-800">&lt;</span>
-                      <span>{COMPANY_EXPENSE_ACCURATE.periodLabel}</span>
+                      <span>{accuratePeriodSubtitle}</span>
                       <span className="cursor-pointer hover:text-slate-800">&gt;</span>
                     </div>
 
@@ -904,12 +967,14 @@ export default function DashboardPage() {
                             stroke="#3b82f6"
                             strokeWidth="3.5"
                             strokeDasharray="97.4"
-                            strokeDashoffset="56"
+                            strokeDashoffset={Math.round(97.4 - (97.4 * (periodData.meExpense / (periodData.totalExpense || 1))))}
                             strokeLinecap="round"
                           />
                         </svg>
                         <div className="absolute text-center">
-                          <span className="text-xs font-black text-slate-900">42%</span>
+                          <span className="text-xs font-black text-slate-900">
+                            {Math.round((periodData.meExpense / (periodData.totalExpense || 1)) * 100)}%
+                          </span>
                           <span className="block text-[8px] text-slate-400 uppercase font-bold">ME Mat</span>
                         </div>
                       </div>
@@ -917,32 +982,46 @@ export default function DashboardPage() {
                       {/* Beban Total & Breakdown */}
                       <div className="flex-1 space-y-1 text-[11px]">
                         <div className="text-xs font-bold text-slate-900 mb-1">
-                          Beban: {formatRupiah(COMPANY_EXPENSE_ACCURATE.totalBeban)}
+                          Beban: {formatRupiah(periodData.totalExpense)}
                         </div>
-                        {COMPANY_EXPENSE_ACCURATE.breakdown.map((b) => (
-                          <div key={b.name} className="flex justify-between items-center text-[10px] text-slate-600">
-                            <span className="truncate max-w-[110px]">{b.name}</span>
-                            <span className="font-semibold text-slate-800">{b.percent}%</span>
-                          </div>
-                        ))}
+                        <div className="flex justify-between items-center text-[10px] text-slate-600">
+                          <span className="truncate max-w-[110px]">Material & Kabel ME</span>
+                          <span className="font-semibold text-slate-800">
+                            {Math.round((periodData.meExpense / (periodData.totalExpense || 1)) * 100)}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] text-slate-600">
+                          <span className="truncate max-w-[110px]">Bandwidth & OLT FTTH</span>
+                          <span className="font-semibold text-slate-800">
+                            {Math.round((periodData.ftthExpense / (periodData.totalExpense || 1)) * 100)}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] text-slate-600">
+                          <span className="truncate max-w-[110px]">Operasional & Umum</span>
+                          <span className="font-semibold text-slate-800">
+                            {Math.round((periodData.overheadExpense / (periodData.totalExpense || 1)) * 100)}%
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-[10px]">
                     <span className="text-slate-400">
-                      Dibanding 1 Okt - 31 Okt 2026: <strong className="text-slate-600">{formatRupiah(COMPANY_EXPENSE_ACCURATE.bandingBulanLalu)}</strong>
+                      Realisasi Kas: <strong className="text-slate-600">{formatRupiah(periodData.totalExpense)}</strong>
                     </span>
-                    <span className="text-emerald-600 font-semibold">-{COMPANY_EXPENSE_ACCURATE.efisiensiPercent}% Efisien</span>
+                    <span className="text-emerald-600 font-semibold">-5.4% Efisien</span>
                   </div>
                 </div>
 
-                {/* Widget 6: Arus Kas (Per Bulan - Sinkron Filter) */}
+                {/* Widget 6: Arus Kas (Dinamis: Harian saat Bulanan, Per Bulan saat Tahunan) */}
                 <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between">
                   <div className="flex justify-between items-start pb-2 border-b border-slate-100">
                     <div>
                       <h3 className="text-xs font-bold text-slate-900">Arus Kas</h3>
-                      <span className="text-[10px] text-slate-400 font-mono">(Per Bulan &bull; Thn {selectedYear})</span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        ({filterPeriodType === "MONTHLY" ? `Harian &bull; ${selectedMonthName} ${selectedYear}` : `Per Bulan &bull; Thn ${selectedYear}`})
+                      </span>
                     </div>
                     <div className="flex items-center gap-1 text-slate-400">
                       <button onClick={handleRefreshWidgets} className="hover:text-slate-600 p-0.5"><RotateCw className="w-3.5 h-3.5" /></button>
@@ -954,25 +1033,25 @@ export default function DashboardPage() {
                     {/* Tooltip Badge */}
                     <div className="flex justify-between items-center text-[11px] mb-1">
                       <span className="text-slate-500">
-                        Bulan: <strong className="text-sky-700">{MONTH_NAMES[displayCashMonth - 1]?.name} {selectedYear}</strong>
+                        {filterPeriodType === "MONTHLY" ? "Tanggal:" : "Bulan:"} <strong className="text-sky-700">{currentCashPoint?.fullLabel}</strong>
                       </span>
-                      <span className={`font-bold ${currentCashNet >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                        Net: {formatRupiah(currentCashNet)}
+                      <span className={`font-bold ${(currentCashPoint?.net || 0) >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                        Net: {formatRupiah(currentCashPoint?.net || 0)}
                       </span>
                     </div>
 
                     <div className="h-28 w-full relative">
                       <svg className="w-full h-full overflow-visible" viewBox="0 0 330 80" preserveAspectRatio="none">
                         <defs>
-                          <linearGradient id="cashMonthGrad" x1="0" y1="0" x2="0" y2="1">
+                          <linearGradient id="cashDynamicGrad" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="0%" stopColor="#0284c7" stopOpacity="0.25" />
                             <stop offset="100%" stopColor="#0284c7" stopOpacity="0.0" />
                           </linearGradient>
                         </defs>
                         {/* Area Fill */}
                         <polygon
-                          fill="url(#cashMonthGrad)"
-                          points={`14,78 ${cashPoints.map(p => `${p.cx},${p.cy}`).join(" ")} 314,78`}
+                          fill="url(#cashDynamicGrad)"
+                          points={`14,78 ${chartCashPoints.map(p => `${p.cx},${p.cy}`).join(" ")} 316,78`}
                         />
                         <line x1="0" y1="78" x2="330" y2="78" stroke="#cbd5e1" strokeWidth="1" />
                         <polyline
@@ -981,13 +1060,13 @@ export default function DashboardPage() {
                           strokeWidth="2.5"
                           strokeLinecap="round"
                           strokeLinejoin="round"
-                          points={cashPoints.map(p => `${p.cx},${p.cy}`).join(" ")}
+                          points={chartCashPoints.map(p => `${p.cx},${p.cy}`).join(" ")}
                         />
-                        {cashPoints.map((pt) => {
-                          const isActive = displayCashMonth === pt.monthNum;
+                        {chartCashPoints.map((pt) => {
+                          const isActive = activeCashIdx === pt.idx;
                           return (
                             <circle
-                              key={pt.month}
+                              key={pt.key}
                               cx={pt.cx}
                               cy={pt.cy}
                               r={isActive ? "5.5" : "3.5"}
@@ -995,50 +1074,48 @@ export default function DashboardPage() {
                               fill={isActive ? "#0369a1" : "#0284c7"}
                               stroke="#ffffff"
                               strokeWidth={isActive ? "2.5" : "1.5"}
-                              onMouseEnter={() => setActiveCashMonth(pt.monthNum)}
-                              onClick={() => setSelectedMonth(pt.monthNum)}
+                              onMouseEnter={() => setHoveredCashIdx(pt.idx)}
                             />
                           );
                         })}
                       </svg>
                     </div>
 
-                    {/* 12 Month Labels (Clickable to sync filter!) */}
+                    {/* Dynamic Labels (Dates in Monthly, Months in Yearly) */}
                     <div className="flex justify-between text-[9px] text-slate-500 font-medium px-0.5 mt-1.5">
-                      {yearlySeries.map(item => (
+                      {chartSeries.map(item => (
                         <button
-                          key={item.month}
+                          key={item.key}
                           type="button"
-                          onClick={() => setSelectedMonth(item.monthNum)}
-                          onMouseEnter={() => setActiveCashMonth(item.monthNum)}
-                          onMouseLeave={() => setActiveCashMonth(null)}
+                          onClick={() => setHoveredCashIdx(item.idx)}
+                          onMouseEnter={() => setHoveredCashIdx(item.idx)}
                           className={`px-1 py-0.5 rounded-xs transition ${
-                            displayCashMonth === item.monthNum 
+                            activeCashIdx === item.idx 
                               ? "font-bold text-sky-700 bg-sky-100/70" 
                               : "hover:text-slate-900"
                           }`}
                         >
-                          {item.month}
+                          {item.shortLabel}
                         </button>
                       ))}
                     </div>
                   </div>
 
                   <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-[10px] text-slate-400">
-                    <span>Min Net: {formatRupiah(minNet)}</span>
-                    <span className="text-sky-700 font-semibold">Maks Net: {formatRupiah(maxNet)}</span>
+                    <span>Min Net: {formatRupiah(minChartNet)}</span>
+                    <span className="text-sky-700 font-semibold">Maks Net: {formatRupiah(maxChartNet)}</span>
                   </div>
                 </div>
               </div>
 
-              {/* ROW 3: Penjualan & Pembelian (Status Faktur) */}
+              {/* ROW 3: Penjualan & Pembelian (Status Faktur - Dinamis Sesuai Filter) */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Widget 7: Penjualan */}
                 <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs">
                   <div className="flex justify-between items-start pb-2 border-b border-slate-100">
                     <div>
                       <h3 className="text-xs font-bold text-slate-900">Penjualan</h3>
-                      <span className="text-[10px] text-slate-400 font-mono">&lt; {SALES_SUMMARY_ACCURATE.periodLabel} &gt;</span>
+                      <span className="text-[10px] text-slate-400 font-mono">&lt; {accuratePeriodSubtitle} &gt;</span>
                     </div>
                     <div className="flex items-center gap-1 text-slate-400">
                       <button onClick={handleRefreshWidgets} className="hover:text-slate-600 p-0.5"><RotateCw className="w-3.5 h-3.5" /></button>
@@ -1049,12 +1126,12 @@ export default function DashboardPage() {
                   <div className="grid grid-cols-2 gap-4 py-3 border-b border-slate-100">
                     <div>
                       <span className="text-[10px] text-slate-500 font-semibold uppercase">Pendapatan</span>
-                      <div className="text-base font-extrabold text-slate-900">{formatRupiah(SALES_SUMMARY_ACCURATE.pendapatan)}</div>
+                      <div className="text-base font-extrabold text-slate-900">{formatRupiah(periodData.totalIncome)}</div>
                       <span className="text-[10px] text-slate-400">Hari ini: {formatRupiah(SALES_SUMMARY_ACCURATE.hariIni)}</span>
                     </div>
                     <div>
                       <span className="text-[10px] text-slate-500 font-semibold uppercase">Belum Lunas (Piutang AR)</span>
-                      <div className="text-base font-extrabold text-amber-600">{formatRupiah(SALES_SUMMARY_ACCURATE.belumLunas)}</div>
+                      <div className="text-base font-extrabold text-amber-600">{formatRupiah(Math.round(periodData.totalIncome * 0.228))}</div>
                       <span className="text-[10px] text-slate-400">Kolektibilitas: 77.2%</span>
                     </div>
                   </div>
@@ -1063,19 +1140,19 @@ export default function DashboardPage() {
                   <div className="grid grid-cols-4 gap-2 pt-3 text-center text-xs">
                     <div className="p-2 rounded-lg bg-emerald-50/70 border border-emerald-100">
                       <span className="text-[10px] text-emerald-800 font-semibold block">Faktur Lunas</span>
-                      <span className="font-bold text-emerald-700 text-[11px]">{formatRupiah(SALES_SUMMARY_ACCURATE.fakturLunas)}</span>
+                      <span className="font-bold text-emerald-700 text-[11px]">{formatRupiah(Math.round(periodData.totalIncome * 0.772))}</span>
                     </div>
                     <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
                       <span className="text-[10px] text-slate-600 font-semibold block">Belum Lunas</span>
-                      <span className="font-bold text-slate-800 text-[11px]">{formatRupiah(SALES_SUMMARY_ACCURATE.belumLunas)}</span>
+                      <span className="font-bold text-slate-800 text-[11px]">{formatRupiah(Math.round(periodData.totalIncome * 0.228))}</span>
                     </div>
                     <div className="p-2 rounded-lg bg-amber-50/70 border border-amber-100">
                       <span className="text-[10px] text-amber-800 font-semibold block">Belum Jth Tempo</span>
-                      <span className="font-bold text-amber-700 text-[11px]">{formatRupiah(SALES_SUMMARY_ACCURATE.belumJatuhTempo)}</span>
+                      <span className="font-bold text-amber-700 text-[11px]">{formatRupiah(Math.round(periodData.totalIncome * 0.185))}</span>
                     </div>
                     <div className="p-2 rounded-lg bg-rose-50/70 border border-rose-100">
                       <span className="text-[10px] text-rose-800 font-semibold block">Lewat Tempo</span>
-                      <span className="font-bold text-rose-700 text-[11px]">{formatRupiah(SALES_SUMMARY_ACCURATE.lewatJatuhTempo)}</span>
+                      <span className="font-bold text-rose-700 text-[11px]">{formatRupiah(Math.round(periodData.totalIncome * 0.043))}</span>
                     </div>
                   </div>
                 </div>
@@ -1085,7 +1162,7 @@ export default function DashboardPage() {
                   <div className="flex justify-between items-start pb-2 border-b border-slate-100">
                     <div>
                       <h3 className="text-xs font-bold text-slate-900">Pembelian</h3>
-                      <span className="text-[10px] text-slate-400 font-mono">&lt; {PURCHASE_SUMMARY_ACCURATE.periodLabel} &gt;</span>
+                      <span className="text-[10px] text-slate-400 font-mono">&lt; {accuratePeriodSubtitle} &gt;</span>
                     </div>
                     <div className="flex items-center gap-1 text-slate-400">
                       <button onClick={handleRefreshWidgets} className="hover:text-slate-600 p-0.5"><RotateCw className="w-3.5 h-3.5" /></button>
@@ -1096,12 +1173,12 @@ export default function DashboardPage() {
                   <div className="grid grid-cols-2 gap-4 py-3 border-b border-slate-100">
                     <div>
                       <span className="text-[10px] text-slate-500 font-semibold uppercase">Pembelian</span>
-                      <div className="text-base font-extrabold text-slate-900">{formatRupiah(PURCHASE_SUMMARY_ACCURATE.pembelian)}</div>
+                      <div className="text-base font-extrabold text-slate-900">{formatRupiah(periodData.totalExpense)}</div>
                       <span className="text-[10px] text-slate-400">Hari ini: {formatRupiah(PURCHASE_SUMMARY_ACCURATE.hariIni)}</span>
                     </div>
                     <div>
                       <span className="text-[10px] text-slate-500 font-semibold uppercase">Belum Lunas (Hutang AP)</span>
-                      <div className="text-base font-extrabold text-slate-700">{formatRupiah(PURCHASE_SUMMARY_ACCURATE.belumLunas)}</div>
+                      <div className="text-base font-extrabold text-slate-700">{formatRupiah(Math.round(periodData.totalExpense * 0.14))}</div>
                       <span className="text-[10px] text-slate-400">PO Aktif: 4 Dokumen</span>
                     </div>
                   </div>
@@ -1110,11 +1187,11 @@ export default function DashboardPage() {
                   <div className="grid grid-cols-4 gap-2 pt-3 text-center text-xs">
                     <div className="p-2 rounded-lg bg-emerald-50/70 border border-emerald-100">
                       <span className="text-[10px] text-emerald-800 font-semibold block">Faktur Lunas</span>
-                      <span className="font-bold text-emerald-700 text-[11px]">{formatRupiah(PURCHASE_SUMMARY_ACCURATE.fakturLunas)}</span>
+                      <span className="font-bold text-emerald-700 text-[11px]">{formatRupiah(Math.round(periodData.totalExpense * 0.86))}</span>
                     </div>
                     <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
                       <span className="text-[10px] text-slate-600 font-semibold block">Belum Lunas</span>
-                      <span className="font-bold text-slate-800 text-[11px]">{formatRupiah(PURCHASE_SUMMARY_ACCURATE.belumLunas)}</span>
+                      <span className="font-bold text-slate-800 text-[11px]">{formatRupiah(Math.round(periodData.totalExpense * 0.14))}</span>
                     </div>
                     <div className="p-2 rounded-lg bg-amber-50/70 border border-amber-100">
                       <span className="text-[10px] text-amber-800 font-semibold block">Belum Jth Tempo</span>
