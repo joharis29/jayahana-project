@@ -48,6 +48,8 @@ import {
   INITIAL_REQUESTS, 
   INITIAL_SUBSCRIBERS, 
   INITIAL_INVOICES,
+  INITIAL_SALES_INVOICES,
+  INITIAL_RECEIPTS_BKM,
   INITIAL_TRANSACTIONS,
   HISTORICAL_FINANCIAL_DATA,
   INITIAL_PENDING_APPROVALS,
@@ -61,7 +63,7 @@ import {
   type PendingApprovalItem
 } from "@/lib/constants";
 import { formatRupiah, formatDateIndo } from "@/lib/utils";
-import { BusinessUnit, BudgetRequest, RequestType, UserRole, FinancialTransaction, ProcurementItem } from "@/types";
+import { BusinessUnit, BudgetRequest, RequestType, UserRole, FinancialTransaction, ProcurementItem, SalesInvoice, OfficialReceiptBKM, InvoicePaymentRecord } from "@/types";
 
 const MONTH_NAMES = [
   { num: 1, name: "Januari", short: "Jan" },
@@ -119,14 +121,52 @@ export default function DashboardPage() {
 
   // Printable Document Modal State
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
-  const [printDocType, setPrintDocType] = useState<"REQUEST" | "DISBURSEMENT" | "REALIZATION" | "GOODS_RECEIPT">("REQUEST");
+  const [printDocType, setPrintDocType] = useState<"REQUEST" | "DISBURSEMENT" | "REALIZATION" | "GOODS_RECEIPT" | "SALES_INVOICE" | "OFFICIAL_RECEIPT" | "PROGRESS_REPORT">("REQUEST");
   const [selectedPrintRequest, setSelectedPrintRequest] = useState<BudgetRequest | null>(null);
+  const [selectedPrintInvoice, setSelectedPrintInvoice] = useState<SalesInvoice | null>(null);
+  const [selectedPrintReceipt, setSelectedPrintReceipt] = useState<OfficialReceiptBKM | null>(null);
 
   const handleOpenPrintModal = (req: BudgetRequest, type: "REQUEST" | "DISBURSEMENT" | "REALIZATION" | "GOODS_RECEIPT") => {
     setSelectedPrintRequest(req);
+    setSelectedPrintInvoice(null);
+    setSelectedPrintReceipt(null);
     setPrintDocType(type);
     setIsPrintModalOpen(true);
   };
+
+  const handleOpenPrintInvoice = (inv: SalesInvoice, type: "SALES_INVOICE" | "PROGRESS_REPORT" | "OFFICIAL_RECEIPT") => {
+    setSelectedPrintInvoice(inv);
+    setSelectedPrintRequest(null);
+    setSelectedPrintReceipt(null);
+    setPrintDocType(type);
+    setIsPrintModalOpen(true);
+  };
+
+  const handleOpenPrintReceipt = (rec: OfficialReceiptBKM) => {
+    setSelectedPrintReceipt(rec);
+    setSelectedPrintInvoice(null);
+    setSelectedPrintRequest(null);
+    setPrintDocType("OFFICIAL_RECEIPT");
+    setIsPrintModalOpen(true);
+  };
+
+  // Revenue & Accounts Receivable (AR) State
+  const [salesInvoices, setSalesInvoices] = useState<SalesInvoice[]>(INITIAL_SALES_INVOICES);
+  const [officialReceipts, setOfficialReceipts] = useState<OfficialReceiptBKM[]>(INITIAL_RECEIPTS_BKM);
+  const [revenueSubTab, setRevenueSubTab] = useState<"INVOICES" | "AR_AGING" | "RECEIPTS">("INVOICES");
+
+  // New Invoice Modal Form State
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+  const [newInvClient, setNewInvClient] = useState("");
+  const [newInvAddress, setNewInvAddress] = useState("");
+  const [newInvNPWP, setNewInvNPWP] = useState("");
+  const [newInvContract, setNewInvContract] = useState("");
+  const [newInvUnit, setNewInvUnit] = useState<BusinessUnit>("ME_CORE");
+  const [newInvTitle, setNewInvTitle] = useState("");
+  const [newInvDpp, setNewInvDpp] = useState("");
+  const [newInvDueDate, setNewInvDueDate] = useState("2026-11-30");
+  const [newInvProgress, setNewInvProgress] = useState("30");
+  const [newInvIncludePph23, setNewInvIncludePph23] = useState(true);
   
   // New request form state
   const [newTitle, setNewTitle] = useState("");
@@ -393,6 +433,134 @@ export default function DashboardPage() {
     setTimeout(() => setApprovalNotification(null), 3500);
   };
 
+  // 3-Pintu Approval Handlers for Invoices
+  const handleAuditProgressApprove = (invId: string) => {
+    setSalesInvoices(prev => prev.map(inv => inv.id === invId ? { ...inv, status: "PENDING_FINANCE_TAX" } : inv));
+    setApprovalNotification("Audit Progres Fisik Lapangan telah memvalidasi pencapaian termin & mutu fisik.");
+    setTimeout(() => setApprovalNotification(null), 3500);
+  };
+
+  const handleFinanceTaxApprove = (invId: string) => {
+    setSalesInvoices(prev => prev.map(inv => inv.id === invId ? { ...inv, status: "PENDING_DIRECTOR" } : inv));
+    setApprovalNotification("Finance & Tax telah memverifikasi DPP, PPN 11%, dan PPh 23.");
+    setTimeout(() => setApprovalNotification(null), 3500);
+  };
+
+  const handleDirectorInvoiceApprove = (invId: string) => {
+    setSalesInvoices(prev => prev.map(inv => inv.id === invId ? { ...inv, status: "APPROVED_ISSUED", directorApprovalDate: new Date().toISOString().split("T")[0] } : inv));
+    setApprovalNotification("Direktur Utama telah menandatangani Faktur Tagihan resmi. Dokumen siap ditagihkan ke klien.");
+    setTimeout(() => setApprovalNotification(null), 3500);
+  };
+
+  // Settlement / Pelunasan Piutang & Terbitkan Kuitansi BKM
+  const handleSettleInvoicePayment = (invId: string) => {
+    const targetInv = salesInvoices.find(i => i.id === invId);
+    if (!targetInv) return;
+
+    const bkmNum = `BKM-2026-11-${Math.floor(100 + Math.random() * 900)}`;
+    const today = new Date().toISOString().split("T")[0];
+
+    const paymentRecord: InvoicePaymentRecord = {
+      paymentId: `pay-${Date.now()}`,
+      paymentDate: today,
+      amountPaid: targetInv.totalAmount,
+      voucherNumber: bkmNum,
+      bankAccount: targetInv.targetBankAccount || "Bank Mandiri Operasional (A/C: 133-00-981240-8)",
+      paymentMethod: "TRANSFER_BANK",
+      referenceNote: `Pelunasan ${targetInv.invoiceNumber} - ${targetInv.clientName}`,
+      receivedBy: "Dewi Anggraeni (Finance Head)"
+    };
+
+    setSalesInvoices(prev => prev.map(inv => inv.id === invId ? {
+      ...inv,
+      status: "PAID_FULL",
+      paidAmount: inv.totalAmount,
+      payments: [paymentRecord]
+    } : inv));
+
+    const newReceipt: OfficialReceiptBKM = {
+      id: `rcpt-${Date.now()}`,
+      receiptNumber: bkmNum,
+      invoiceNumber: targetInv.invoiceNumber,
+      clientName: targetInv.clientName,
+      amountReceived: targetInv.totalAmount,
+      receivedDate: today,
+      paymentMethod: "Transfer Bank",
+      bankTarget: targetInv.targetBankAccount || "Bank BCA / Mandiri Operasional",
+      forPaymentOf: `Pelunasan ${targetInv.title} (${targetInv.contractNumber})`,
+      cashierName: "Siti Rahmawati (Kasir)",
+      authorizedBy: "Dewi Anggraeni, SE (Finance Head)"
+    };
+    setOfficialReceipts([newReceipt, ...officialReceipts]);
+
+    const newIncomeTx: FinancialTransaction = {
+      id: `tx-in-${Date.now()}`,
+      transactionNumber: `TX-IN-${Date.now().toString().slice(-6)}`,
+      date: today,
+      description: `Pelunasan ${targetInv.invoiceNumber} - ${targetInv.clientName}`,
+      unit: targetInv.unit,
+      type: "INCOME",
+      category: targetInv.unit === "ME_CORE" ? "Termin Kontrak Jasa ME" : "Pendapatan Langganan FTTH",
+      amount: targetInv.totalAmount,
+      status: "COMPLETED",
+      paymentMethod: "Transfer Bank",
+      recipientOrPayer: targetInv.clientName
+    };
+    setTransactions([newIncomeTx, ...transactions]);
+
+    setApprovalNotification(`Pembayaran ${targetInv.invoiceNumber} sebesar ${formatRupiah(targetInv.totalAmount)} berhasil diterima & Kuitansi BKM telah terbit.`);
+    setTimeout(() => setApprovalNotification(null), 4000);
+  };
+
+  const handleCreateSalesInvoice = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newInvClient || !newInvDpp || !newInvTitle) return;
+
+    const parsedDpp = parseFloat(newInvDpp);
+    const ppn = Math.round(parsedDpp * 0.11);
+    const pph23 = newInvIncludePph23 ? Math.round(parsedDpp * 0.02) : 0;
+    const total = parsedDpp + ppn - pph23;
+
+    const invNum = `INV-2026-${newInvUnit === "ME_CORE" ? "ME" : "STAR"}-${Math.floor(100 + Math.random() * 900)}`;
+
+    const newInvoice: SalesInvoice = {
+      id: `inv-${Date.now()}`,
+      invoiceNumber: invNum,
+      clientName: newInvClient,
+      clientAddress: newInvAddress || "Alamat Klien Terdaftar",
+      clientNPWP: newInvNPWP || "01.xxx.xxx.x-xxx.000",
+      contractNumber: newInvContract || `SPK-2026-${Math.floor(10 + Math.random() * 90)}`,
+      unit: newInvUnit,
+      title: newInvTitle,
+      description: `Penagihan termin/layanan untuk ${newInvClient}`,
+      invoiceDate: new Date().toISOString().split("T")[0],
+      dueDate: newInvDueDate || "2026-11-30",
+      progressPercent: parseInt(newInvProgress) || 30,
+      dppAmount: parsedDpp,
+      ppnPercent: 11,
+      ppnAmount: ppn,
+      pph23Percent: newInvIncludePph23 ? 2 : undefined,
+      pph23Amount: pph23 || undefined,
+      totalAmount: total,
+      paidAmount: 0,
+      status: newInvUnit === "ME_CORE" ? "PENDING_AUDIT_PROGRESS" : "PENDING_FINANCE_TAX",
+      targetBankAccount: "Bank Mandiri (A/C: 133-00-981240-8 a.n. PT Jayahana Manaura Mekanika Selaras)",
+      auditProgressNote: "Menunggu verifikasi lapangan tim audit.",
+      financeTaxNote: "Perhitungan PPN 11% dan PPh 23 terverifikasi sistem."
+    };
+
+    setSalesInvoices([newInvoice, ...salesInvoices]);
+    setIsInvoiceModalOpen(false);
+    setNewInvClient("");
+    setNewInvAddress("");
+    setNewInvNPWP("");
+    setNewInvContract("");
+    setNewInvTitle("");
+    setNewInvDpp("");
+    setApprovalNotification(`Faktur Penjualan ${invNum} berhasil dibuat dan masuk antrean review.`);
+    setTimeout(() => setApprovalNotification(null), 3500);
+  };
+
   // Pending Approvals Handler
   const handleApprove = (id: string, docNumber: string) => {
     setPendingApprovals(prev => prev.filter(item => item.id !== id));
@@ -607,14 +775,14 @@ export default function DashboardPage() {
             onClick={() => setActiveTab("starlite")}
             className={`py-3 px-3.5 border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
               activeTab === "starlite"
-                ? "border-fuchsia-600 text-fuchsia-700 font-bold"
+                ? "border-emerald-600 text-emerald-700 font-bold"
                 : "border-transparent text-slate-600 hover:text-slate-900"
             }`}
           >
-            <Wifi className="w-4 h-4 text-fuchsia-600" />
-            Starlite FTTH (Billing & AR)
-            <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-fuchsia-100 text-fuchsia-800 font-bold">
-              {totalSubscribers} Klien
+            <TrendingUp className="w-4 h-4 text-emerald-600" />
+            Pendapatan, Billing & Piutang (AR)
+            <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-100 text-emerald-800 font-bold">
+              {salesInvoices.filter(i => i.status !== "PAID_FULL").length} Tagihan
             </span>
           </button>
 
@@ -2522,84 +2690,508 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* TAB 4: STARLITE FTTH */}
+        {/* TAB 4: PENDAPATAN, BILLING & PIUTANG USAHA (REVENUE & AR CYCLE LENGKAP) */}
         {activeTab === "starlite" && (
-          <div className="space-y-6">
-            <div className="bg-gradient-to-r from-fuchsia-900 to-purple-900 text-white p-6 rounded-2xl shadow-md">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-fuchsia-500/30 text-fuchsia-200 text-xs font-semibold mb-2">
-                    <Wifi className="w-3.5 h-3.5" /> Unit Bisnis Starlite FTTH
-                  </div>
-                  <h2 className="text-xl font-bold">Billing, Pelanggan & Pendapatan Internet</h2>
-                  <p className="text-xs text-fuchsia-200 mt-1">
-                    Pengelolaan tagihan bulanan pelanggan fiber optik dan monitoring arus kas piutang (AR).
-                  </p>
-                </div>
-                <div className="flex gap-4">
-                  <div className="bg-white/10 backdrop-blur px-4 py-2.5 rounded-xl border border-white/20">
-                    <div className="text-[10px] uppercase tracking-wider text-fuchsia-200">Pelanggan Aktif</div>
-                    <div className="text-lg font-bold">{INITIAL_SUBSCRIBERS.length} Titik Sambung</div>
-                  </div>
-                  <div className="bg-white/10 backdrop-blur px-4 py-2.5 rounded-xl border border-white/20">
-                    <div className="text-[10px] uppercase tracking-wider text-fuchsia-200">Estimasi Pendapatan</div>
-                    <div className="text-lg font-bold">{formatRupiah(totalMonthlyAR)} / bln</div>
-                  </div>
-                </div>
+          <div className="space-y-4">
+            
+            {/* Header Tab & Action Buttons */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+              <div>
+                <h2 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-emerald-600" />
+                  Alur Pendapatan & Piutang Usaha (Revenue & Accounts Receivable)
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Pengelolaan terintegrasi: Jasa ME Core (Termin Kontrak Proyek B2B) & Starlite FTTH (Langganan Internet & Pasang Baru).
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <select
+                  value={selectedUnit}
+                  onChange={(e) => setSelectedUnit(e.target.value as any)}
+                  className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-50 text-slate-700 cursor-pointer"
+                >
+                  <option value="ALL">Semua Unit Bisnis</option>
+                  <option value="ME_CORE">Jasa ME Core (Termin Proyek)</option>
+                  <option value="STARLITE_FTTH">Starlite FTTH (Internet & PSB)</option>
+                </select>
+
+                <button
+                  type="button"
+                  onClick={() => setIsInvoiceModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 transition cursor-pointer shadow-xs"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>+ Buat Faktur Tagihan (Invoice)</span>
+                </button>
               </div>
             </div>
 
-            {/* Invoices List */}
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-              <div className="p-4 border-b border-slate-200 flex justify-between items-center">
-                <h3 className="font-bold text-slate-900 text-sm">Status Tagihan Periode Berjalan (November 2026)</h3>
-                <span className="text-xs text-slate-500 font-mono">Periode: 2026-11</span>
+            {/* Metric Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+              <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                <span className="text-slate-500 block">Total Omset Tagihan</span>
+                <strong className="text-base text-slate-900 font-extrabold font-mono block">
+                  {formatRupiah(salesInvoices.reduce((acc, i) => acc + i.totalAmount, 0))}
+                </strong>
+                <span className="text-[10px] text-slate-400 mt-0.5 block">{salesInvoices.length} Faktur Diterbitkan</span>
               </div>
-              <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
-                <thead className="bg-slate-50 font-semibold text-slate-600">
-                  <tr>
-                    <th className="px-4 py-3">No. Invoice</th>
-                    <th className="px-4 py-3">Nama Pelanggan</th>
-                    <th className="px-4 py-3">Paket Layanan</th>
-                    <th className="px-4 py-3">Nominal</th>
-                    <th className="px-4 py-3">Jatuh Tempo</th>
-                    <th className="px-4 py-3">Status Bayar</th>
-                    <th className="px-4 py-3 text-right">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {INITIAL_INVOICES.map((inv) => (
-                    <tr key={inv.id} className="hover:bg-slate-50 transition">
-                      <td className="px-4 py-3 font-mono font-bold text-slate-900">{inv.invoiceNumber}</td>
-                      <td className="px-4 py-3 font-medium text-slate-900">{inv.subscriberName}</td>
-                      <td className="px-4 py-3 text-slate-500">
-                        {INITIAL_SUBSCRIBERS.find(s => s.id === inv.subscriberId)?.packagePlan || "-"}
-                      </td>
-                      <td className="px-4 py-3 font-bold text-slate-900">{formatRupiah(inv.amount)}</td>
-                      <td className="px-4 py-3">{formatDateIndo(inv.dueDate)}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          inv.paymentStatus === "PAID"
-                            ? "bg-emerald-100 text-emerald-800"
-                            : "bg-rose-100 text-rose-800"
-                        }`}>
-                          {inv.paymentStatus === "PAID" ? "Lunas" : "Belum Bayar"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {inv.paymentStatus !== "PAID" ? (
-                          <button className="px-2.5 py-1 bg-emerald-600 text-white rounded text-[11px] font-semibold hover:bg-emerald-700">
-                            Konfirmasi Bayar
-                          </button>
-                        ) : (
-                          <span className="text-[11px] text-slate-400 font-mono">Kuitansi #{inv.id}</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+              <div className="p-3 bg-white rounded-xl border border-amber-200 bg-amber-50/30 shadow-2xs">
+                <span className="text-amber-800 block">Piutang Usaha (AR) Belum Lunas</span>
+                <strong className="text-base text-amber-900 font-extrabold font-mono block">
+                  {formatRupiah(
+                    salesInvoices.filter(i => i.status !== "PAID_FULL").reduce((acc, i) => acc + i.totalAmount, 0)
+                  )}
+                </strong>
+                <span className="text-[10px] text-amber-700 mt-0.5 block">
+                  {salesInvoices.filter(i => i.status !== "PAID_FULL").length} Faktur Dalam Penagihan
+                </span>
+              </div>
+
+              <div className="p-3 bg-white rounded-xl border border-emerald-200 bg-emerald-50/30 shadow-2xs">
+                <span className="text-emerald-800 block">Kas Masuk Diterima (Lunas)</span>
+                <strong className="text-base text-emerald-900 font-extrabold font-mono block">
+                  {formatRupiah(
+                    salesInvoices.filter(i => i.status === "PAID_FULL").reduce((acc, i) => acc + i.totalAmount, 0)
+                  )}
+                </strong>
+                <span className="text-[10px] text-emerald-700 mt-0.5 block">Kuitansi BKM Terbit</span>
+              </div>
+
+              <div className="p-3 bg-white rounded-xl border border-rose-200 bg-rose-50/30 shadow-2xs">
+                <span className="text-rose-800 block">Piutang Lewat Tempo (Overdue)</span>
+                <strong className="text-base text-rose-900 font-extrabold font-mono block">
+                  {formatRupiah(
+                    salesInvoices.filter(i => i.status === "OVERDUE").reduce((acc, i) => acc + i.totalAmount, 0)
+                  )}
+                </strong>
+                <span className="text-[10px] text-rose-700 mt-0.5 block">Perlu Follow-up Intensif</span>
+              </div>
             </div>
+
+            {/* SUB-TAB NAVIGASI 3 TAHAP PENDAPATAN & AR */}
+            <div className="flex flex-wrap border-b border-slate-200 gap-2 bg-white p-2 rounded-xl shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setRevenueSubTab("INVOICES")}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  revenueSubTab === "INVOICES" 
+                    ? "bg-emerald-600 text-white shadow-xs" 
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                <span>1. Faktur Tagihan & Invoicing (Approval 3-Pintu)</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                  revenueSubTab === "INVOICES" ? "bg-emerald-700 text-white" : "bg-slate-200 text-slate-700"
+                }`}>
+                  {salesInvoices.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRevenueSubTab("AR_AGING")}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  revenueSubTab === "AR_AGING" 
+                    ? "bg-amber-600 text-white shadow-xs" 
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                <Clock className="w-4 h-4" />
+                <span>2. Kartu Piutang & Aging AR (Monitoring)</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                  revenueSubTab === "AR_AGING" ? "bg-amber-700 text-white" : "bg-slate-200 text-slate-700"
+                }`}>
+                  {salesInvoices.filter(i => i.status !== "PAID_FULL").length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRevenueSubTab("RECEIPTS")}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  revenueSubTab === "RECEIPTS" 
+                    ? "bg-blue-600 text-white shadow-xs" 
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                <Receipt className="w-4 h-4" />
+                <span>3. Penerimaan Kas & Kuitansi (Pelunasan BKM)</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                  revenueSubTab === "RECEIPTS" ? "bg-blue-700 text-white" : "bg-slate-200 text-slate-700"
+                }`}>
+                  {officialReceipts.length}
+                </span>
+              </button>
+            </div>
+
+            {/* KONTEN SUB-TAB 1: FAKTUR TAGIHAN & INVOICING (APPROVAL 3 PINTU) */}
+            {revenueSubTab === "INVOICES" && (
+              <div className="space-y-4">
+                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+                  <div className="p-3 border-b border-slate-100 flex justify-between items-center text-xs">
+                    <span className="font-bold text-slate-900">Daftar Faktur Penjualan (Sales Invoice B2B & B2C)</span>
+                    <span className="text-slate-400 font-mono text-[11px]">
+                      Otorisasi Berjenjang: Audit Progres &rarr; Finance & Tax &rarr; Direktur Utama
+                    </span>
+                  </div>
+
+                  <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
+                    <thead className="bg-slate-50 font-semibold text-slate-600">
+                      <tr>
+                        <th className="px-4 py-3">No. Invoice & SPK</th>
+                        <th className="px-4 py-3">Klien & Uraian Pekerjaan</th>
+                        <th className="px-4 py-3">Unit</th>
+                        <th className="px-4 py-3">DPP & Pajak</th>
+                        <th className="px-4 py-3">Total Tagihan</th>
+                        <th className="px-4 py-3 text-center">Status Approval 3-Pintu</th>
+                        <th className="px-4 py-3 text-right">Aksi & Dokumen</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-700">
+                      {salesInvoices
+                        .filter(i => selectedUnit === "ALL" || i.unit === selectedUnit)
+                        .map((inv) => {
+                          const isProgressAuditPassed = !["PENDING_AUDIT_PROGRESS"].includes(inv.status);
+                          const isTaxPassed = !["PENDING_AUDIT_PROGRESS", "PENDING_FINANCE_TAX"].includes(inv.status);
+                          const isDirectorSigned = ["APPROVED_ISSUED", "PAID_FULL", "OVERDUE"].includes(inv.status);
+
+                          return (
+                            <tr key={inv.id} className="hover:bg-slate-50/70 transition">
+                              <td className="px-4 py-3 font-mono">
+                                <span className="font-bold text-slate-900 block">{inv.invoiceNumber}</span>
+                                <span className="text-[10px] text-slate-400 block">{inv.contractNumber}</span>
+                                <span className="text-[10px] text-rose-600 block font-semibold">Tempo: {inv.dueDate}</span>
+                              </td>
+                              <td className="px-4 py-3 max-w-[260px]">
+                                <div className="font-bold text-slate-900 truncate">{inv.clientName}</div>
+                                <div className="text-[11px] text-slate-500 line-clamp-1">{inv.title}</div>
+                                {inv.progressPercent && (
+                                  <span className="inline-block mt-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-100 text-blue-800">
+                                    Opname Fisik: {inv.progressPercent}%
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  inv.unit === "ME_CORE" ? "bg-blue-100 text-blue-700" : "bg-fuchsia-100 text-fuchsia-700"
+                                }`}>
+                                  {inv.unit === "ME_CORE" ? "ME Core" : "Starlite FTTH"}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-[11px]">
+                                <div className="text-slate-600">DPP: {formatRupiah(inv.dppAmount)}</div>
+                                <div className="text-emerald-700 font-semibold">+PPN 11%: {formatRupiah(inv.ppnAmount)}</div>
+                                {inv.pph23Amount ? (
+                                  <div className="text-slate-400">-PPh 23: {formatRupiah(inv.pph23Amount)}</div>
+                                ) : null}
+                              </td>
+                              <td className="px-4 py-3 font-bold text-slate-900 font-mono text-xs">
+                                {formatRupiah(inv.totalAmount)}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                {/* Stepper 3 Pintu */}
+                                <div className="flex items-center justify-center gap-1.5">
+                                  {/* Pintu 1: Audit */}
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                    isProgressAuditPassed 
+                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300" 
+                                      : inv.status === "PENDING_AUDIT_PROGRESS"
+                                      ? "bg-amber-100 text-amber-800 animate-pulse border border-amber-300"
+                                      : "bg-slate-100 text-slate-400"
+                                  }`}>
+                                    {isProgressAuditPassed ? "✓ Audit" : "Audit"}
+                                  </span>
+                                  <span className="text-slate-300">&rarr;</span>
+                                  {/* Pintu 2: Finance Tax */}
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                    isTaxPassed 
+                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300" 
+                                      : inv.status === "PENDING_FINANCE_TAX"
+                                      ? "bg-blue-100 text-blue-800 animate-pulse border border-blue-300"
+                                      : "bg-slate-100 text-slate-400"
+                                  }`}>
+                                    {isTaxPassed ? "✓ Pajak" : "Pajak"}
+                                  </span>
+                                  <span className="text-slate-300">&rarr;</span>
+                                  {/* Pintu 3: Direktur */}
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                    isDirectorSigned 
+                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300" 
+                                      : inv.status === "PENDING_DIRECTOR"
+                                      ? "bg-indigo-100 text-indigo-800 animate-pulse border border-indigo-300"
+                                      : "bg-slate-100 text-slate-400"
+                                  }`}>
+                                    {isDirectorSigned ? "✓ Direktur" : "Direktur"}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {/* Cetak Faktur Penjualan */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenPrintInvoice(inv, "SALES_INVOICE")}
+                                    className="flex items-center gap-1 px-2.5 py-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                                    title="Cetak Faktur Penjualan Resmi A4"
+                                  >
+                                    <Printer className="w-3.5 h-3.5" />
+                                    <span>Faktur</span>
+                                  </button>
+
+                                  {/* Cetak BAKP jika ME Proyek */}
+                                  {inv.unit === "ME_CORE" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenPrintInvoice(inv, "PROGRESS_REPORT")}
+                                      className="flex items-center gap-1 px-2 py-1 text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                                      title="Cetak Berita Acara Kemajuan Pekerjaan (BAKP)"
+                                    >
+                                      <span>BAKP</span>
+                                    </button>
+                                  )}
+
+                                  {/* Approval Action Buttons */}
+                                  {inv.status === "PENDING_AUDIT_PROGRESS" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAuditProgressApprove(inv.id)}
+                                      className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                    >
+                                      ACC Audit
+                                    </button>
+                                  )}
+                                  {inv.status === "PENDING_FINANCE_TAX" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleFinanceTaxApprove(inv.id)}
+                                      className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                    >
+                                      ACC Pajak
+                                    </button>
+                                  )}
+                                  {inv.status === "PENDING_DIRECTOR" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDirectorInvoiceApprove(inv.id)}
+                                      className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                    >
+                                      ACC Direktur
+                                    </button>
+                                  )}
+                                  {inv.status === "APPROVED_ISSUED" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSettleInvoicePayment(inv.id)}
+                                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                    >
+                                      Terima Bayar
+                                    </button>
+                                  )}
+                                  {inv.status === "PAID_FULL" && (
+                                    <span className="text-[10px] text-emerald-800 font-bold bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
+                                      Lunas
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* KONTEN SUB-TAB 2: KARTU PIUTANG & AGING AR (MONITORING JATUH TEMPO) */}
+            {revenueSubTab === "AR_AGING" && (
+              <div className="space-y-4">
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex justify-between items-center text-xs text-amber-900">
+                  <div>
+                    <h3 className="font-bold text-sm text-amber-950 flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-amber-700" />
+                      Monitoring Umur Piutang Usaha (Aging Accounts Receivable)
+                    </h3>
+                    <p className="text-[11px] text-amber-800 mt-0.5">
+                      Pengawasan jatuh tempo pembayaran termin proyek dan iuran langganan FTTH untuk menjaga perputaran kas operasional.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Current (0-30 Hari) */}
+                  <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                      <span className="font-bold text-xs text-slate-800">Lancar (0 - 30 Hari)</span>
+                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[10px]">Normal</span>
+                    </div>
+                    <div className="text-lg font-extrabold text-slate-900 font-mono">
+                      {formatRupiah(
+                        salesInvoices
+                          .filter(i => i.status === "APPROVED_ISSUED")
+                          .reduce((acc, i) => acc + i.totalAmount, 0)
+                      )}
+                    </div>
+                    <span className="text-[11px] text-slate-500 block">Jatuh tempo dalam waktu aman</span>
+                  </div>
+
+                  {/* Perhatian (31-60 Hari) */}
+                  <div className="bg-white p-4 rounded-xl border border-amber-200 bg-amber-50/20 shadow-2xs space-y-2">
+                    <div className="flex justify-between items-center pb-2 border-b border-amber-100">
+                      <span className="font-bold text-xs text-amber-900">Perhatian (31 - 60 Hari)</span>
+                      <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-bold text-[10px]">Follow-up</span>
+                    </div>
+                    <div className="text-lg font-extrabold text-amber-800 font-mono">
+                      {formatRupiah(0)}
+                    </div>
+                    <span className="text-[11px] text-amber-700 block">Belum ada piutang di rentang ini</span>
+                  </div>
+
+                  {/* Overdue (>60 Hari) */}
+                  <div className="bg-white p-4 rounded-xl border border-rose-200 bg-rose-50/20 shadow-2xs space-y-2">
+                    <div className="flex justify-between items-center pb-2 border-b border-rose-100">
+                      <span className="font-bold text-xs text-rose-900">Lewat Tempo (&gt; 60 Hari / Overdue)</span>
+                      <span className="px-2 py-0.5 bg-rose-100 text-rose-800 rounded font-bold text-[10px]">Kritis</span>
+                    </div>
+                    <div className="text-lg font-extrabold text-rose-800 font-mono">
+                      {formatRupiah(
+                        salesInvoices
+                          .filter(i => i.status === "OVERDUE")
+                          .reduce((acc, i) => acc + i.totalAmount, 0)
+                      )}
+                    </div>
+                    <span className="text-[11px] text-rose-700 block">Segera kirimkan surat tegangan resmi</span>
+                  </div>
+                </div>
+
+                {/* Tabel Piutang Belum Lunas */}
+                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+                  <div className="p-3 border-b border-slate-100 text-xs font-bold text-slate-900">
+                    Kartu Rincian Piutang Klien yang Belum Terbayar
+                  </div>
+
+                  <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
+                    <thead className="bg-slate-50 font-semibold text-slate-600">
+                      <tr>
+                        <th className="px-4 py-3">No. Invoice & Klien</th>
+                        <th className="px-4 py-3">No. Kontrak / SPK</th>
+                        <th className="px-4 py-3">Tgl Jatuh Tempo</th>
+                        <th className="px-4 py-3">Nominal Piutang</th>
+                        <th className="px-4 py-3">Status Aging</th>
+                        <th className="px-4 py-3 text-right">Tindakan Penagihan</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-700">
+                      {salesInvoices
+                        .filter(i => i.status !== "PAID_FULL")
+                        .map((inv) => (
+                          <tr key={inv.id} className="hover:bg-slate-50/70 transition">
+                            <td className="px-4 py-3">
+                              <span className="font-mono font-bold text-slate-900 block">{inv.invoiceNumber}</span>
+                              <strong className="text-slate-800 block text-[11px]">{inv.clientName}</strong>
+                            </td>
+                            <td className="px-4 py-3 font-mono text-[11px]">{inv.contractNumber}</td>
+                            <td className="px-4 py-3">
+                              <span className="font-bold text-rose-700 block">{inv.dueDate}</span>
+                              <span className="text-[10px] text-slate-400">Terbit: {inv.invoiceDate}</span>
+                            </td>
+                            <td className="px-4 py-3 font-mono font-bold text-slate-900 text-xs">
+                              {formatRupiah(inv.totalAmount)}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                inv.status === "OVERDUE" ? "bg-rose-100 text-rose-800" : "bg-emerald-100 text-emerald-800"
+                              }`}>
+                                {inv.status === "OVERDUE" ? "Lewat Jatuh Tempo" : "Dalam Batas Waktu"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSettleInvoicePayment(inv.id)}
+                                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold shadow-xs cursor-pointer"
+                                >
+                                  Terima Bayar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenPrintInvoice(inv, "SALES_INVOICE")}
+                                  className="px-2 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded text-[11px] font-medium text-slate-700 cursor-pointer"
+                                >
+                                  Kirim Ulang
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* KONTEN SUB-TAB 3: PENERIMAAN KAS & KUITANSI (PELUNASAN BKM) */}
+            {revenueSubTab === "RECEIPTS" && (
+              <div className="space-y-4">
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl flex justify-between items-center text-xs text-blue-900">
+                  <div>
+                    <h3 className="font-bold text-sm text-blue-950 flex items-center gap-2">
+                      <Receipt className="w-4 h-4 text-blue-700" />
+                      Kuitansi Resmi & Bukti Kas Masuk (Official Receipt / BKM)
+                    </h3>
+                    <p className="text-[11px] text-blue-800 mt-0.5">
+                      Pencatatan tanda terima pembayaran sah yang telah masuk ke rekening bank perusahaan, ditandatangani Kasir dan Finance Manager.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+                  <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
+                    <thead className="bg-slate-50 font-semibold text-slate-600">
+                      <tr>
+                        <th className="px-4 py-3">No. Kuitansi BKM</th>
+                        <th className="px-4 py-3">Tgl Diterima</th>
+                        <th className="px-4 py-3">Diterima Dari (Klien)</th>
+                        <th className="px-4 py-3">Untuk Pembayaran</th>
+                        <th className="px-4 py-3">Jumlah Uang</th>
+                        <th className="px-4 py-3">Rekening Penampung</th>
+                        <th className="px-4 py-3 text-right">Aksi Cetak</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-700">
+                      {officialReceipts.map((rec) => (
+                        <tr key={rec.id} className="hover:bg-slate-50/70 transition">
+                          <td className="px-4 py-3 font-mono font-bold text-slate-900">{rec.receiptNumber}</td>
+                          <td className="px-4 py-3 text-slate-600">{rec.receivedDate}</td>
+                          <td className="px-4 py-3 font-bold text-slate-900">{rec.clientName}</td>
+                          <td className="px-4 py-3 max-w-[240px] text-slate-600 truncate">{rec.forPaymentOf}</td>
+                          <td className="px-4 py-3 font-mono font-bold text-emerald-700 text-xs">
+                            {formatRupiah(rec.amountReceived)}
+                          </td>
+                          <td className="px-4 py-3 text-[11px] text-slate-500 font-mono">{rec.bankTarget}</td>
+                          <td className="px-4 py-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenPrintReceipt(rec)}
+                              className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg font-bold text-xs transition cursor-pointer"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                              <span>Cetak Kuitansi</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
           </div>
         )}
 
@@ -2954,13 +3546,197 @@ export default function DashboardPage() {
       )}
 
       {/* MODAL 3: PRATINJAU CETAK DOKUMEN RESMI A4 (ISO-FIN-2026 STANDAR PERUSAHAAN) */}
-      {selectedPrintRequest && (
+      {(selectedPrintRequest || selectedPrintInvoice || selectedPrintReceipt) && (
         <PrintableDocumentModal
           isOpen={isPrintModalOpen}
           onClose={() => setIsPrintModalOpen(false)}
-          request={selectedPrintRequest}
+          request={selectedPrintRequest || undefined}
+          invoice={selectedPrintInvoice || undefined}
+          receipt={selectedPrintReceipt || undefined}
           docType={printDocType}
         />
+      )}
+
+      {/* MODAL 4: BUAT FAKTUR TAGIHAN / SALES INVOICE BARU (B2B & B2C) */}
+      {isInvoiceModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-xl border border-slate-200 animate-in fade-in duration-200 my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start pb-2 border-b border-slate-100 mb-4">
+              <div>
+                <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-emerald-600" />
+                  Buat Faktur Penjualan Resmi (Sales Invoice)
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Tagihan resmi B2B Termin Proyek ME atau Tagihan Pelanggan Starlite FTTH lengkap dengan pajak PPN 11% & PPh 23.
+                </p>
+              </div>
+              <button onClick={() => setIsInvoiceModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateSalesInvoice} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Unit Usaha Penghasil</label>
+                  <select
+                    value={newInvUnit}
+                    onChange={(e) => setNewInvUnit(e.target.value as BusinessUnit)}
+                    className="w-full border border-slate-300 rounded-lg p-2 bg-white"
+                  >
+                    <option value="ME_CORE">Jasa ME Core (Termin Kontrak Proyek)</option>
+                    <option value="STARLITE_FTTH">Starlite FTTH (Langganan Internet & PSB)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">No. Kontrak / SPK / ID Pelanggan</label>
+                  <input
+                    type="text"
+                    value={newInvContract}
+                    onChange={(e) => setNewInvContract(e.target.value)}
+                    placeholder="Misal: SPK-2026-ME-02 / STL-004"
+                    className="w-full border border-slate-300 rounded-lg p-2 font-mono"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Nama Klien / Perusahaan Pembayar</label>
+                  <input
+                    type="text"
+                    value={newInvClient}
+                    onChange={(e) => setNewInvClient(e.target.value)}
+                    placeholder="Contoh: PT. Astra Otoparts Tbk"
+                    className="w-full border border-slate-300 rounded-lg p-2"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">NPWP Klien (Opsional)</label>
+                  <input
+                    type="text"
+                    value={newInvNPWP}
+                    onChange={(e) => setNewInvNPWP(e.target.value)}
+                    placeholder="Contoh: 01.342.891.4-054.000"
+                    className="w-full border border-slate-300 rounded-lg p-2 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Alamat Lengkap Klien / Lokasi Proyek</label>
+                <input
+                  type="text"
+                  value={newInvAddress}
+                  onChange={(e) => setNewInvAddress(e.target.value)}
+                  placeholder="Misal: Kawasan Industri KIIC Karawang Barat Lot B-02"
+                  className="w-full border border-slate-300 rounded-lg p-2"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Judul / Uraian Termin Tagihan</label>
+                <input
+                  type="text"
+                  value={newInvTitle}
+                  onChange={(e) => setNewInvTitle(e.target.value)}
+                  placeholder="Contoh: Termin I (30%) - Pekerjaan Instalasi Panel Listrik & Kabel Feeder"
+                  className="w-full border border-slate-300 rounded-lg p-2"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Nilai DPP / Pokok (Rp)</label>
+                  <input
+                    type="number"
+                    value={newInvDpp}
+                    onChange={(e) => setNewInvDpp(e.target.value)}
+                    placeholder="Contoh: 50000000"
+                    className="w-full border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Progres Fisik (%)</label>
+                  <input
+                    type="number"
+                    value={newInvProgress}
+                    onChange={(e) => setNewInvProgress(e.target.value)}
+                    placeholder="30"
+                    className="w-full border border-slate-300 rounded-lg p-2 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Tgl Jatuh Tempo</label>
+                  <input
+                    type="date"
+                    value={newInvDueDate}
+                    onChange={(e) => setNewInvDueDate(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg p-2"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Kalkulasi Pajak Otomatis */}
+              {newInvDpp && (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs">
+                  <div className="flex justify-between text-slate-600">
+                    <span>DPP (Dasar Pengenaan Pajak):</span>
+                    <strong className="font-mono">{formatRupiah(parseFloat(newInvDpp) || 0)}</strong>
+                  </div>
+                  <div className="flex justify-between text-emerald-700">
+                    <span>+ PPN 11% (Pajak Pertambahan Nilai):</span>
+                    <strong className="font-mono">{formatRupiah((parseFloat(newInvDpp) || 0) * 0.11)}</strong>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-600 pt-1 border-t border-slate-200">
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newInvIncludePph23}
+                        onChange={(e) => setNewInvIncludePph23(e.target.checked)}
+                        className="rounded"
+                      />
+                      <span>Potong PPh 23 (2% Jasa Teknik)</span>
+                    </label>
+                    <span className="font-mono text-slate-500">
+                      -{formatRupiah(newInvIncludePph23 ? (parseFloat(newInvDpp) || 0) * 0.02 : 0)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm font-bold text-blue-900 pt-1.5 border-t border-slate-300">
+                    <span>Total Tagihan Bersih:</span>
+                    <span className="font-mono font-black text-base">
+                      {formatRupiah(
+                        (parseFloat(newInvDpp) || 0) * 1.11 - (newInvIncludePph23 ? (parseFloat(newInvDpp) || 0) * 0.02 : 0)
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsInvoiceModalOpen(false)}
+                  className="px-3.5 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition cursor-pointer shadow-xs"
+                >
+                  Kirim ke Tim Audit Progres (Step 1)
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

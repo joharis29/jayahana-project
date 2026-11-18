@@ -5,7 +5,9 @@ import {
   StarliteInvoice, 
   BudgetRequest,
   FinancialTransaction,
-  MonthlyFinancialSummary 
+  MonthlyFinancialSummary,
+  SalesInvoice,
+  OfficialReceiptBKM
 } from "@/types";
 
 export const COMPANY_NAME = "PT. Jayahana Manaura Mekanika Selaras";
@@ -311,6 +313,184 @@ export const INITIAL_INVOICES: StarliteInvoice[] = [
     amount: 1250000,
     dueDate: "2026-11-15",
     paymentStatus: "OVERDUE"
+  }
+];
+
+// B2B & B2C Integrated Sales Invoices (Faktur Penjualan & Piutang Proyek / FTTH)
+export const INITIAL_SALES_INVOICES: SalesInvoice[] = [
+  {
+    id: "inv-sales-001",
+    invoiceNumber: "INV-2026-ME-001",
+    clientName: "PT. Astra Otoparts Tbk (Kawasan Industri KIIC)",
+    clientAddress: "Jl. Permata Raya Lot CA-4, KIIC Karawang Barat",
+    clientNPWP: "01.342.891.4-054.000",
+    clientPhone: "(0267) 845-2100",
+    contractNumber: "SPK-2026-ME-01",
+    unit: "ME_CORE",
+    title: "Termin I (30%) - Pekerjaan Instalasi Panel Incoming & Kabel Power",
+    description: "Pembayaran Termin 1 sesuai Berita Acara Progres Fisik No. BAKP-ME-2026-004",
+    invoiceDate: "2026-11-01",
+    dueDate: "2026-11-15",
+    progressPercent: 35,
+    dppAmount: 120000000,
+    ppnPercent: 11,
+    ppnAmount: 13200000,
+    pph23Percent: 2,
+    pph23Amount: 2400000,
+    totalAmount: 130800000,
+    paidAmount: 130800000,
+    status: "PAID_FULL",
+    targetBankAccount: "Bank Mandiri (A/C: 133-00-981240-8 a.n. PT Jayahana Manaura Mekanika Selaras)",
+    auditProgressNote: "Fisik instalasi panel incoming telah dicek dan memenuhi standar teknis 35% opname.",
+    financeTaxNote: "Faktur pajak PPN 11% dan bukti potong PPh 23 (2%) telah divalidasi.",
+    directorApprovalDate: "2026-11-02",
+    payments: [
+      {
+        paymentId: "pay-001",
+        paymentDate: "2026-11-08",
+        amountPaid: 130800000,
+        voucherNumber: "BKM-2026-11-001",
+        bankAccount: "Bank Mandiri Operasional (A/C: 133-00-981240-8)",
+        paymentMethod: "TRANSFER_BANK",
+        referenceNote: "Pelunasan Termin I Proyek KIIC via Bank Mandiri",
+        receivedBy: "Dewi Anggraeni (Finance Head)"
+      }
+    ]
+  },
+  {
+    id: "inv-sales-002",
+    invoiceNumber: "INV-2026-ME-002",
+    clientName: "PT. Menara Sentul Land (Gedung Sentul Tower)",
+    clientAddress: "Jl. MH Thamrin Blok C-02, Sentul City, Bogor",
+    clientNPWP: "02.891.123.6-403.000",
+    clientPhone: "(021) 8792-5500",
+    contractNumber: "SPK-2026-ME-08",
+    unit: "ME_CORE",
+    title: "Termin II (40%) - Instalasi Pemipaan Chiller & Pengkabelan Feeder",
+    description: "Pembayaran Termin 2 pekerjaan mekanikal pendingin gedung lantai 1-5",
+    invoiceDate: "2026-11-10",
+    dueDate: "2026-11-25",
+    progressPercent: 65,
+    dppAmount: 85000000,
+    ppnPercent: 11,
+    ppnAmount: 9350000,
+    pph23Percent: 2,
+    pph23Amount: 1700000,
+    totalAmount: 92650000,
+    paidAmount: 0,
+    status: "APPROVED_ISSUED",
+    targetBankAccount: "Bank BCA (A/C: 731-0982-11 a.n. PT Jayahana Manaura Mekanika Selaras)",
+    auditProgressNote: "Opname fisik chiller pipa dan uji tekanan hidrostatik pipa telah lolos uji.",
+    financeTaxNote: "Invoice B2B telah terverifikasi, menunggu pembayaran jatuh tempo 25 Nov 2026.",
+    directorApprovalDate: "2026-11-11"
+  },
+  {
+    id: "inv-sales-003",
+    invoiceNumber: "INV-2026-STAR-088",
+    clientName: "CV. Abadi Surya (SOHO)",
+    clientAddress: "Ruko Sentul Niaga Blok B-03, Sentul City",
+    clientNPWP: "03.441.980.1-403.000",
+    clientPhone: "082111223344",
+    contractNumber: "SUB-2026-STL-003",
+    unit: "STARLITE_FTTH",
+    title: "Langganan Internet Dedicated Starlite Business 200 Mbps (Nov 2026)",
+    description: "Iuran bulanan koneksi internet fiber optik + 1 Static IP Public",
+    invoiceDate: "2026-11-01",
+    dueDate: "2026-11-15",
+    dppAmount: 1250000,
+    ppnPercent: 11,
+    ppnAmount: 137500,
+    totalAmount: 1387500,
+    paidAmount: 0,
+    status: "OVERDUE",
+    targetBankAccount: "Bank BCA (A/C: 731-0982-11 a.n. PT Jayahana Manaura Mekanika Selaras)",
+    financeTaxNote: "Lewat jatuh tempo 3 hari, reminder penagihan telah dikirim via WhatsApp."
+  },
+  {
+    id: "inv-sales-004",
+    invoiceNumber: "INV-2026-STAR-092",
+    clientName: "Pengelola Warga Cluster Sentul Tahap 2 (Kolektif)",
+    clientAddress: "Kantor Pengelola RT/RW Cluster Sentul City",
+    clientPhone: "081299887766",
+    contractNumber: "TAGIHAN-FTTH-RES-2611",
+    unit: "STARLITE_FTTH",
+    title: "Tagihan Kolektif 28 Pelanggan Residensial Starlite FTTH (Nov 2026)",
+    description: "Iuran internet rumah tangga paket 50 Mbps & 100 Mbps cluster Sentul",
+    invoiceDate: "2026-11-05",
+    dueDate: "2026-11-20",
+    dppAmount: 8850000,
+    ppnPercent: 11,
+    ppnAmount: 973500,
+    totalAmount: 9823500,
+    paidAmount: 9823500,
+    status: "PAID_FULL",
+    targetBankAccount: "Bank BCA (A/C: 731-0982-11 a.n. PT Jayahana Manaura Mekanika Selaras)",
+    payments: [
+      {
+        paymentId: "pay-002",
+        paymentDate: "2026-11-14",
+        amountPaid: 9823500,
+        voucherNumber: "BKM-2026-11-002",
+        bankAccount: "Bank BCA (A/C: 731-0982-11)",
+        paymentMethod: "TRANSFER_BANK",
+        referenceNote: "Pelunasan tagihan kolektif FTTH Cluster Sentul Tahap 2",
+        receivedBy: "Dewi Anggraeni (Finance Head)"
+      }
+    ]
+  },
+  {
+    id: "inv-sales-005",
+    invoiceNumber: "INV-2026-ME-003",
+    clientName: "PT. Cipta Graha Mandiri (Mall Cibinong)",
+    clientAddress: "Jl. Raya Jakarta-Bogor Km. 42, Cibinong",
+    clientNPWP: "01.772.331.2-403.000",
+    clientPhone: "(021) 875-9900",
+    contractNumber: "SPK-2026-ME-14",
+    unit: "ME_CORE",
+    title: "Termin I (20%) - Pengadaan & Penarikan Kabel Feeder Mall Cibinong",
+    description: "Uang muka kerja & pengadaan kabel NYFGBY 4x95mm feeder trafo mall",
+    invoiceDate: "2026-11-17",
+    dueDate: "2026-12-02",
+    progressPercent: 20,
+    dppAmount: 45000000,
+    ppnPercent: 11,
+    ppnAmount: 4950000,
+    pph23Percent: 2,
+    pph23Amount: 900000,
+    totalAmount: 49050000,
+    paidAmount: 0,
+    status: "PENDING_AUDIT_PROGRESS",
+    targetBankAccount: "Bank Mandiri (A/C: 133-00-981240-8 a.n. PT Jayahana Manaura Mekanika Selaras)",
+    auditProgressNote: "Menunggu Berita Acara Opname Fisik lapangan dari Site Manager & Tim Audit."
+  }
+];
+
+export const INITIAL_RECEIPTS_BKM: OfficialReceiptBKM[] = [
+  {
+    id: "bkm-001",
+    receiptNumber: "BKM-2026-11-001",
+    invoiceNumber: "INV-2026-ME-001",
+    clientName: "PT. Astra Otoparts Tbk (Kawasan Industri KIIC)",
+    amountReceived: 130800000,
+    receivedDate: "2026-11-08",
+    paymentMethod: "Transfer Bank Mandiri",
+    bankTarget: "Bank Mandiri Operasional (A/C: 133-00-981240-8)",
+    forPaymentOf: "Pelunasan Termin I (30%) Pekerjaan Instalasi Panel & Kabel Pabrik KIIC (SPK-2026-ME-01)",
+    cashierName: "Siti Rahmawati (Kasir)",
+    authorizedBy: "Dewi Anggraeni, SE (Finance Head)"
+  },
+  {
+    id: "bkm-002",
+    receiptNumber: "BKM-2026-11-002",
+    invoiceNumber: "INV-2026-STAR-092",
+    clientName: "Pengelola Warga Cluster Sentul Tahap 2 (Kolektif)",
+    amountReceived: 9823500,
+    receivedDate: "2026-11-14",
+    paymentMethod: "Transfer Bank BCA",
+    bankTarget: "Bank BCA Operasional (A/C: 731-0982-11)",
+    forPaymentOf: "Pelunasan Tagihan Kolektif 28 Pelanggan Residensial Starlite FTTH Periode November 2026",
+    cashierName: "Siti Rahmawati (Kasir)",
+    authorizedBy: "Dewi Anggraeni, SE (Finance Head)"
   }
 ];
 

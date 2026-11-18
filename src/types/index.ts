@@ -219,6 +219,70 @@ export interface StarliteInvoice {
   paymentMethod?: 'TRANSFER_BCA' | 'TRANSFER_MANDIRI' | 'CASH';
 }
 
+// B2B & B2C Integrated Sales Invoice, Accounts Receivable & Official Receipt Models
+export type InvoiceStatus = 
+  | 'PENDING_AUDIT_PROGRESS'
+  | 'PENDING_FINANCE_TAX'
+  | 'PENDING_DIRECTOR'
+  | 'APPROVED_ISSUED'
+  | 'PAID_FULL'
+  | 'PARTIAL_PAID'
+  | 'OVERDUE';
+
+export interface InvoicePaymentRecord {
+  paymentId: string;
+  paymentDate: string;
+  amountPaid: number;
+  voucherNumber: string; // "BKM-2026-11-001"
+  bankAccount: string; // "Bank BCA - 731-0982-11"
+  paymentMethod: 'TRANSFER_BANK' | 'CASH';
+  referenceNote: string;
+  receivedBy: string;
+}
+
+export interface SalesInvoice {
+  id: string;
+  invoiceNumber: string; // "INV-2026-ME-001"
+  clientName: string;
+  clientAddress: string;
+  clientNPWP?: string;
+  clientPhone?: string;
+  contractNumber: string; // "SPK-2026-ME-01" / "SUB-2026-STL-01"
+  unit: BusinessUnit;
+  title: string;
+  description: string;
+  invoiceDate: string;
+  dueDate: string;
+  progressPercent?: number; // e.g. 30 (Termin I 30%)
+  dppAmount: number; // Dasar Pengenaan Pajak
+  ppnPercent: number; // 11%
+  ppnAmount: number;
+  pph23Percent?: number; // 2%
+  pph23Amount?: number;
+  totalAmount: number;
+  paidAmount: number;
+  status: InvoiceStatus;
+  targetBankAccount: string;
+  auditProgressNote?: string;
+  financeTaxNote?: string;
+  directorApprovalDate?: string;
+  payments?: InvoicePaymentRecord[];
+}
+
+export interface OfficialReceiptBKM {
+  id: string;
+  receiptNumber: string; // "BKM-2026-11-001"
+  invoiceNumber: string;
+  clientName: string;
+  amountReceived: number;
+  receivedDate: string;
+  paymentMethod: string;
+  bankTarget: string;
+  forPaymentOf: string;
+  cashierName: string;
+  authorizedBy: string;
+}
+
 // Accounting & Financial Reporting Models
 export interface AccountCOA {
   code: string;

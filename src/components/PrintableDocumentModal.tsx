@@ -1,20 +1,24 @@
 "use client";
 
 import React from "react";
-import { Printer, X, CheckCircle2, AlertTriangle, ShieldCheck, FileText } from "lucide-react";
-import type { BudgetRequest, GoodsReceiptRecord, RealizationRecord } from "@/types";
+import { Printer, X, CheckCircle2, AlertTriangle, ShieldCheck, FileText, Building2, Wifi } from "lucide-react";
+import type { BudgetRequest, GoodsReceiptRecord, RealizationRecord, SalesInvoice, OfficialReceiptBKM } from "@/types";
 
 interface PrintableDocumentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  request: BudgetRequest;
-  docType: "REQUEST" | "DISBURSEMENT" | "REALIZATION" | "GOODS_RECEIPT";
+  request?: BudgetRequest;
+  invoice?: SalesInvoice;
+  receipt?: OfficialReceiptBKM;
+  docType: "REQUEST" | "DISBURSEMENT" | "REALIZATION" | "GOODS_RECEIPT" | "SALES_INVOICE" | "OFFICIAL_RECEIPT" | "PROGRESS_REPORT";
 }
 
 export function PrintableDocumentModal({
   isOpen,
   onClose,
   request,
+  invoice,
+  receipt,
   docType,
 }: PrintableDocumentModalProps) {
   if (!isOpen) return null;
@@ -31,10 +35,11 @@ export function PrintableDocumentModal({
     window.print();
   };
 
+  const activeUnit = invoice ? invoice.unit : (request ? request.unit : "ME_CORE");
   const unitName = 
-    request.unit === "ME_CORE" 
+    activeUnit === "ME_CORE" 
       ? "Divisi Mekanikal & Elektrikal (ME Core)" 
-      : request.unit === "STARLITE_FTTH" 
+      : activeUnit === "STARLITE_FTTH" 
       ? "Divisi Starlite FTTH (Fiber Optic)" 
       : "Divisi Operasional & Umum";
 
@@ -58,6 +63,7 @@ export function PrintableDocumentModal({
           </div>
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={handlePrint}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
             >
@@ -65,6 +71,7 @@ export function PrintableDocumentModal({
               Cetak / Simpan PDF
             </button>
             <button
+              type="button"
               onClick={onClose}
               className="p-2 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl transition cursor-pointer"
             >
@@ -96,14 +103,14 @@ export function PrintableDocumentModal({
                     FORM ISO-FIN-2026
                   </div>
                   <div className="text-[10px] text-slate-400 mt-1 font-mono">
-                    Doc ID: {request.requestNumber}
+                    Doc ID: {invoice ? invoice.invoiceNumber : (request ? request.requestNumber : "DOC-2026")}
                   </div>
                 </div>
               </div>
             </div>
 
             {/* DOKUMEN 1: FORMULIR PENGAJUAN ANGGARAN & PENGADAAN */}
-            {docType === "REQUEST" && (
+            {docType === "REQUEST" && request && (
               <div>
                 <div className="text-center mb-6">
                   <h2 className="text-base font-extrabold uppercase underline tracking-wider text-slate-900">
@@ -200,7 +207,7 @@ export function PrintableDocumentModal({
             )}
 
             {/* DOKUMEN 2: FORMULIR BUKTI PENCAIRAN DANA (PAYMENT VOUCHER) */}
-            {docType === "DISBURSEMENT" && (
+            {docType === "DISBURSEMENT" && request && (
               <div>
                 <div className="text-center mb-6">
                   <h2 className="text-base font-extrabold uppercase underline tracking-wider text-slate-900">
@@ -224,7 +231,6 @@ export function PrintableDocumentModal({
                   </div>
                 </div>
 
-                {/* Box Nominal Pencairan */}
                 <div className="my-6 p-4 rounded-xl border-2 border-emerald-500 bg-emerald-50 text-center">
                   <span className="text-xs font-bold uppercase tracking-wider text-emerald-800">Jumlah Dana yang Dicairkan</span>
                   <div className="text-2xl font-black text-emerald-900 mt-1">
@@ -238,7 +244,7 @@ export function PrintableDocumentModal({
             )}
 
             {/* DOKUMEN 3: FORMULIR LAPORAN REALISASI & LPJ */}
-            {docType === "REALIZATION" && (
+            {docType === "REALIZATION" && request && (
               <div>
                 <div className="text-center mb-6">
                   <h2 className="text-base font-extrabold uppercase underline tracking-wider text-slate-900">
@@ -328,7 +334,7 @@ export function PrintableDocumentModal({
             )}
 
             {/* DOKUMEN 4: FORMULIR PENERIMAAN BARANG FISIK (GOODS RECEIPT / BAST) */}
-            {docType === "GOODS_RECEIPT" && (
+            {docType === "GOODS_RECEIPT" && request && (
               <div>
                 <div className="text-center mb-6">
                   <h2 className="text-base font-extrabold uppercase underline tracking-wider text-slate-900">
@@ -405,27 +411,238 @@ export function PrintableDocumentModal({
               </div>
             )}
 
+            {/* DOKUMEN 5: FORMULIR FAKTUR PENJUALAN RESMI (SALES INVOICE) */}
+            {docType === "SALES_INVOICE" && invoice && (
+              <div>
+                <div className="text-center mb-6">
+                  <h2 className="text-base font-extrabold uppercase underline tracking-wider text-slate-900">
+                    Faktur Penjualan / Tagihan Resmi (Sales Invoice)
+                  </h2>
+                  <span className="text-xs text-slate-500 font-mono">
+                    Nomor Invoice: {invoice.invoiceNumber} &bull; No. Kontrak/SPK: {invoice.contractNumber}
+                  </span>
+                </div>
+
+                {/* Box Data Klien & Tanggal */}
+                <div className="grid grid-cols-2 gap-4 text-xs mb-6 border border-slate-300 rounded-lg p-3 bg-slate-50">
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-slate-500 uppercase font-bold block">Tagihan Ditujukan Kepada:</span>
+                    <strong className="text-sm text-slate-900 block">{invoice.clientName}</strong>
+                    <span className="text-slate-600 block">{invoice.clientAddress}</span>
+                    {invoice.clientNPWP && (
+                      <span className="text-slate-500 font-mono block text-[11px]">NPWP: {invoice.clientNPWP}</span>
+                    )}
+                    {invoice.clientPhone && (
+                      <span className="text-slate-500 font-mono block text-[11px]">Kontak: {invoice.clientPhone}</span>
+                    )}
+                  </div>
+                  <div className="space-y-1 text-right">
+                    <div><span className="text-slate-500">Tanggal Faktur:</span> <strong>{invoice.invoiceDate}</strong></div>
+                    <div><span className="text-slate-500">Jatuh Tempo:</span> <strong className="text-rose-700">{invoice.dueDate}</strong></div>
+                    <div><span className="text-slate-500">Unit Bisnis:</span> <strong>{unitName}</strong></div>
+                    <div><span className="text-slate-500">Status Pembayaran:</span> <strong className="text-blue-700">{invoice.status}</strong></div>
+                  </div>
+                </div>
+
+                {/* Tabel Rincian Tagihan Pajak DPP, PPN, PPh 23 */}
+                <div className="mb-6">
+                  <table className="w-full text-xs border border-slate-300 border-collapse">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-700 border-b border-slate-300">
+                        <th className="border border-slate-300 px-3 py-2 text-center w-12">No</th>
+                        <th className="border border-slate-300 px-3 py-2 text-left">Deskripsi Layanan / Progres Termin</th>
+                        <th className="border border-slate-300 px-3 py-2 text-center w-28">Progres Fisik</th>
+                        <th className="border border-slate-300 px-3 py-2 text-right w-36">Dasar Pengenaan Pajak (DPP)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-slate-200">
+                        <td className="border border-slate-300 px-3 py-2 text-center">1</td>
+                        <td className="border border-slate-300 px-3 py-2">
+                          <strong className="block text-slate-900">{invoice.title}</strong>
+                          <span className="text-slate-600 text-[11px] block">{invoice.description}</span>
+                        </td>
+                        <td className="border border-slate-300 px-3 py-2 text-center font-bold text-blue-700">
+                          {invoice.progressPercent ? `${invoice.progressPercent}% Opname` : "100% Layanan"}
+                        </td>
+                        <td className="border border-slate-300 px-3 py-2 text-right font-semibold">
+                          {formatRupiah(invoice.dppAmount)}
+                        </td>
+                      </tr>
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-slate-50">
+                        <td colSpan={3} className="border border-slate-300 px-3 py-1.5 text-right font-medium">
+                          Dasar Pengenaan Pajak (DPP):
+                        </td>
+                        <td className="border border-slate-300 px-3 py-1.5 text-right font-semibold font-mono">
+                          {formatRupiah(invoice.dppAmount)}
+                        </td>
+                      </tr>
+                      <tr className="bg-slate-50">
+                        <td colSpan={3} className="border border-slate-300 px-3 py-1.5 text-right font-medium">
+                          PPN 11% (Pajak Pertambahan Nilai):
+                        </td>
+                        <td className="border border-slate-300 px-3 py-1.5 text-right font-semibold text-emerald-700 font-mono">
+                          +{formatRupiah(invoice.ppnAmount)}
+                        </td>
+                      </tr>
+                      {invoice.pph23Amount ? (
+                        <tr className="bg-slate-50">
+                          <td colSpan={3} className="border border-slate-300 px-3 py-1.5 text-right font-medium">
+                            PPh Pasal 23 ({invoice.pph23Percent}% Jasa Teknik):
+                          </td>
+                          <td className="border border-slate-300 px-3 py-1.5 text-right font-semibold text-slate-500 font-mono">
+                            -{formatRupiah(invoice.pph23Amount)}
+                          </td>
+                        </tr>
+                      ) : null}
+                      <tr className="bg-blue-50 font-bold border-t-2 border-slate-400">
+                        <td colSpan={3} className="border border-slate-300 px-3 py-2 text-right uppercase text-xs text-blue-900">
+                          Total Tagihan Bersih (Net Payable):
+                        </td>
+                        <td className="border border-slate-300 px-3 py-2 text-right text-sm text-blue-900 font-mono font-extrabold">
+                          {formatRupiah(invoice.totalAmount)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {/* Instruksi Rekening Resmi Penampung */}
+                <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-lg text-xs mb-6 space-y-1">
+                  <span className="font-bold text-blue-950 uppercase tracking-wide block">Instruksi Pembayaran Resmi:</span>
+                  <p className="text-slate-700">
+                    Mohon pembayaran ditransfer langsung ke rekening resmi perusahaan berikut:
+                  </p>
+                  <div className="font-mono font-bold text-slate-900 text-[11px] bg-white p-2 rounded border border-blue-200 inline-block">
+                    {invoice.targetBankAccount}
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    *Harap mencantumkan Nomor Invoice ({invoice.invoiceNumber}) pada berita transfer dan mengirimkan bukti pembayaran ke finance@jayahana.co.id.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* DOKUMEN 6: FORMULIR KUITANSI / BUKTI KAS MASUK RESMI (OFFICIAL RECEIPT / BKM) */}
+            {docType === "OFFICIAL_RECEIPT" && (receipt || invoice) && (
+              <div>
+                {(() => {
+                  const bkmNumber = receipt?.receiptNumber || invoice?.payments?.[0]?.voucherNumber || "BKM-2026-11-001";
+                  const payer = receipt?.clientName || invoice?.clientName || "PT. Klien Terhormat";
+                  const nominal = receipt?.amountReceived || invoice?.totalAmount || 0;
+                  const purpose = receipt?.forPaymentOf || invoice?.title || "Pelunasan Tagihan Proyek";
+                  const bankTarget = receipt?.bankTarget || invoice?.payments?.[0]?.bankAccount || "Bank BCA Operasional (A/C: 731-0982-11)";
+                  const date = receipt?.receivedDate || invoice?.payments?.[0]?.paymentDate || "18/11/2026";
+
+                  return (
+                    <div>
+                      <div className="text-center mb-6">
+                        <h2 className="text-base font-extrabold uppercase underline tracking-wider text-slate-900">
+                          Kuitansi Resmi / Bukti Kas Masuk (Official Receipt)
+                        </h2>
+                        <span className="text-xs text-slate-500 font-mono">
+                          Nomor Kuitansi: {bkmNumber}
+                        </span>
+                      </div>
+
+                      <div className="border border-slate-300 rounded-xl p-5 bg-slate-50/60 mb-6 space-y-3 text-xs">
+                        <div className="grid grid-cols-4 gap-2 py-1.5 border-b border-slate-200">
+                          <span className="text-slate-500 font-medium">Telah Diterima Dari</span>
+                          <span className="col-span-3 font-bold text-slate-900 text-sm">: {payer}</span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2 py-1.5 border-b border-slate-200">
+                          <span className="text-slate-500 font-medium">Sejumlah Uang</span>
+                          <span className="col-span-3 font-bold text-emerald-800 text-sm font-mono">: {formatRupiah(nominal)}</span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2 py-1.5 border-b border-slate-200">
+                          <span className="text-slate-500 font-medium">Untuk Pembayaran</span>
+                          <span className="col-span-3 text-slate-800 font-medium">: {purpose}</span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2 py-1.5 border-b border-slate-200">
+                          <span className="text-slate-500 font-medium">Rekening Penampung</span>
+                          <span className="col-span-3 text-slate-700 font-mono">: {bankTarget}</span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2 py-1.5">
+                          <span className="text-slate-500 font-medium">Tanggal Diterima</span>
+                          <span className="col-span-3 text-slate-700 font-medium">: {date}</span>
+                        </div>
+                      </div>
+
+                      <div className="p-4 bg-emerald-50 border-2 border-emerald-400 rounded-xl text-center mb-6">
+                        <span className="text-xs text-emerald-800 uppercase font-bold tracking-wider block">Status Pelunasan:</span>
+                        <div className="text-xl font-black text-emerald-950 mt-1">LUNAS / VERIFIED</div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* DOKUMEN 7: BERITA ACARA KEMAJUAN PEKERJAAN (BAKP / OPNAME FISIK) */}
+            {docType === "PROGRESS_REPORT" && invoice && (
+              <div>
+                <div className="text-center mb-6">
+                  <h2 className="text-base font-extrabold uppercase underline tracking-wider text-slate-900">
+                    Berita Acara Kemajuan Pekerjaan (BAKP / Opname Fisik Proyek)
+                  </h2>
+                  <span className="text-xs text-slate-500 font-mono">
+                    No. BAST-Progres: BAKP-ME-2026-004 &bull; Ref SPK: {invoice.contractNumber}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 text-xs mb-6 border border-slate-200 rounded-lg p-3 bg-slate-50">
+                  <div className="space-y-1">
+                    <div><span className="text-slate-500">Nama Klien / Pemberi Kerja:</span> <strong>{invoice.clientName}</strong></div>
+                    <div><span className="text-slate-500">Nama Proyek:</span> <strong>{invoice.title}</strong></div>
+                    <div><span className="text-slate-500">Lokasi Proyek:</span> <strong>{invoice.clientAddress}</strong></div>
+                  </div>
+                  <div className="space-y-1 text-right">
+                    <div><span className="text-slate-500">Tanggal Opname:</span> <strong>{invoice.invoiceDate}</strong></div>
+                    <div><span className="text-slate-500">Pencapaian Fisik:</span> <strong className="text-blue-700">{invoice.progressPercent || 35}% Selesai</strong></div>
+                    <div><span className="text-slate-500">Nilai Tagihan DPP:</span> <strong>{formatRupiah(invoice.dppAmount)}</strong></div>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs mb-6 text-slate-800 space-y-1.5">
+                  <strong className="block text-blue-950 font-bold uppercase">Pernyataan Tim Audit & Pengawas Lapangan:</strong>
+                  <p>
+                    Berdasarkan hasil pemeriksaan fisik langsung di lokasi pekerjaan, instalasi panel listrik, penarikan kabel feeder, dan uji tahanan isolasi telah memenuhi spesifikasi teknis kontrak dan dinyatakan layak untuk dilakukan penagihan termin sebesar <strong>{invoice.progressPercent || 35}%</strong>.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* 4 KOLOM TANDA TANGAN RESMI PERUSAHAAN (KONSISTEN DI SEMUA FORM) */}
             <div className="mt-8 pt-4 border-t-2 border-slate-800">
               <div className="grid grid-cols-4 gap-4 text-center text-xs">
                 
-                {/* 1. Diajukan Oleh */}
+                {/* 1. Diajukan / Dibuat Oleh */}
                 <div className="flex flex-col justify-between h-32 border border-slate-200 p-2 rounded bg-slate-50/50">
-                  <span className="text-[10px] uppercase font-bold text-slate-500">Diajukan Oleh:</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-500">
+                    {invoice ? "Disiapkan Oleh (AR):" : "Diajukan Oleh:"}
+                  </span>
                   <div className="font-serif italic text-slate-400 text-xs my-auto">
                     [Tanda Tangan Digital]
                   </div>
                   <div>
-                    <strong className="block text-slate-900 underline">{request.requesterName}</strong>
-                    <span className="text-[10px] text-slate-500 block">Pemohon / {request.requesterRole}</span>
+                    <strong className="block text-slate-900 underline">
+                      {invoice ? "Siti Rahmawati" : (request?.requesterName || "Pemohon")}
+                    </strong>
+                    <span className="text-[10px] text-slate-500 block">
+                      {invoice ? "Staf Billing & AR" : (request?.requesterRole || "Pemohon")}
+                    </span>
                   </div>
                 </div>
 
                 {/* 2. Diperiksa Oleh (Audit) */}
                 <div className="flex flex-col justify-between h-32 border border-slate-200 p-2 rounded bg-slate-50/50">
-                  <span className="text-[10px] uppercase font-bold text-slate-500">Diperiksa Oleh:</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-500">
+                    {invoice ? "Audit Opname Fisik:" : "Diperiksa Oleh:"}
+                  </span>
                   <div className="font-serif italic text-blue-700 text-xs my-auto">
-                    {request.status !== "DRAFT" ? "[Verified by Audit]" : "-"}
+                    [Verified by Audit]
                   </div>
                   <div>
                     <strong className="block text-slate-900 underline">Budi Santoso, S.Ak</strong>
@@ -433,11 +650,13 @@ export function PrintableDocumentModal({
                   </div>
                 </div>
 
-                {/* 3. Diverifikasi Oleh (Finance) */}
+                {/* 3. Diverifikasi Oleh (Finance & Tax) */}
                 <div className="flex flex-col justify-between h-32 border border-slate-200 p-2 rounded bg-slate-50/50">
-                  <span className="text-[10px] uppercase font-bold text-slate-500">Diverifikasi Oleh:</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-500">
+                    {invoice ? "Verifikasi Tax & Treasury:" : "Diverifikasi Oleh:"}
+                  </span>
                   <div className="font-serif italic text-emerald-700 text-xs my-auto">
-                    {["DISBURSED", "APPROVED_READY_PAY", "COMPLETED"].includes(request.status) ? "[Verified by Finance]" : "-"}
+                    [Verified by Finance]
                   </div>
                   <div>
                     <strong className="block text-slate-900 underline">Dewi Anggraeni, SE</strong>
@@ -447,9 +666,11 @@ export function PrintableDocumentModal({
 
                 {/* 4. Disetujui Oleh (Direktur) */}
                 <div className="flex flex-col justify-between h-32 border border-slate-200 p-2 rounded bg-slate-50/50">
-                  <span className="text-[10px] uppercase font-bold text-slate-500">Disetujui Oleh:</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-500">
+                    {invoice ? "Disahkan Oleh (Direksi):" : "Disetujui Oleh:"}
+                  </span>
                   <div className="font-serif italic text-slate-800 text-xs my-auto">
-                    {["DISBURSED", "APPROVED_READY_PAY", "COMPLETED"].includes(request.status) ? "[Approved by Director]" : "-"}
+                    [Approved by Director]
                   </div>
                   <div>
                     <strong className="block text-slate-900 underline">Ir. H. Sidqi Johari, MT</strong>
