@@ -175,6 +175,18 @@ export default function DashboardPage() {
   const [newAmount, setNewAmount] = useState("");
   const [newPurpose, setNewPurpose] = useState("");
   const [requesterName, setRequesterName] = useState("Tim Lapangan");
+  const [requestDate, setRequestDate] = useState(new Date().toISOString().split("T")[0]);
+
+  // Item table for request form (Accurate style)
+  type RequestLineItem = { id: string; description: string; quantity: number; unit: string; unitPrice: number; discount: number };
+  const [requestItems, setRequestItems] = useState<RequestLineItem[]>([
+    { id: "ri-1", description: "", quantity: 1, unit: "Pcs", unitPrice: 0, discount: 0 }
+  ]);
+  const addRequestItem = () => setRequestItems(prev => [...prev, { id: `ri-${Date.now()}`, description: "", quantity: 1, unit: "Pcs", unitPrice: 0, discount: 0 }]);
+  const removeRequestItem = (id: string) => setRequestItems(prev => prev.length > 1 ? prev.filter(i => i.id !== id) : prev);
+  const updateRequestItem = (id: string, field: keyof RequestLineItem, value: string | number) =>
+    setRequestItems(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i));
+  const requestItemsSubTotal = requestItems.reduce((acc, i) => acc + (i.quantity * i.unitPrice * (1 - i.discount / 100)), 0);
 
   // Procurement Vendor Info (Accurate style)
   const [vendorName, setVendorName] = useState("");
@@ -570,9 +582,11 @@ export default function DashboardPage() {
 
   const handleCreateRequest = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle || !newAmount) return;
+    if (!newTitle) return;
 
-    const parsedAmount = parseFloat(newAmount);
+    // Use items table total if items have values, otherwise fall back to newAmount
+    const parsedAmount = requestItemsSubTotal > 0 ? requestItemsSubTotal : parseFloat(newAmount || "0");
+    if (parsedAmount <= 0) return;
     const newDocNum = `${newType === "CASH_ADVANCE" ? "CA" : "PR"}-2026-${Math.floor(100 + Math.random() * 900)}`;
 
     const newReq: BudgetRequest = {
@@ -587,28 +601,24 @@ export default function DashboardPage() {
       totalAmount: parsedAmount,
       status: "PENDING_AUDIT",
       purpose: newPurpose,
-      createdAt: new Date().toISOString().split("T")[0],
-      items: [
-        {
-          id: `item-${Date.now()}`,
-          description: newTitle,
-          quantity: 1,
-          unit: "Paket",
-          estimatedPrice: parsedAmount,
-          totalPrice: parsedAmount,
-        }
-      ],
-      procurementItems: newType === "PURCHASE_REQUISITION" ? [
-        {
-          id: `pi-${Date.now()}`,
-          itemCode: `MAT-${Math.floor(100 + Math.random() * 900)}`,
-          itemName: newTitle,
-          quantity: 1,
-          unit: "Paket",
-          unitPrice: parsedAmount,
-          totalPrice: parsedAmount,
-        }
-      ] : undefined,
+      createdAt: requestDate,
+      items: requestItems.filter(i => i.description).map(i => ({
+        id: `item-${Date.now()}-${i.id}`,
+        description: i.description,
+        quantity: i.quantity,
+        unit: i.unit,
+        estimatedPrice: i.unitPrice,
+        totalPrice: i.quantity * i.unitPrice * (1 - i.discount / 100),
+      })),
+      procurementItems: newType === "PURCHASE_REQUISITION" ? requestItems.filter(i => i.description).map(i => ({
+        id: `pi-${Date.now()}-${i.id}`,
+        itemCode: `MAT-${Math.floor(100 + Math.random() * 900)}`,
+        itemName: i.description,
+        quantity: i.quantity,
+        unit: i.unit,
+        unitPrice: i.unitPrice,
+        totalPrice: i.quantity * i.unitPrice * (1 - i.discount / 100),
+      })) : undefined,
       vendorInfo: newType === "PURCHASE_REQUISITION" && vendorName ? {
         vendorName: vendorName,
         paymentTerms: paymentTerms,
@@ -645,6 +655,8 @@ export default function DashboardPage() {
     setVendorName("");
     setBankAccountNumber("");
     setBankAccountName("");
+    setRequestDate(new Date().toISOString().split("T")[0]);
+    setRequestItems([{ id: "ri-1", description: "", quantity: 1, unit: "Pcs", unitPrice: 0, discount: 0 }]);
   };
 
   const handleCreateIncome = (e: React.FormEvent) => {
@@ -3281,7 +3293,7 @@ export default function DashboardPage() {
       {/* Modal 1: Buat Pengajuan Baru (Kas Bon / Pesanan Pembelian PO Accurate Style) */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-xl border border-slate-200 animate-in fade-in duration-200 my-8 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-xl border border-slate-200 animate-in fade-in duration-200 my-8 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-start pb-2 border-b border-slate-100 mb-4">
               <div>
                 <h3 className="font-bold text-slate-900 text-base">
@@ -3297,6 +3309,7 @@ export default function DashboardPage() {
             </div>
 
             <form onSubmit={handleCreateRequest} className="space-y-3.5 text-xs">
+              {/* Row 1: Unit & Jenis Dokumen */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Unit Bisnis / Divisi</label>
@@ -3306,11 +3319,10 @@ export default function DashboardPage() {
                     className="w-full border border-slate-300 rounded-lg p-2 bg-white"
                   >
                     <option value="STARLITE_FTTH">Starlite FTTH (Fiber to the Home)</option>
-                    <option value="ME_CORE">Jasa ME Core (Mekanikal & Elektrikal)</option>
+                    <option value="ME_CORE">Jasa ME Core (Mekanikal &amp; Elektrikal)</option>
                     <option value="OVERHEAD_OPERASIONAL">Overhead / Operasional Kantor</option>
                   </select>
                 </div>
-
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Jenis Dokumen</label>
                   <select
@@ -3325,6 +3337,7 @@ export default function DashboardPage() {
                 </div>
               </div>
 
+              {/* Row 2: Pemohon & Tanggal */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Nama Pemohon (Requester)</label>
@@ -3338,20 +3351,20 @@ export default function DashboardPage() {
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Total Nominal Anggaran (Rp)</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Tanggal Pengajuan</label>
                   <input
-                    type="number"
-                    value={newAmount}
-                    onChange={(e) => setNewAmount(e.target.value)}
-                    placeholder="Contoh: 15000000"
-                    className="w-full border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900"
+                    type="date"
+                    value={requestDate}
+                    onChange={(e) => setRequestDate(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg p-2 bg-white"
                     required
                   />
                 </div>
               </div>
 
+              {/* Row 3: Judul Dokumen */}
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Judul Dokumen / Nama Barang</label>
+                <label className="block font-semibold text-slate-700 mb-1">Judul Dokumen / Keperluan</label>
                 <input
                   type="text"
                   value={newTitle}
@@ -3362,13 +3375,125 @@ export default function DashboardPage() {
                 />
               </div>
 
-              {/* KHUSUS PO / PENGADAAN BARANG: INFORMASI VENDOR & PENGIRIMAN ACCURATE STYLE */}
+              {/* TABEL RINCIAN BARANG / ITEM — Accurate Style */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="font-semibold text-slate-700">Rincian Barang / Jasa</label>
+                  <button
+                    type="button"
+                    onClick={addRequestItem}
+                    className="flex items-center gap-1 text-blue-600 hover:text-blue-800 font-semibold text-xs border border-blue-200 rounded-lg px-2 py-1 hover:bg-blue-50 transition cursor-pointer"
+                  >
+                    <span className="text-base leading-none">+</span> Tambah Baris
+                  </button>
+                </div>
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-slate-100 text-slate-600">
+                      <tr>
+                        <th className="text-left px-2 py-2 font-semibold w-[32%]">Nama Barang / Jasa</th>
+                        <th className="text-center px-2 py-2 font-semibold w-[9%]">Qty</th>
+                        <th className="text-center px-2 py-2 font-semibold w-[12%]">Satuan</th>
+                        <th className="text-right px-2 py-2 font-semibold w-[20%]">@Harga (Rp)</th>
+                        <th className="text-center px-2 py-2 font-semibold w-[9%]">Diskon%</th>
+                        <th className="text-right px-2 py-2 font-semibold w-[14%]">Total</th>
+                        <th className="w-[4%]"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {requestItems.map((item, idx) => {
+                        const lineTotal = item.quantity * item.unitPrice * (1 - item.discount / 100);
+                        return (
+                          <tr key={item.id} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                            <td className="px-1.5 py-1">
+                              <input
+                                type="text"
+                                value={item.description}
+                                onChange={(e) => updateRequestItem(item.id, "description", e.target.value)}
+                                placeholder="Nama barang/jasa..."
+                                className="w-full border border-slate-200 rounded px-1.5 py-1 focus:outline-none focus:border-blue-400"
+                              />
+                            </td>
+                            <td className="px-1 py-1">
+                              <input
+                                type="number"
+                                min={1}
+                                value={item.quantity}
+                                onChange={(e) => updateRequestItem(item.id, "quantity", parseFloat(e.target.value) || 1)}
+                                className="w-full border border-slate-200 rounded px-1 py-1 text-center focus:outline-none focus:border-blue-400"
+                              />
+                            </td>
+                            <td className="px-1 py-1">
+                              <select
+                                value={item.unit}
+                                onChange={(e) => updateRequestItem(item.id, "unit", e.target.value)}
+                                className="w-full border border-slate-200 rounded px-1 py-1 bg-white focus:outline-none focus:border-blue-400"
+                              >
+                                <option>Pcs</option>
+                                <option>Unit</option>
+                                <option>Paket</option>
+                                <option>Meter</option>
+                                <option>Roll</option>
+                                <option>Box</option>
+                                <option>Set</option>
+                                <option>Liter</option>
+                                <option>Kg</option>
+                                <option>Jasa</option>
+                              </select>
+                            </td>
+                            <td className="px-1 py-1">
+                              <input
+                                type="number"
+                                min={0}
+                                value={item.unitPrice || ""}
+                                onChange={(e) => updateRequestItem(item.id, "unitPrice", parseFloat(e.target.value) || 0)}
+                                placeholder="0"
+                                className="w-full border border-slate-200 rounded px-1 py-1 text-right font-mono focus:outline-none focus:border-blue-400"
+                              />
+                            </td>
+                            <td className="px-1 py-1">
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={item.discount || ""}
+                                onChange={(e) => updateRequestItem(item.id, "discount", parseFloat(e.target.value) || 0)}
+                                placeholder="0"
+                                className="w-full border border-slate-200 rounded px-1 py-1 text-center focus:outline-none focus:border-blue-400"
+                              />
+                            </td>
+                            <td className="px-1.5 py-1 text-right font-mono font-semibold text-slate-800">
+                              {lineTotal > 0 ? lineTotal.toLocaleString("id-ID") : "-"}
+                            </td>
+                            <td className="px-1 py-1 text-center">
+                              <button
+                                type="button"
+                                onClick={() => removeRequestItem(item.id)}
+                                className="text-red-400 hover:text-red-600 transition cursor-pointer"
+                                title="Hapus baris"
+                              >✕</button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {/* Sub Total Row */}
+                  <div className="flex justify-between items-center px-3 py-2 bg-blue-50 border-t border-blue-100">
+                    <span className="text-slate-500 font-medium">Sub Total</span>
+                    <span className="font-bold text-blue-700 font-mono text-sm">
+                      Rp {requestItemsSubTotal.toLocaleString("id-ID")}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* KHUSUS PO: INFO VENDOR & PENGIRIMAN */}
               {newType === "PURCHASE_REQUISITION" && (
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
                   <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5 uppercase tracking-wide">
-                    <Truck className="w-3.5 h-3.5" /> Info Pemasok & Pengiriman (Accurate Online Standard)
+                    <Truck className="w-3.5 h-3.5" /> Info Pemasok &amp; Pengiriman
                   </span>
-                  
                   <div className="grid grid-cols-2 gap-2.5">
                     <div>
                       <label className="block font-medium text-slate-600 mb-0.5">Nama Pemasok / Vendor *</label>
@@ -3395,10 +3520,9 @@ export default function DashboardPage() {
                       </select>
                     </div>
                   </div>
-
                   <div className="grid grid-cols-2 gap-2.5">
                     <div>
-                      <label className="block font-medium text-slate-600 mb-0.5">Bank & Nomor Rekening Tujuan</label>
+                      <label className="block font-medium text-slate-600 mb-0.5">Bank &amp; No. Rekening Tujuan</label>
                       <input
                         type="text"
                         value={bankAccountNumber}
@@ -3432,20 +3556,25 @@ export default function DashboardPage() {
                 />
               </div>
 
-              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-3.5 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition cursor-pointer shadow-xs"
-                >
-                  Kirim ke Tim Audit (Step 1)
-                </button>
+              <div className="pt-3 flex justify-between items-center border-t border-slate-100">
+                <span className="text-slate-500 font-medium">
+                  Total Pengajuan: <span className="font-bold text-slate-800 font-mono">Rp {requestItemsSubTotal.toLocaleString("id-ID")}</span>
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-3.5 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition cursor-pointer shadow-xs"
+                  >
+                    Kirim ke Tim Audit (Step 1)
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -3560,7 +3689,7 @@ export default function DashboardPage() {
       {/* MODAL 4: BUAT FAKTUR TAGIHAN / SALES INVOICE BARU (B2B & B2C) */}
       {isInvoiceModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-xl border border-slate-200 animate-in fade-in duration-200 my-8 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-xl border border-slate-200 animate-in fade-in duration-200 my-8 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-start pb-2 border-b border-slate-100 mb-4">
               <div>
                 <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
