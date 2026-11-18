@@ -85,13 +85,54 @@ export const INITIAL_REQUESTS: BudgetRequest[] = [
     requesterRole: "SITE_SPV",
     requestType: "PURCHASE_REQUISITION",
     totalAmount: 18500000,
-    status: "DISBURSED",
-    purpose: "Material lanjutan instalasi panel incoming pabrik KIIC",
+    status: "COMPLETED",
+    purpose: "Material lanjutan instalasi panel incoming pabrik KIIC Karawang",
     createdAt: "2026-11-10",
     items: [
-      { id: "itm-1", description: "Kabel NYY 4x16mm (100 meter)", quantity: 2, unit: "Roll", estimatedPrice: 7500000, totalPrice: 15000000 },
-      { id: "itm-2", description: "MCB 3 Phase 63A Schneider", quantity: 5, unit: "Pcs", estimatedPrice: 700000, totalPrice: 3500000 }
-    ]
+      { id: "itm-1", description: "Kabel NYY 4x16mm Supreme (100 meter)", quantity: 2, unit: "Roll", estimatedPrice: 7500000, totalPrice: 15000000 },
+      { id: "itm-2", description: "MCB 3 Phase 63A Schneider Acti9", quantity: 5, unit: "Pcs", estimatedPrice: 700000, totalPrice: 3500000 }
+    ],
+    procurementItems: [
+      { id: "pi-1", itemCode: "KBL-NYY-16", itemName: "Kabel NYY 4x16mm Supreme (100m)", quantity: 2, unit: "Roll", unitPrice: 7500000, totalPrice: 15000000 },
+      { id: "pi-2", itemCode: "MCB-3P-63A", itemName: "MCB 3 Phase 63A Schneider Acti9", quantity: 5, unit: "Pcs", unitPrice: 700000, totalPrice: 3500000 }
+    ],
+    vendorInfo: {
+      vendorName: "PT. Schneider Electric & Kabel Distributor",
+      paymentTerms: "Net 30",
+      bankName: "Bank Central Asia (BCA)",
+      bankAccountName: "PT Schneider Kabel Distribusi",
+      bankAccountNumber: "542-0192-881",
+      shippingAddress: "Site Proyek Gedung Pabrik KIIC Kav B-12, Karawang Barat",
+      remarks: "Pengiriman sertakan surat jalan & sertifikat uji pabrik",
+      isTaxable: true
+    },
+    disbursement: {
+      disbursedAt: "2026-11-12",
+      disbursedBy: "Dewi Anggraeni (Finance)",
+      voucherNumber: "BKK-2026-11-019",
+      sourceAccount: "BCA Operasional (No: 731-0982-11)",
+      paymentMethod: "TRANSFER_BANK",
+      transferReference: "TRF-BCA-9812401",
+      amountPaid: 18500000
+    },
+    goodsReceipt: {
+      id: "gr-001",
+      receiptNumber: "BAST-2026-11-008",
+      poNumber: "PR-2026-ME-019",
+      requestId: "req-001",
+      receivedDate: "2026-11-14",
+      vendorName: "PT. Schneider Electric & Kabel Distributor",
+      vendorDeliveryNoteNumber: "SJ-SCH-2026-9921",
+      auditedBy: "Budi Santoso (Internal Audit)",
+      warehouseStaff: "Asep Sudrajat (Logistik ME)",
+      overallStatus: "VERIFIED_GOOD",
+      inspectionLocation: "Gudang Utama Sentul & Site KIIC",
+      items: [
+        { itemId: "pi-1", itemCode: "KBL-NYY-16", itemName: "Kabel NYY 4x16mm Supreme (100m)", qtyOrdered: 2, qtyReceived: 2, unit: "Roll", condition: "GOOD", physicalAuditNotes: "Kondisi utuh segel pabrik, panjang 100m/roll terverifikasi alat ukur" },
+        { itemId: "pi-2", itemCode: "MCB-3P-63A", itemName: "MCB 3 Phase 63A Schneider Acti9", qtyOrdered: 5, qtyReceived: 5, unit: "Pcs", condition: "GOOD", physicalAuditNotes: "Fisik mulus, barcode, segel SNI & kartu garansi lengkap" }
+      ],
+      notes: "Pemeriksaan fisik oleh Tim Audit menyatakan barang diterima dalam keadaan lengkap dan baik."
+    }
   },
   {
     id: "req-002",
@@ -103,13 +144,90 @@ export const INITIAL_REQUESTS: BudgetRequest[] = [
     requesterRole: "FIELD_TECH",
     requestType: "CASH_ADVANCE",
     totalAmount: 3500000,
-    status: "PENDING_FINANCE",
-    purpose: "BBM mobil operasional tangga, konsumsi lembur tim teknisi, dan klem tiang darurat",
-    createdAt: "2026-11-16",
+    status: "DISBURSED",
+    purpose: "BBM mobil operasional tangga, konsumsi lembur tim teknisi, dan klem tiang darurat penarikan fiber Sentul",
+    createdAt: "2026-11-15",
     items: [
-      { id: "itm-3", description: "BBM Operasional Lapangan", quantity: 1, unit: "Paket", estimatedPrice: 1000000, totalPrice: 1000000 },
+      { id: "itm-3", description: "BBM Operasional Lapangan (2 Mobil)", quantity: 1, unit: "Paket", estimatedPrice: 1000000, totalPrice: 1000000 },
       { id: "itm-4", description: "Aksesoris Klem Tiang & Suspension", quantity: 50, unit: "Pcs", estimatedPrice: 30000, totalPrice: 1500000 },
       { id: "itm-5", description: "Uang Makan & Lembur Teknisi (4 org)", quantity: 4, unit: "Orang", estimatedPrice: 250000, totalPrice: 1000000 }
+    ],
+    disbursement: {
+      disbursedAt: "2026-11-16",
+      disbursedBy: "Dewi Anggraeni (Finance)",
+      voucherNumber: "BKK-2026-11-042",
+      sourceAccount: "Kas Kecil (Petty Cash Operasional)",
+      paymentMethod: "CASH_KAS_KECIL",
+      transferReference: "KAS-KECIL-042",
+      amountPaid: 3500000
+    },
+    realization: {
+      id: "lpj-002",
+      requestId: "req-002",
+      lpjNumber: "LPJ-2026-11-042",
+      submittedAt: "2026-11-17",
+      submittedBy: "Rudi Haryanto",
+      initialAdvanceAmount: 3500000,
+      totalRealizedAmount: 3350000,
+      balanceDifference: 150000,
+      settlementAction: "REFUND_TO_CASHIER",
+      status: "PENDING_AUDIT",
+      items: [
+        { id: "r-1", receiptDate: "16/11/2026", description: "BBM Pertamax Mobil Tangga Lapangan", vendor: "SPBU Pertamina Sentul", receiptNumber: "STR-0912", amount: 950000 },
+        { id: "r-2", receiptDate: "16/11/2026", description: "Baut Klem Tiang Tambahan", vendor: "Toko Baut Sentul", receiptNumber: "NTA-881", amount: 1420000 },
+        { id: "r-3", receiptDate: "17/11/2026", description: "Konsumsi Lembur Teknisi (4 Orang)", vendor: "RM Sederhana Sentul", receiptNumber: "RM-442", amount: 980000 }
+      ],
+      auditNotes: "Fisik nota BBM, klem tiang, dan konsumsi lengkap. Saldo sisa Rp 150.000 wajib disetor ke kasir."
+    }
+  },
+  {
+    id: "req-003",
+    requestNumber: "PO-2026-STAR-011",
+    title: "Pengadaan OLT EPON 8-Port & Splitter PLC Starlite FTTH",
+    unit: "STARLITE_FTTH",
+    costCenterId: "cc-star-01",
+    requesterName: "Agus Pratama",
+    requesterRole: "PROCUREMENT",
+    requestType: "PURCHASE_REQUISITION",
+    totalAmount: 24500000,
+    status: "PENDING_AUDIT",
+    purpose: "Penguatan backbone dan ekspansi 2 cluster baru perumahan Sentul City Tahap 3",
+    createdAt: "2026-11-18",
+    items: [
+      { id: "itm-6", description: "OLT EPON 8-Port Rackmount 1U", quantity: 2, unit: "Unit", estimatedPrice: 9500000, totalPrice: 19000000 },
+      { id: "itm-7", description: "Optical Splitter PLC 1:16 Cassette", quantity: 10, unit: "Box", estimatedPrice: 550000, totalPrice: 5500000 }
+    ],
+    procurementItems: [
+      { id: "pi-3", itemCode: "OLT-EPON-8P", itemName: "OLT EPON 8-Port Rackmount 1U Gigabit", quantity: 2, unit: "Unit", unitPrice: 9500000, totalPrice: 19000000 },
+      { id: "pi-4", itemCode: "SPL-PLC-1-16", itemName: "Optical Splitter PLC 1:16 Cassette Box", quantity: 10, unit: "Box", unitPrice: 550000, totalPrice: 5500000 }
+    ],
+    vendorInfo: {
+      vendorName: "PT. Fiber Network Solusindo",
+      paymentTerms: "Net 14",
+      bankName: "Bank Mandiri",
+      bankAccountName: "PT Fiber Network Solusindo",
+      bankAccountNumber: "133-00-981244-1",
+      shippingAddress: "NOC Jayahana Starlite, Sentul Business District B-08",
+      remarks: "Termasuk modul SFP PX20+++ dan garansi distributor 1 tahun",
+      isTaxable: true
+    }
+  },
+  {
+    id: "req-004",
+    requestNumber: "CA-2026-ME-025",
+    title: "Kas Bon Pengujian Tahanan Isolasi Megger & Scaffolding",
+    unit: "ME_CORE",
+    costCenterId: "cc-me-01",
+    requesterName: "Iwan Setiawan",
+    requesterRole: "SITE_SPV",
+    requestType: "CASH_ADVANCE",
+    totalAmount: 4200000,
+    status: "APPROVED_READY_PAY",
+    purpose: "Sewa scaffolding 4 set untuk pekerjaan kabel tray di ketinggian 8 meter dan kalibrasi alat uji",
+    createdAt: "2026-11-17",
+    items: [
+      { id: "itm-8", description: "Sewa Scaffolding 4 Set (7 Hari)", quantity: 4, unit: "Set", estimatedPrice: 650000, totalPrice: 2600000 },
+      { id: "itm-9", description: "Jasa Kalibrasi Megger & Safety Inspector", quantity: 1, unit: "Paket", estimatedPrice: 1600000, totalPrice: 1600000 }
     ]
   }
 ];

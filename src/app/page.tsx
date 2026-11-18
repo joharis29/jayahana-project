@@ -31,8 +31,16 @@ import {
   RotateCw,
   MoreVertical,
   CircleDot,
-  Activity
+  Activity,
+  Printer,
+  Truck,
+  FileCheck,
+  ClipboardCheck,
+  Boxes,
+  FileText,
+  Send
 } from "lucide-react";
+import { PrintableDocumentModal } from "@/components/PrintableDocumentModal";
 import { 
   COMPANY_NAME, 
   BUSINESS_UNITS, 
@@ -53,7 +61,7 @@ import {
   type PendingApprovalItem
 } from "@/lib/constants";
 import { formatRupiah, formatDateIndo } from "@/lib/utils";
-import { BusinessUnit, BudgetRequest, RequestType, UserRole, FinancialTransaction } from "@/types";
+import { BusinessUnit, BudgetRequest, RequestType, UserRole, FinancialTransaction, ProcurementItem } from "@/types";
 
 const MONTH_NAMES = [
   { num: 1, name: "Januari", short: "Jan" },
@@ -105,6 +113,20 @@ export default function DashboardPage() {
   // Modals state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
+
+  // Workflow Subtab in Tab "requests" (Alur 4 Tahap)
+  const [requestWorkflowSubTab, setRequestWorkflowSubTab] = useState<"PROPOSAL" | "DISBURSEMENT" | "REALIZATION" | "GOODS_RECEIPT">("PROPOSAL");
+
+  // Printable Document Modal State
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [printDocType, setPrintDocType] = useState<"REQUEST" | "DISBURSEMENT" | "REALIZATION" | "GOODS_RECEIPT">("REQUEST");
+  const [selectedPrintRequest, setSelectedPrintRequest] = useState<BudgetRequest | null>(null);
+
+  const handleOpenPrintModal = (req: BudgetRequest, type: "REQUEST" | "DISBURSEMENT" | "REALIZATION" | "GOODS_RECEIPT") => {
+    setSelectedPrintRequest(req);
+    setPrintDocType(type);
+    setIsPrintModalOpen(true);
+  };
   
   // New request form state
   const [newTitle, setNewTitle] = useState("");
@@ -113,6 +135,14 @@ export default function DashboardPage() {
   const [newAmount, setNewAmount] = useState("");
   const [newPurpose, setNewPurpose] = useState("");
   const [requesterName, setRequesterName] = useState("Tim Lapangan");
+
+  // Procurement Vendor Info (Accurate style)
+  const [vendorName, setVendorName] = useState("");
+  const [paymentTerms, setPaymentTerms] = useState("Net 30");
+  const [bankName, setBankName] = useState("Bank Central Asia (BCA)");
+  const [bankAccountNumber, setBankAccountNumber] = useState("");
+  const [bankAccountName, setBankAccountName] = useState("");
+  const [shippingAddress, setShippingAddress] = useState("Gudang Utama Jayahana, Sentul City");
 
   // New Income form state
   const [incomeTitle, setIncomeTitle] = useState("");
@@ -282,6 +312,87 @@ export default function DashboardPage() {
     return list;
   }, [selectedYear]);
 
+  // Multi-Level Approval Handlers (Audit -> Finance -> Direktur)
+  const handleAuditApprove = (reqId: string) => {
+    setRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: "PENDING_FINANCE" } : r));
+    setApprovalNotification("Audit Internal telah memverifikasi kesesuaian SOP & pagu anggaran.");
+    setTimeout(() => setApprovalNotification(null), 3500);
+  };
+
+  const handleFinanceApprove = (reqId: string) => {
+    setRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: "PENDING_DIRECTOR" } : r));
+    setApprovalNotification("Finance Manager memverifikasi ketersediaan dana kas & rekening penerima.");
+    setTimeout(() => setApprovalNotification(null), 3500);
+  };
+
+  const handleDirectorApprove = (reqId: string) => {
+    setRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: "APPROVED_READY_PAY" } : r));
+    setApprovalNotification("Direktur Utama memberikan otorisasi final pengeluaran (Siap Dicairkan).");
+    setTimeout(() => setApprovalNotification(null), 3500);
+  };
+
+  // Pencairan Dana oleh Tim Finance
+  const handleDisbursePayment = (reqId: string) => {
+    setRequests(prev => prev.map(r => {
+      if (r.id !== reqId) return r;
+      const vNum = `BKK-2026-11-${Math.floor(100 + Math.random() * 900)}`;
+      return {
+        ...r,
+        status: "DISBURSED",
+        disbursedAt: new Date().toISOString().split("T")[0],
+        disbursement: {
+          disbursedAt: new Date().toISOString().split("T")[0],
+          disbursedBy: "Dewi Anggraeni (Finance Head)",
+          voucherNumber: vNum,
+          sourceAccount: r.requestType === "CASH_ADVANCE" ? "Kas Kecil Lapangan (Petty Cash)" : "Bank BCA Operasional (A/C: 731-0982-11)",
+          paymentMethod: r.requestType === "CASH_ADVANCE" ? "CASH_KAS_KECIL" : "TRANSFER_BANK",
+          transferReference: `TRF-${Date.now().toString().slice(-6)}`,
+          amountPaid: r.totalAmount,
+        }
+      };
+    }));
+    setApprovalNotification("Dana berhasil dicairkan oleh Finance. Formulir bukti pencairan siap dicetak.");
+    setTimeout(() => setApprovalNotification(null), 3500);
+  };
+
+  // Penerimaan Barang Fisik oleh Tim Audit (BAST Gudang)
+  const handleAuditGoodsReceipt = (reqId: string) => {
+    setRequests(prev => prev.map(r => {
+      if (r.id !== reqId) return r;
+      const bastNum = `BAST-2026-11-${Math.floor(100 + Math.random() * 900)}`;
+      return {
+        ...r,
+        status: "COMPLETED",
+        goodsReceipt: {
+          id: `gr-${Date.now()}`,
+          receiptNumber: bastNum,
+          poNumber: r.requestNumber,
+          requestId: r.id,
+          receivedDate: new Date().toISOString().split("T")[0],
+          vendorName: r.vendorInfo?.vendorName || "Pemasok Terverifikasi",
+          vendorDeliveryNoteNumber: `SJ-VND-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+          auditedBy: "Budi Santoso (Tim Audit Internal)",
+          warehouseStaff: "Logistik Jayahana",
+          overallStatus: "VERIFIED_GOOD",
+          inspectionLocation: "Gudang Utama Sentul / Site Proyek",
+          items: (r.procurementItems || r.items).map((it: any) => ({
+            itemId: it.id,
+            itemCode: it.itemCode || "BRG-GEN",
+            itemName: it.itemName || it.description,
+            qtyOrdered: it.quantity,
+            qtyReceived: it.quantity,
+            unit: it.unit,
+            condition: "GOOD",
+            physicalAuditNotes: "Pemeriksaan fisik sesuai pesanan dan kondisi baik tanpa cacat."
+          })),
+          notes: "Pemeriksaan fisik oleh Tim Audit menyatakan barang diterima dalam keadaan lengkap dan baik."
+        }
+      };
+    }));
+    setApprovalNotification("Pemeriksaan fisik oleh Tim Audit selesai. Form BAST Penerimaan Barang siap dicetak.");
+    setTimeout(() => setApprovalNotification(null), 3500);
+  };
+
   // Pending Approvals Handler
   const handleApprove = (id: string, docNumber: string) => {
     setPendingApprovals(prev => prev.filter(item => item.id !== id));
@@ -306,7 +417,7 @@ export default function DashboardPage() {
       requesterRole: newType === "CASH_ADVANCE" ? "FIELD_TECH" : "SITE_SPV",
       requestType: newType,
       totalAmount: parsedAmount,
-      status: "PENDING_SPV",
+      status: "PENDING_AUDIT",
       purpose: newPurpose,
       createdAt: new Date().toISOString().split("T")[0],
       items: [
@@ -318,7 +429,27 @@ export default function DashboardPage() {
           estimatedPrice: parsedAmount,
           totalPrice: parsedAmount,
         }
-      ]
+      ],
+      procurementItems: newType === "PURCHASE_REQUISITION" ? [
+        {
+          id: `pi-${Date.now()}`,
+          itemCode: `MAT-${Math.floor(100 + Math.random() * 900)}`,
+          itemName: newTitle,
+          quantity: 1,
+          unit: "Paket",
+          unitPrice: parsedAmount,
+          totalPrice: parsedAmount,
+        }
+      ] : undefined,
+      vendorInfo: newType === "PURCHASE_REQUISITION" && vendorName ? {
+        vendorName: vendorName,
+        paymentTerms: paymentTerms,
+        bankName: bankName,
+        bankAccountNumber: bankAccountNumber || "Rekening Vendor",
+        bankAccountName: bankAccountName || vendorName,
+        shippingAddress: shippingAddress,
+        remarks: newPurpose
+      } : undefined
     };
 
     // Add to requests
@@ -334,7 +465,7 @@ export default function DashboardPage() {
       requester: requesterName,
       amount: parsedAmount,
       submittedAt: new Date().toISOString().split("T")[0],
-      level: "SPV / Kasir",
+      level: "Audit Internal",
       urgent: parsedAmount > 10000000,
     };
     setPendingApprovals([newApproval, ...pendingApprovals]);
@@ -343,6 +474,9 @@ export default function DashboardPage() {
     setNewTitle("");
     setNewAmount("");
     setNewPurpose("");
+    setVendorName("");
+    setBankAccountNumber("");
+    setBankAccountName("");
   };
 
   const handleCreateIncome = (e: React.FormEvent) => {
@@ -1726,14 +1860,16 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* TAB 2: REQUESTS */}
+        {/* TAB 2: PENGAJUAN ANGGARAN & PENGADAAN (SIKLUS 4 TAHAP LENGKAP) */}
         {activeTab === "requests" && (
           <div className="space-y-4">
+            
+            {/* Header Tab & Action Buttons */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4 rounded-xl border border-slate-200">
               <div>
-                <h2 className="font-bold text-slate-900 text-base">Pengajuan Anggaran & Kas Bon Lapangan</h2>
+                <h2 className="font-bold text-slate-900 text-base">Alur Pengajuan Anggaran, Pencairan & Pengadaan Barang</h2>
                 <p className="text-xs text-slate-500">
-                  Daftar pengajuan operasional teknisi dan pengadaan material yang membutuhkan persetujuan.
+                  Siklus terintegrasi: Pengajuan (Approval Audit, Finance, Direktur) &bull; Pencairan Kas &bull; Laporan Realisasi LPJ &bull; Penerimaan Barang Fisik (Audit).
                 </p>
               </div>
 
@@ -1746,135 +1882,642 @@ export default function DashboardPage() {
                   <option value="ALL">Semua Divisi / Unit</option>
                   <option value="ME_CORE">Jasa ME Core</option>
                   <option value="STARLITE_FTTH">Starlite FTTH</option>
+                  <option value="OVERHEAD_OPERASIONAL">Overhead / Umum</option>
                 </select>
 
                 <button
                   onClick={() => setIsModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition cursor-pointer shadow-xs"
                 >
                   <PlusCircle className="w-4 h-4" />
-                  <span>Buat Pengajuan</span>
+                  <span>Buat Pengajuan / PO Baru</span>
                 </button>
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-              <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
-                <thead className="bg-slate-50 font-semibold text-slate-600">
-                  <tr>
-                    <th className="px-4 py-3">No. Pengajuan</th>
-                    <th className="px-4 py-3">Judul Pengajuan</th>
-                    <th className="px-4 py-3">Unit / Proyek</th>
-                    <th className="px-4 py-3">Pemohon</th>
-                    <th className="px-4 py-3">Nominal</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3 text-right">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {requests
-                    .filter(r => selectedUnit === "ALL" || r.unit === selectedUnit)
-                    .map((req) => (
-                      <tr key={req.id} className="hover:bg-slate-50/70 transition">
-                        <td className="px-4 py-3 font-mono font-bold text-slate-900">{req.requestNumber}</td>
-                        <td className="px-4 py-3">
-                          <div className="font-medium text-slate-900">{req.title}</div>
-                          <div className="text-[11px] text-slate-400">{req.purpose}</div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            req.unit === "ME_CORE" ? "bg-blue-100 text-blue-700" : "bg-fuchsia-100 text-fuchsia-700"
-                          }`}>
-                            {req.unit === "ME_CORE" ? "ME Core" : "Starlite FTTH"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="font-medium">{req.requesterName}</div>
-                          <div className="text-[10px] text-slate-400">{req.requesterRole}</div>
-                        </td>
-                        <td className="px-4 py-3 font-bold text-slate-900">{formatRupiah(req.totalAmount)}</td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                            req.status === "DISBURSED" 
-                              ? "bg-emerald-100 text-emerald-800"
-                              : req.status.startsWith("PENDING")
-                              ? "bg-amber-100 text-amber-800"
-                              : "bg-slate-100 text-slate-800"
-                          }`}>
-                            {req.status === "DISBURSED" ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                            {req.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <button className="text-blue-600 hover:text-blue-800 font-semibold text-xs">
-                            Detail &rarr;
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
+            {/* SUB-TAB NAVIGASI 4 TAHAPAN ALUR */}
+            <div className="flex flex-wrap border-b border-slate-200 gap-2 bg-white p-2 rounded-xl shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setRequestWorkflowSubTab("PROPOSAL")}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  requestWorkflowSubTab === "PROPOSAL" 
+                    ? "bg-blue-600 text-white shadow-xs" 
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                <span>1. Pengajuan & PO (Approval 3-Pintu)</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                  requestWorkflowSubTab === "PROPOSAL" ? "bg-blue-700 text-white" : "bg-slate-200 text-slate-700"
+                }`}>
+                  {requests.filter(r => ["PENDING_AUDIT", "PENDING_FINANCE", "PENDING_DIRECTOR", "APPROVED_READY_PAY"].includes(r.status)).length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRequestWorkflowSubTab("DISBURSEMENT")}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  requestWorkflowSubTab === "DISBURSEMENT" 
+                    ? "bg-emerald-600 text-white shadow-xs" 
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                <Wallet className="w-4 h-4" />
+                <span>2. Pencairan Kas (Finance Gate)</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                  requestWorkflowSubTab === "DISBURSEMENT" ? "bg-emerald-700 text-white" : "bg-slate-200 text-slate-700"
+                }`}>
+                  {requests.filter(r => r.status === "APPROVED_READY_PAY" || r.disbursement).length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRequestWorkflowSubTab("REALIZATION")}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  requestWorkflowSubTab === "REALIZATION" 
+                    ? "bg-purple-600 text-white shadow-xs" 
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                <Receipt className="w-4 h-4" />
+                <span>3. Laporan Realisasi & LPJ</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                  requestWorkflowSubTab === "REALIZATION" ? "bg-purple-700 text-white" : "bg-slate-200 text-slate-700"
+                }`}>
+                  {requests.filter(r => r.requestType === "CASH_ADVANCE" && r.disbursement).length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRequestWorkflowSubTab("GOODS_RECEIPT")}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  requestWorkflowSubTab === "GOODS_RECEIPT" 
+                    ? "bg-amber-600 text-white shadow-xs" 
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                <Boxes className="w-4 h-4" />
+                <span>4. Penerimaan Barang Fisik (Audit BAST)</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                  requestWorkflowSubTab === "GOODS_RECEIPT" ? "bg-amber-700 text-white" : "bg-slate-200 text-slate-700"
+                }`}>
+                  {requests.filter(r => r.requestType === "PURCHASE_REQUISITION").length}
+                </span>
+              </button>
             </div>
+
+            {/* KONTEN TAHAP 1: PENGAJUAN & PO (APPROVAL 3 PINTU) */}
+            {requestWorkflowSubTab === "PROPOSAL" && (
+              <div className="space-y-4">
+                {/* Stats Alert Box */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="p-3 bg-white rounded-xl border border-slate-200">
+                    <span className="text-slate-500 block">Menunggu Audit</span>
+                    <strong className="text-base text-amber-700 font-extrabold">
+                      {requests.filter(r => r.status === "PENDING_AUDIT").length} Dokumen
+                    </strong>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Uji kepatuhan SOP & pagu</span>
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border border-slate-200">
+                    <span className="text-slate-500 block">Menunggu Finance</span>
+                    <strong className="text-base text-blue-700 font-extrabold">
+                      {requests.filter(r => r.status === "PENDING_FINANCE").length} Dokumen
+                    </strong>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Cek saldo kas & bank</span>
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border border-slate-200">
+                    <span className="text-slate-500 block">Menunggu Direktur</span>
+                    <strong className="text-base text-indigo-700 font-extrabold">
+                      {requests.filter(r => r.status === "PENDING_DIRECTOR").length} Dokumen
+                    </strong>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Otorisasi final direksi</span>
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 bg-emerald-50/50">
+                    <span className="text-emerald-800 block">Siap Dicairkan (Approved)</span>
+                    <strong className="text-base text-emerald-800 font-extrabold">
+                      {requests.filter(r => r.status === "APPROVED_READY_PAY").length} Dokumen
+                    </strong>
+                    <span className="text-[10px] text-emerald-600 block mt-0.5">Siap bayar di Tab 2</span>
+                  </div>
+                </div>
+
+                {/* Tabel Pengajuan */}
+                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+                  <div className="p-3 border-b border-slate-100 flex justify-between items-center text-xs">
+                    <span className="font-bold text-slate-900">Daftar Pengajuan Anggaran & Pesanan Pembelian (PO)</span>
+                    <span className="text-slate-400 font-mono text-[11px]">Memerlukan Approval 3-Pintu: Audit &rarr; Finance &rarr; Direktur</span>
+                  </div>
+
+                  <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
+                    <thead className="bg-slate-50 font-semibold text-slate-600">
+                      <tr>
+                        <th className="px-4 py-3">No. Dokumen</th>
+                        <th className="px-4 py-3">Judul & Peruntukan</th>
+                        <th className="px-4 py-3">Divisi</th>
+                        <th className="px-4 py-3">Pemohon</th>
+                        <th className="px-4 py-3">Nominal Diajukan</th>
+                        <th className="px-4 py-3 text-center">Status Approval 3-Pintu</th>
+                        <th className="px-4 py-3 text-right">Aksi & Cetak</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-700">
+                      {requests
+                        .filter(r => selectedUnit === "ALL" || r.unit === selectedUnit)
+                        .map((req) => {
+                          const isAuditPassed = !["PENDING_AUDIT", "DRAFT"].includes(req.status);
+                          const isFinancePassed = !["PENDING_AUDIT", "PENDING_FINANCE", "DRAFT"].includes(req.status);
+                          const isDirectorPassed = ["APPROVED_READY_PAY", "DISBURSED", "COMPLETED"].includes(req.status);
+
+                          return (
+                            <tr key={req.id} className="hover:bg-slate-50/70 transition">
+                              <td className="px-4 py-3 font-mono">
+                                <span className="font-bold text-slate-900 block">{req.requestNumber}</span>
+                                <span className="text-[10px] text-slate-400 block">{req.createdAt}</span>
+                              </td>
+                              <td className="px-4 py-3 max-w-[260px]">
+                                <div className="font-bold text-slate-900 truncate">{req.title}</div>
+                                <div className="text-[11px] text-slate-500 line-clamp-1">{req.purpose}</div>
+                                <span className={`inline-block mt-1 px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                  req.requestType === "CASH_ADVANCE" ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"
+                                }`}>
+                                  {req.requestType === "CASH_ADVANCE" ? "Kas Bon Operasional" : "Pengadaan PO Barang"}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  req.unit === "ME_CORE" 
+                                    ? "bg-blue-100 text-blue-700" 
+                                    : req.unit === "STARLITE_FTTH" 
+                                    ? "bg-fuchsia-100 text-fuchsia-700" 
+                                    : "bg-slate-100 text-slate-700"
+                                }`}>
+                                  {req.unit === "ME_CORE" ? "ME Core" : req.unit === "STARLITE_FTTH" ? "Starlite FTTH" : "Overhead"}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="font-medium text-slate-900">{req.requesterName}</div>
+                                <div className="text-[10px] text-slate-400">{req.requesterRole}</div>
+                              </td>
+                              <td className="px-4 py-3 font-bold text-slate-900 text-xs font-mono">
+                                {formatRupiah(req.totalAmount)}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                {/* 3 Pintu Stepper Badges */}
+                                <div className="flex items-center justify-center gap-1.5">
+                                  {/* Step 1: Audit */}
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                    isAuditPassed 
+                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300" 
+                                      : req.status === "PENDING_AUDIT"
+                                      ? "bg-amber-100 text-amber-800 animate-pulse border border-amber-300"
+                                      : "bg-slate-100 text-slate-400"
+                                  }`}>
+                                    {isAuditPassed ? "✓ Audit" : "Audit"}
+                                  </span>
+                                  <span className="text-slate-300">&rarr;</span>
+                                  {/* Step 2: Finance */}
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                    isFinancePassed 
+                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300" 
+                                      : req.status === "PENDING_FINANCE"
+                                      ? "bg-blue-100 text-blue-800 animate-pulse border border-blue-300"
+                                      : "bg-slate-100 text-slate-400"
+                                  }`}>
+                                    {isFinancePassed ? "✓ Finance" : "Finance"}
+                                  </span>
+                                  <span className="text-slate-300">&rarr;</span>
+                                  {/* Step 3: Direktur */}
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                    isDirectorPassed 
+                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300" 
+                                      : req.status === "PENDING_DIRECTOR"
+                                      ? "bg-indigo-100 text-indigo-800 animate-pulse border border-indigo-300"
+                                      : "bg-slate-100 text-slate-400"
+                                  }`}>
+                                    {isDirectorPassed ? "✓ Direktur" : "Direktur"}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {/* Tombol Cetak Form Pengajuan */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenPrintModal(req, "REQUEST")}
+                                    className="flex items-center gap-1 px-2.5 py-1 text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                                    title="Cetak Formulir Pengajuan Resmi A4"
+                                  >
+                                    <Printer className="w-3.5 h-3.5 text-slate-600" />
+                                    <span>Cetak Form</span>
+                                  </button>
+
+                                  {/* Action Approve Sesuai Tahapan */}
+                                  {req.status === "PENDING_AUDIT" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAuditApprove(req.id)}
+                                      className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                    >
+                                      ACC Audit
+                                    </button>
+                                  )}
+                                  {req.status === "PENDING_FINANCE" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleFinanceApprove(req.id)}
+                                      className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                    >
+                                      ACC Finance
+                                    </button>
+                                  )}
+                                  {req.status === "PENDING_DIRECTOR" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDirectorApprove(req.id)}
+                                      className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                    >
+                                      ACC Direktur
+                                    </button>
+                                  )}
+                                  {req.status === "APPROVED_READY_PAY" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setRequestWorkflowSubTab("DISBURSEMENT")}
+                                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                    >
+                                      Siap Cair &rarr;
+                                    </button>
+                                  )}
+                                  {["DISBURSED", "COMPLETED"].includes(req.status) && (
+                                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                      Sudah Cair
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* KONTEN TAHAP 2: PENCAIRAN KAS (FINANCE GATE) */}
+            {requestWorkflowSubTab === "DISBURSEMENT" && (
+              <div className="space-y-4">
+                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex justify-between items-center text-xs text-emerald-900">
+                  <div>
+                    <h3 className="font-bold text-sm text-emerald-950 flex items-center gap-2">
+                      <Wallet className="w-4 h-4 text-emerald-700" />
+                      Pencairan Dana Kas & Bank oleh Tim Finance
+                    </h3>
+                    <p className="text-[11px] text-emerald-800 mt-0.5">
+                      Pengajuan yang telah mendapat otorisasi Direktur Utama siap diproses pembayarannya (Transfer Bank / Kas Kecil) dan dicetak Form Bukti Pencairannya.
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] text-emerald-700 uppercase font-bold block">Total Siap Dicairkan:</span>
+                    <strong className="text-sm font-extrabold text-emerald-950">
+                      {formatRupiah(
+                        requests.filter(r => r.status === "APPROVED_READY_PAY").reduce((acc, r) => acc + r.totalAmount, 0)
+                      )}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+                  <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
+                    <thead className="bg-slate-50 font-semibold text-slate-600">
+                      <tr>
+                        <th className="px-4 py-3">No. Pengajuan</th>
+                        <th className="px-4 py-3">Keperluan Dana</th>
+                        <th className="px-4 py-3">Divisi & Penerima</th>
+                        <th className="px-4 py-3">Nominal Pencairan</th>
+                        <th className="px-4 py-3">Status Pencairan</th>
+                        <th className="px-4 py-3">Info Voucher Kas</th>
+                        <th className="px-4 py-3 text-right">Aksi Finance</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-700">
+                      {requests
+                        .filter(r => r.status === "APPROVED_READY_PAY" || r.disbursement)
+                        .map((req) => (
+                          <tr key={req.id} className="hover:bg-slate-50/70 transition">
+                            <td className="px-4 py-3 font-mono font-bold text-slate-900">{req.requestNumber}</td>
+                            <td className="px-4 py-3">
+                              <div className="font-bold text-slate-900">{req.title}</div>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                Tipe: {req.requestType === "CASH_ADVANCE" ? "Kas Bon Lapangan" : "Pengadaan PO"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="font-semibold text-slate-800">{req.requesterName}</div>
+                              <div className="text-[10px] text-slate-500">{req.unit}</div>
+                            </td>
+                            <td className="px-4 py-3 font-bold text-emerald-700 font-mono text-xs">
+                              {formatRupiah(req.totalAmount)}
+                            </td>
+                            <td className="px-4 py-3">
+                              {req.disbursement ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                  <CheckCircle2 className="w-3 h-3" /> Telah Dicairkan
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 animate-pulse">
+                                  <Clock className="w-3 h-3" /> Siap Dicairkan
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-[11px]">
+                              {req.disbursement ? (
+                                <div>
+                                  <span className="font-mono font-bold text-slate-900 block">{req.disbursement.voucherNumber}</span>
+                                  <span className="text-[10px] text-slate-500 block">{req.disbursement.sourceAccount}</span>
+                                </div>
+                              ) : (
+                                <span className="text-slate-400 italic">Menunggu eksekusi kasir</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {req.disbursement ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenPrintModal(req, "DISBURSEMENT")}
+                                    className="flex items-center gap-1 px-2.5 py-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                                  >
+                                    <Printer className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>Cetak Form Pencairan</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDisbursePayment(req.id)}
+                                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs"
+                                  >
+                                    Proses Bayar / Cairkan
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* KONTEN TAHAP 3: LAPORAN REALISASI & LPJ */}
+            {requestWorkflowSubTab === "REALIZATION" && (
+              <div className="space-y-4">
+                <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl flex justify-between items-center text-xs text-purple-900">
+                  <div>
+                    <h3 className="font-bold text-sm text-purple-950 flex items-center gap-2">
+                      <Receipt className="w-4 h-4 text-purple-700" />
+                      Laporan Pertanggungjawaban (LPJ) & Rekonsiliasi Kas Bon
+                    </h3>
+                    <p className="text-[11px] text-purple-800 mt-0.5">
+                      Pencocokan nota fisik/struk transaksi lapangan terhadap uang muka kas bon. Memerlukan approval Audit &rarr; Finance &rarr; Direktur, dan dapat dicetak Form Realisasi LPJ.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Grid Kas Bon Realisasi */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {requests
+                    .filter(r => r.requestType === "CASH_ADVANCE" && r.disbursement)
+                    .map((req) => {
+                      const advance = req.realization?.initialAdvanceAmount || req.totalAmount;
+                      const actual = req.realization?.totalRealizedAmount || (advance - 150000);
+                      const diff = advance - actual;
+
+                      return (
+                        <div key={req.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3">
+                          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                            <div>
+                              <span className="font-mono font-bold text-xs text-slate-900">{req.requestNumber}</span>
+                              <h4 className="text-xs font-bold text-slate-900">{req.title}</h4>
+                            </div>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800">
+                              {req.realization ? req.realization.status : "Belum LPJ"}
+                            </span>
+                          </div>
+
+                          <div className="text-xs text-slate-600">
+                            Pemohon: <strong>{req.requesterName}</strong> &bull; Divisi: {req.unit === "ME_CORE" ? "ME Core" : "Starlite FTTH"}
+                          </div>
+
+                          {/* Box Komparasi Saldo */}
+                          <div className="grid grid-cols-3 gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-center text-xs">
+                            <div>
+                              <span className="text-[10px] text-slate-400 block uppercase">Kasbon Awal</span>
+                              <strong className="text-slate-900 font-mono text-xs">{formatRupiah(advance)}</strong>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-400 block uppercase">Total Realisasi</span>
+                              <strong className="text-slate-900 font-mono text-xs">{formatRupiah(actual)}</strong>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-400 block uppercase">
+                                {diff >= 0 ? "Sisa Disetor" : "Klaim Kurang"}
+                              </span>
+                              <strong className={`font-mono text-xs ${diff >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                                {formatRupiah(Math.abs(diff))}
+                              </strong>
+                            </div>
+                          </div>
+
+                          {/* Tombol Cetak & Aksi */}
+                          <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-xs">
+                            <span className="text-[11px] text-slate-400">
+                              {req.realization ? `${req.realization.items?.length || 3} Nota Fisik Terlampir` : "Menunggu upload nota"}
+                            </span>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenPrintModal(req, "REALIZATION")}
+                                className="flex items-center gap-1 px-3 py-1 bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 rounded-lg font-bold text-xs transition cursor-pointer"
+                              >
+                                <Printer className="w-3.5 h-3.5" />
+                                <span>Cetak Form Realisasi</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+
+            {/* KONTEN TAHAP 4: PENERIMAAN BARANG FISIK (TIM AUDIT BAST GUDANG) */}
+            {requestWorkflowSubTab === "GOODS_RECEIPT" && (
+              <div className="space-y-4">
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex justify-between items-center text-xs text-amber-900">
+                  <div>
+                    <h3 className="font-bold text-sm text-amber-950 flex items-center gap-2">
+                      <Boxes className="w-4 h-4 text-amber-700" />
+                      Penerimaan Barang Fisik (Goods Receipt / BAST oleh Tim Audit)
+                    </h3>
+                    <p className="text-[11px] text-amber-800 mt-0.5">
+                      Pengecekan fisik material proyek (ME & Starlite FTTH) oleh Tim Audit Internal saat barang tiba dari vendor pemasok. Hasil inspeksi disahkan dalam Form Penerimaan Barang.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {requests
+                    .filter(r => r.requestType === "PURCHASE_REQUISITION")
+                    .map((req) => (
+                      <div key={req.id} className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-3">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-slate-100">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-slate-900 text-xs">{req.requestNumber}</span>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                req.goodsReceipt ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                              }`}>
+                                {req.goodsReceipt ? "BAST Terbit & Terverifikasi" : "Menunggu Pemeriksaan Fisik"}
+                              </span>
+                            </div>
+                            <h4 className="font-bold text-sm text-slate-900 mt-0.5">{req.title}</h4>
+                            <span className="text-[11px] text-slate-500">
+                              Pemasok: <strong>{req.goodsReceipt?.vendorName || req.vendorInfo?.vendorName || "PT. Schneider / Distributor"}</strong> &bull; Lokasi: {req.goodsReceipt?.inspectionLocation || "Gudang Utama Sentul"}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {req.goodsReceipt ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenPrintModal(req, "GOODS_RECEIPT")}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold transition cursor-pointer shadow-xs"
+                              >
+                                <Printer className="w-3.5 h-3.5 text-amber-700" />
+                                <span>Cetak Form Penerimaan Barang (BAST)</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleAuditGoodsReceipt(req.id)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs"
+                              >
+                                <ClipboardCheck className="w-3.5 h-3.5" />
+                                <span>Lakukan Audit Fisik & Terbitkan BAST</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Detail Checklist Fisik */}
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full text-xs text-left border border-slate-200">
+                            <thead className="bg-slate-50 text-slate-600">
+                              <tr>
+                                <th className="px-3 py-2 border-b border-slate-200">Rincian Barang / Material</th>
+                                <th className="px-3 py-2 border-b border-slate-200 text-center">Qty Dipesan</th>
+                                <th className="px-3 py-2 border-b border-slate-200 text-center">Qty Fisik Tiba</th>
+                                <th className="px-3 py-2 border-b border-slate-200 text-center">Kondisi Fisik</th>
+                                <th className="px-3 py-2 border-b border-slate-200">Catatan Pengecekan Audit</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {(req.goodsReceipt?.items || (req.procurementItems || req.items).map((it: any) => ({
+                                itemId: it.id,
+                                itemName: it.itemName || it.description,
+                                qtyOrdered: it.quantity,
+                                qtyReceived: it.quantity,
+                                unit: it.unit,
+                                condition: "GOOD",
+                                physicalAuditNotes: "Kondisi fisik segel lengkap sesuai PO."
+                              }))).map((item: any, idx: number) => (
+                                <tr key={item.itemId || idx} className="hover:bg-slate-50/50">
+                                  <td className="px-3 py-2 font-medium text-slate-900">{item.itemName}</td>
+                                  <td className="px-3 py-2 text-center">{item.qtyOrdered} {item.unit}</td>
+                                  <td className="px-3 py-2 text-center font-bold text-blue-700">{item.qtyReceived} {item.unit}</td>
+                                  <td className="px-3 py-2 text-center">
+                                    <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                                      {item.condition === "GOOD" ? "BAIK / LENGKAP" : item.condition}
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-2 text-slate-600 text-[11px]">{item.physicalAuditNotes}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
           </div>
         )}
 
-        {/* TAB 3: LPJ REALISASI */}
+        {/* TAB 3: LPJ REALISASI (TERINTEGRASI DENGAN TAHAP 3 ALUR) */}
         {activeTab === "lpj" && (
           <div className="space-y-4">
-            <div className="bg-white p-4 rounded-xl border border-slate-200">
-              <h2 className="font-bold text-slate-900 text-base">Realisasi & Pertanggungjawaban (LPJ Kas Bon)</h2>
-              <p className="text-xs text-slate-500">
-                Pencocokan nota fisik/struk transaksi lapangan terhadap dana kas bon yang telah dicairkan oleh kasir.
-              </p>
+            <div className="bg-white p-4 rounded-xl border border-slate-200 flex justify-between items-center">
+              <div>
+                <h2 className="font-bold text-slate-900 text-base">Realisasi & Pertanggungjawaban (LPJ Kas Bon)</h2>
+                <p className="text-xs text-slate-500">
+                  Pencocokan nota fisik/struk transaksi lapangan terhadap dana kas bon yang telah dicairkan oleh kasir.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("requests");
+                  setRequestWorkflowSubTab("REALIZATION");
+                }}
+                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition cursor-pointer"
+              >
+                Buka Tab Realisasi &rarr;
+              </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-sm text-slate-900">Kas Bon Belum LPJ</span>
-                  <span className="px-2 py-0.5 bg-amber-100 text-amber-800 font-bold text-[10px] rounded-full">
-                    Perlu Tindak Lanjut
-                  </span>
-                </div>
-                <div className="p-3 rounded-lg border border-slate-200 bg-slate-50 space-y-2">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="text-xs font-bold text-slate-900">CA-2026-STAR-042 (Sentul Cluster)</div>
-                      <div className="text-[11px] text-slate-500">Pemohon: Rudi Haryanto (Teknisi FTTH)</div>
+              {requests
+                .filter(r => r.requestType === "CASH_ADVANCE" && r.disbursement)
+                .map((req) => (
+                  <div key={req.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-sm text-slate-900">{req.requestNumber} ({req.title})</span>
+                      <span className="px-2 py-0.5 bg-purple-100 text-purple-800 font-bold text-[10px] rounded-full">
+                        {req.realization ? req.realization.status : "Belum LPJ"}
+                      </span>
                     </div>
-                    <div className="text-xs font-bold text-blue-600">Rp 3.500.000</div>
-                  </div>
-                  <p className="text-[11px] text-slate-600">
-                    Keperluan: BBM operasional mobil tangga & klem tiang darurat.
-                  </p>
-                  <div className="pt-2 border-t border-slate-200 flex justify-end gap-2">
-                    <button className="px-3 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700">
-                      Upload Struk / Bukti Nota
-                    </button>
-                  </div>
-                </div>
-              </div>
 
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-sm text-slate-900">LPJ Telah Terverifikasi (Auto-Journal)</span>
-                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold text-[10px] rounded-full">
-                    Selesai
-                  </span>
-                </div>
-                <div className="p-3 rounded-lg border border-slate-200 bg-slate-50 space-y-1">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="text-xs font-bold text-slate-900">PR-2026-ME-019 (Proyek KIIC)</div>
-                      <div className="text-[11px] text-slate-500">Vendor: PT. Schneider Elektrik Indonesia</div>
+                    <div className="p-3 rounded-lg border border-slate-200 bg-slate-50 space-y-2">
+                      <div className="flex justify-between items-start text-xs">
+                        <div>
+                          <div className="font-semibold text-slate-800">Pemohon: {req.requesterName}</div>
+                          <div className="text-[11px] text-slate-500">{req.purpose}</div>
+                        </div>
+                        <div className="font-bold text-blue-600 font-mono">{formatRupiah(req.totalAmount)}</div>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-200 flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenPrintModal(req, "REALIZATION")}
+                          className="flex items-center gap-1 px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-medium cursor-pointer"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>Cetak Form Realisasi</span>
+                        </button>
+                      </div>
                     </div>
-                    <div className="text-xs font-bold text-slate-900">Rp 18.500.000</div>
                   </div>
-                  <div className="text-[10px] text-emerald-700 font-mono mt-1">
-                    Terjurnal: [D] Beban Material Proyek ME / [K] Kas Bank Mandiri
-                  </div>
-                </div>
-              </div>
+                ))}
             </div>
           </div>
         )}
@@ -2043,102 +2686,173 @@ export default function DashboardPage() {
         )}
       </main>
 
-      {/* Modal 1: Buat Pengajuan Baru (Kas Bon / PR) */}
+      {/* Modal 1: Buat Pengajuan Baru (Kas Bon / Pesanan Pembelian PO Accurate Style) */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 animate-in fade-in duration-200">
-            <h3 className="font-bold text-slate-900 text-base mb-1">Form Pengajuan Anggaran / Kas Bon</h3>
-            <p className="text-xs text-slate-500 mb-4">
-              Isi formulir berikut dengan jelas untuk ditinjau oleh SPV dan Divisi Keuangan.
-            </p>
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-xl border border-slate-200 animate-in fade-in duration-200 my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start pb-2 border-b border-slate-100 mb-4">
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">
+                  {newType === "PURCHASE_REQUISITION" ? "Pesanan Pembelian Barang (Purchase Order / PR)" : "Form Pengajuan Kas Bon Lapangan"}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {newType === "PURCHASE_REQUISITION" ? "Format pengadaan material & perangkat proyek standar ERP Accurate Online." : "Pengajuan uang muka kerja operasional lapangan divisi."}
+                </p>
+              </div>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
             <form onSubmit={handleCreateRequest} className="space-y-3.5 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Unit Bisnis / Divisi</label>
-                <select
-                  value={newUnit}
-                  onChange={(e) => setNewUnit(e.target.value as BusinessUnit)}
-                  className="w-full border border-slate-300 rounded-lg p-2 bg-white"
-                >
-                  <option value="STARLITE_FTTH">Starlite FTTH (Jaringan Internet)</option>
-                  <option value="ME_CORE">Jasa ME Core (Mekanik & Elektronik)</option>
-                  <option value="OVERHEAD_OPERASIONAL">Overhead / Operasional Kantor</option>
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Unit Bisnis / Divisi</label>
+                  <select
+                    value={newUnit}
+                    onChange={(e) => setNewUnit(e.target.value as BusinessUnit)}
+                    className="w-full border border-slate-300 rounded-lg p-2 bg-white"
+                  >
+                    <option value="STARLITE_FTTH">Starlite FTTH (Fiber to the Home)</option>
+                    <option value="ME_CORE">Jasa ME Core (Mekanikal & Elektrikal)</option>
+                    <option value="OVERHEAD_OPERASIONAL">Overhead / Operasional Kantor</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Jenis Dokumen</label>
+                  <select
+                    value={newType}
+                    onChange={(e) => setNewType(e.target.value as RequestType)}
+                    className="w-full border border-slate-300 rounded-lg p-2 bg-white"
+                  >
+                    <option value="CASH_ADVANCE">Kas Bon Operasional (Cash Advance)</option>
+                    <option value="PURCHASE_REQUISITION">Pesanan Pembelian Barang (PO)</option>
+                    <option value="REIMBURSEMENT">Klaim Reimbursement</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Nama Pemohon (Requester)</label>
+                  <input
+                    type="text"
+                    value={requesterName}
+                    onChange={(e) => setRequesterName(e.target.value)}
+                    placeholder="Misal: Rudi (Teknisi) / Agus (SPV)"
+                    className="w-full border border-slate-300 rounded-lg p-2"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Total Nominal Anggaran (Rp)</label>
+                  <input
+                    type="number"
+                    value={newAmount}
+                    onChange={(e) => setNewAmount(e.target.value)}
+                    placeholder="Contoh: 15000000"
+                    className="w-full border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900"
+                    required
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Jenis Pengajuan</label>
-                <select
-                  value={newType}
-                  onChange={(e) => setNewType(e.target.value as RequestType)}
-                  className="w-full border border-slate-300 rounded-lg p-2 bg-white"
-                >
-                  <option value="CASH_ADVANCE">Kas Bon Operasional (Cash Advance)</option>
-                  <option value="PURCHASE_REQUISITION">Pengadaan Barang / PO (Purchase Requisition)</option>
-                  <option value="REIMBURSEMENT">Reimbursement</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Nama Pemohon</label>
-                <input
-                  type="text"
-                  value={requesterName}
-                  onChange={(e) => setRequesterName(e.target.value)}
-                  placeholder="Misal: Rudi (Teknisi Lapangan)"
-                  className="w-full border border-slate-300 rounded-lg p-2"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Judul Pengajuan</label>
+                <label className="block font-semibold text-slate-700 mb-1">Judul Dokumen / Nama Barang</label>
                 <input
                   type="text"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="Misal: Pembelian Patchcord & BBM Operasional"
+                  placeholder={newType === "PURCHASE_REQUISITION" ? "Misal: Pengadaan Switch Core & Patchcord Fiber Optic" : "Misal: Kas Bon Tarik Kabel Sentul City"}
                   className="w-full border border-slate-300 rounded-lg p-2"
                   required
                 />
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Nominal yang Diajukan (Rp)</label>
-                <input
-                  type="number"
-                  value={newAmount}
-                  onChange={(e) => setNewAmount(e.target.value)}
-                  placeholder="Contoh: 1500000"
-                  className="w-full border border-slate-300 rounded-lg p-2 font-mono"
-                  required
-                />
-              </div>
+              {/* KHUSUS PO / PENGADAAN BARANG: INFORMASI VENDOR & PENGIRIMAN ACCURATE STYLE */}
+              {newType === "PURCHASE_REQUISITION" && (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+                  <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5 uppercase tracking-wide">
+                    <Truck className="w-3.5 h-3.5" /> Info Pemasok & Pengiriman (Accurate Online Standard)
+                  </span>
+                  
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block font-medium text-slate-600 mb-0.5">Nama Pemasok / Vendor *</label>
+                      <input
+                        type="text"
+                        value={vendorName}
+                        onChange={(e) => setVendorName(e.target.value)}
+                        placeholder="Misal: PT. Fiber Solusindo"
+                        className="w-full border border-slate-300 rounded-lg p-1.5 bg-white"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-600 mb-0.5">Syarat Pembayaran</label>
+                      <select
+                        value={paymentTerms}
+                        onChange={(e) => setPaymentTerms(e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg p-1.5 bg-white"
+                      >
+                        <option value="COD">Cash On Delivery (COD)</option>
+                        <option value="Net 14">Net 14 Hari</option>
+                        <option value="Net 30">Net 30 Hari</option>
+                        <option value="Tunai">Tunai / Transfer di Muka</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block font-medium text-slate-600 mb-0.5">Bank & Nomor Rekening Tujuan</label>
+                      <input
+                        type="text"
+                        value={bankAccountNumber}
+                        onChange={(e) => setBankAccountNumber(e.target.value)}
+                        placeholder="Contoh: BCA 123-456-7890"
+                        className="w-full border border-slate-300 rounded-lg p-1.5 bg-white font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-600 mb-0.5">Alamat Pengiriman Fisik</label>
+                      <input
+                        type="text"
+                        value={shippingAddress}
+                        onChange={(e) => setShippingAddress(e.target.value)}
+                        placeholder="Gudang Sentul / Site Proyek"
+                        className="w-full border border-slate-300 rounded-lg p-1.5 bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Keterangan / Keperluan Lapangan</label>
+                <label className="block font-semibold text-slate-700 mb-1">Keterangan / Keperluan Lengkap</label>
                 <textarea
                   value={newPurpose}
                   onChange={(e) => setNewPurpose(e.target.value)}
-                  placeholder="Jelaskan kebutuhan pengeluaran secara ringkas..."
+                  placeholder="Jelaskan kebutuhan pengeluaran atau detail barang yang dipesan..."
                   rows={2}
                   className="w-full border border-slate-300 rounded-lg p-2"
                 />
               </div>
 
-              <div className="pt-3 flex justify-end gap-2">
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-3.5 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition"
+                  className="px-3.5 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition cursor-pointer shadow-xs"
                 >
-                  Kirim Pengajuan
+                  Kirim ke Tim Audit (Step 1)
                 </button>
               </div>
             </form>
@@ -2237,6 +2951,16 @@ export default function DashboardPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* MODAL 3: PRATINJAU CETAK DOKUMEN RESMI A4 (ISO-FIN-2026 STANDAR PERUSAHAAN) */}
+      {selectedPrintRequest && (
+        <PrintableDocumentModal
+          isOpen={isPrintModalOpen}
+          onClose={() => setIsPrintModalOpen(false)}
+          request={selectedPrintRequest}
+          docType={printDocType}
+        />
       )}
     </div>
   );

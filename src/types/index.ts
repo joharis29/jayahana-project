@@ -5,7 +5,9 @@ export type UserRole =
   | 'SITE_SPV'
   | 'PROCUREMENT'
   | 'DIVISION_HEAD'
+  | 'INTERNAL_AUDIT'
   | 'FINANCE_CASHIER'
+  | 'FINANCE_MANAGER'
   | 'ACCOUNTING_TAX'
   | 'DIRECTOR'
   | 'SUPERADMIN';
@@ -14,13 +16,20 @@ export type RequestType = 'CASH_ADVANCE' | 'PURCHASE_REQUISITION' | 'REIMBURSEME
 
 export type ApprovalStatus = 
   | 'DRAFT'
-  | 'PENDING_SPV'
-  | 'PENDING_HEAD'
+  | 'PENDING_AUDIT'
   | 'PENDING_FINANCE'
   | 'PENDING_DIRECTOR'
-  | 'APPROVED'
-  | 'REJECTED'
+  | 'APPROVED_READY_PAY'
   | 'DISBURSED'
+  | 'REALIZED_PENDING_AUDIT'
+  | 'REALIZED_PENDING_FINANCE'
+  | 'REALIZED_PENDING_DIRECTOR'
+  | 'COMPLETED'
+  | 'REJECTED'
+  // Legacy compatibility
+  | 'PENDING_SPV'
+  | 'PENDING_HEAD'
+  | 'APPROVED'
   | 'SETTLED';
 
 export interface CostCenter {
@@ -33,6 +42,104 @@ export interface CostCenter {
   spentAmount: number;
   projectCode?: string; // For ME (e.g. SPK-2026-ME-01)
   clusterCode?: string; // For Starlite (e.g. CLUSTER-BOGOR-01)
+}
+
+export interface ProcurementItem {
+  id: string;
+  itemCode: string;
+  itemName: string;
+  quantity: number;
+  unit: string; // Pcs, Roll, Meter, Unit, Box, Lot
+  unitPrice: number;
+  discountPercent?: number;
+  totalPrice: number;
+  notes?: string;
+}
+
+export interface ProcurementVendorInfo {
+  vendorName: string;
+  paymentTerms: string; // e.g. "Net 30", "COD", "Cash On Delivery", "Tunai"
+  bankAccountName: string;
+  bankAccountNumber: string;
+  bankName: string;
+  shippingAddress: string;
+  remarks: string;
+  fobType?: string; // FOB Shipping Point / Destination
+  isTaxable?: boolean;
+  isTaxIncluded?: boolean;
+}
+
+export interface ApprovalHistoryEntry {
+  stage: 'AUDIT' | 'FINANCE' | 'DIRECTOR';
+  approverName: string;
+  approverRole: string;
+  status: 'APPROVED' | 'REJECTED' | 'REVISED';
+  date: string;
+  notes?: string;
+}
+
+export interface DisbursementRecord {
+  disbursedAt: string;
+  disbursedBy: string; // "Finance Staff"
+  voucherNumber: string; // "BKK-2026-11-002"
+  sourceAccount: string; // "BCA Operasional 123-xxx" | "Kas Kecil (Petty Cash)"
+  paymentMethod: 'TRANSFER_BANK' | 'CASH_KAS_KECIL';
+  transferReference: string;
+  amountPaid: number;
+  bankReceiptUrl?: string;
+}
+
+export interface RealizationItem {
+  id: string;
+  receiptDate: string;
+  description: string;
+  amount: number;
+  receiptNumber: string;
+  vendor: string;
+}
+
+export interface RealizationRecord {
+  id: string;
+  requestId: string;
+  lpjNumber: string;
+  submittedAt: string;
+  submittedBy: string;
+  initialAdvanceAmount: number;
+  totalRealizedAmount: number;
+  balanceDifference: number; // >0: sisa dana disetor ke kasir, <0: klaim reimbursement tambahan
+  settlementAction: 'REFUND_TO_CASHIER' | 'REIMBURSE_ADDITIONAL' | 'EXACT';
+  status: 'PENDING_AUDIT' | 'PENDING_FINANCE' | 'PENDING_DIRECTOR' | 'COMPLETED' | 'REJECTED';
+  items: RealizationItem[];
+  auditNotes?: string;
+  financeNotes?: string;
+  directorNotes?: string;
+}
+
+export interface GoodsReceiptItem {
+  itemId: string;
+  itemCode: string;
+  itemName: string;
+  qtyOrdered: number;
+  qtyReceived: number;
+  unit: string;
+  condition: 'GOOD' | 'DAMAGED' | 'SHORTAGE';
+  physicalAuditNotes: string;
+}
+
+export interface GoodsReceiptRecord {
+  id: string;
+  receiptNumber: string; // "GR-2026-11-001" / "BAST-2026-11-001"
+  poNumber: string;
+  requestId: string;
+  receivedDate: string;
+  vendorName: string;
+  vendorDeliveryNoteNumber: string; // No. Surat Jalan Pengirim
+  auditedBy: string; // "Tim Audit Internal"
+  warehouseStaff: string; // "Gudang Sentul"
+  overallStatus: 'VERIFIED_GOOD' | 'PARTIAL_ISSUE' | 'REJECTED';
+  inspectionLocation: string; // "Gudang Utama Sentul / Site Proyek"
+  items: GoodsReceiptItem[];
+  notes: string;
 }
 
 export interface BudgetRequestItem {
@@ -58,6 +165,12 @@ export interface BudgetRequest {
   totalAmount: number;
   status: ApprovalStatus;
   items: BudgetRequestItem[];
+  procurementItems?: ProcurementItem[];
+  vendorInfo?: ProcurementVendorInfo;
+  disbursement?: DisbursementRecord;
+  realization?: RealizationRecord;
+  goodsReceipt?: GoodsReceiptRecord;
+  approvalHistory?: ApprovalHistoryEntry[];
   purpose: string;
   createdAt: string;
   disbursedAt?: string;
@@ -70,7 +183,7 @@ export interface ExpenseRealization {
   receiptNumber: string;
   vendorName: string;
   totalActualAmount: number;
-  differenceAmount: number; // positive = refund to cashier, negative = additional reimbursement
+  differenceAmount: number;
   receiptImageUrl?: string;
   settledBy?: string;
   verifiedAt?: string;
