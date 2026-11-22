@@ -188,6 +188,28 @@ export function PrintableDocumentModal({
                   </table>
                 </div>
 
+                {/* Lampiran Dokumen jika ada */}
+                {request?.attachments && request.attachments.length > 0 && (
+                  <div className="mb-6 p-3 bg-slate-50 border border-slate-300 rounded text-xs">
+                    <span className="font-bold text-slate-800 block mb-2">
+                      Lampiran Dokumen &amp; Foto ({request.attachments.length} Berkas):
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {request.attachments.map((att) => (
+                        <div key={att.id} className="flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-300 rounded text-[10px]">
+                          {att.type.startsWith("image/") ? (
+                            <img src={att.dataUrl} alt={att.name} className="w-5 h-5 object-cover rounded" />
+                          ) : (
+                            <FileText className="w-4 h-4 text-red-500" />
+                          )}
+                          <span className="font-medium text-slate-800 truncate max-w-[220px]">{att.name}</span>
+                          <span className="text-slate-400 font-mono">({(att.size / 1024).toFixed(0)}KB)</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Vendor / Rekening Tujuan jika ada */}
                 {request.vendorInfo && (
                   <div className="mb-6 p-3 bg-blue-50/50 border border-blue-200 rounded-lg text-xs grid grid-cols-2 gap-3">
@@ -306,6 +328,28 @@ export function PrintableDocumentModal({
                   </table>
                 </div>
 
+                {/* Lampiran Dokumen jika ada */}
+                {request?.attachments && request.attachments.length > 0 && (
+                  <div className="mb-6 p-3 bg-slate-50 border border-slate-300 rounded text-xs">
+                    <span className="font-bold text-slate-800 block mb-2">
+                      Lampiran Dokumen &amp; Foto ({request.attachments.length} Berkas):
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {request.attachments.map((att) => (
+                        <div key={att.id} className="flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-300 rounded text-[10px]">
+                          {att.type.startsWith("image/") ? (
+                            <img src={att.dataUrl} alt={att.name} className="w-5 h-5 object-cover rounded" />
+                          ) : (
+                            <FileText className="w-4 h-4 text-red-500" />
+                          )}
+                          <span className="font-medium text-slate-800 truncate max-w-[220px]">{att.name}</span>
+                          <span className="text-slate-400 font-mono">({(att.size / 1024).toFixed(0)}KB)</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Komparasi Rekonsiliasi Saldo */}
                 {(() => {
                   const advance = request.realization?.initialAdvanceAmount || request.totalAmount;
@@ -403,6 +447,28 @@ export function PrintableDocumentModal({
                     </tbody>
                   </table>
                 </div>
+
+                {/* Lampiran Dokumen jika ada */}
+                {request?.attachments && request.attachments.length > 0 && (
+                  <div className="mb-6 p-3 bg-slate-50 border border-slate-300 rounded text-xs">
+                    <span className="font-bold text-slate-800 block mb-2">
+                      Lampiran Dokumen &amp; Foto ({request.attachments.length} Berkas):
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {request.attachments.map((att) => (
+                        <div key={att.id} className="flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-300 rounded text-[10px]">
+                          {att.type.startsWith("image/") ? (
+                            <img src={att.dataUrl} alt={att.name} className="w-5 h-5 object-cover rounded" />
+                          ) : (
+                            <FileText className="w-4 h-4 text-red-500" />
+                          )}
+                          <span className="font-medium text-slate-800 truncate max-w-[220px]">{att.name}</span>
+                          <span className="text-slate-400 font-mono">({(att.size / 1024).toFixed(0)}KB)</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs mb-6 flex items-start gap-2 text-emerald-900">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
@@ -510,6 +576,28 @@ export function PrintableDocumentModal({
                     </tfoot>
                   </table>
                 </div>
+
+                {/* Lampiran Dokumen jika ada */}
+                {request?.attachments && request.attachments.length > 0 && (
+                  <div className="mb-6 p-3 bg-slate-50 border border-slate-300 rounded text-xs">
+                    <span className="font-bold text-slate-800 block mb-2">
+                      Lampiran Dokumen &amp; Foto ({request.attachments.length} Berkas):
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {request.attachments.map((att) => (
+                        <div key={att.id} className="flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-300 rounded text-[10px]">
+                          {att.type.startsWith("image/") ? (
+                            <img src={att.dataUrl} alt={att.name} className="w-5 h-5 object-cover rounded" />
+                          ) : (
+                            <FileText className="w-4 h-4 text-red-500" />
+                          )}
+                          <span className="font-medium text-slate-800 truncate max-w-[220px]">{att.name}</span>
+                          <span className="text-slate-400 font-mono">({(att.size / 1024).toFixed(0)}KB)</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Instruksi Rekening Resmi Penampung */}
                 <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-lg text-xs mb-6 space-y-1">

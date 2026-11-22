@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { 
   Building2, 
   Wifi, 
@@ -38,7 +38,12 @@ import {
   ClipboardCheck,
   Boxes,
   FileText,
-  Send
+  Send,
+  Paperclip,
+  Camera,
+  Image as ImageIcon,
+  Trash2,
+  Eye
 } from "lucide-react";
 import { PrintableDocumentModal } from "@/components/PrintableDocumentModal";
 import { 
@@ -63,7 +68,7 @@ import {
   type PendingApprovalItem
 } from "@/lib/constants";
 import { formatRupiah, formatDateIndo } from "@/lib/utils";
-import { BusinessUnit, BudgetRequest, RequestType, UserRole, FinancialTransaction, ProcurementItem, SalesInvoice, OfficialReceiptBKM, InvoicePaymentRecord, SITE_DIVISIONS, EXPENSE_CATEGORIES, ExpenseCategory } from "@/types";
+import { BusinessUnit, BudgetRequest, RequestType, UserRole, FinancialTransaction, ProcurementItem, SalesInvoice, OfficialReceiptBKM, InvoicePaymentRecord, SITE_DIVISIONS, EXPENSE_CATEGORIES, ExpenseCategory, RequestAttachment } from "@/types";
 
 const MONTH_NAMES = [
   { num: 1, name: "Januari", short: "Jan" },
@@ -188,6 +193,42 @@ export default function DashboardPage() {
   const updateRequestItem = (id: string, field: keyof RequestLineItem, value: string | number) =>
     setRequestItems(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i));
   const requestItemsSubTotal = requestItems.reduce((acc, i) => acc + (i.quantity * i.unitPrice * (1 - i.discount / 100)), 0);
+
+  // Attachment state for request form (PDF, Images, Camera)
+  const [attachments, setAttachments] = useState<RequestAttachment[]>([]);
+  const [selectedPreviewAttachment, setSelectedPreviewAttachment] = useState<RequestAttachment | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
+        setAttachments((prev) => [
+          ...prev,
+          {
+            id: `att-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            name: file.name,
+            type: file.type || "application/octet-stream",
+            size: file.size,
+            dataUrl,
+            uploadedAt: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+          },
+        ]);
+      };
+      reader.readAsDataURL(file);
+    });
+    // Reset input value so same file can be re-selected if needed
+    e.target.value = "";
+  };
+
+  const removeAttachment = (id: string) => {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
+  };
 
   // Procurement Vendor Info (Accurate style)
   const [vendorName, setVendorName] = useState("");
@@ -631,7 +672,8 @@ export default function DashboardPage() {
         bankAccountName: bankAccountName || vendorName,
         shippingAddress: shippingAddress,
         remarks: newPurpose
-      } : undefined
+      } : undefined,
+      attachments: attachments.length > 0 ? attachments : undefined
     };
 
     // Add to requests
@@ -662,6 +704,7 @@ export default function DashboardPage() {
     setRequestDate(new Date().toISOString().split("T")[0]);
     setNewUnit("Rajeg & Pasar Kemis");
     setNewCategory("Akomodasi");
+    setAttachments([]);
     setRequestItems([{ id: "ri-1", description: "", quantity: 1, unit: "Pcs", unitPrice: 0, discount: 0 }]);
   };
 
@@ -3602,6 +3645,133 @@ export default function DashboardPage() {
                 />
               </div>
 
+              {/* LAMPIRAN (FILE PDF, GAMBAR, / AMBIL FOTO KAMERA LANGSUNG) */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="font-semibold text-slate-700 flex items-center gap-1.5 text-xs">
+                    <Paperclip className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Lampiran Dokumen / Bukti Pendukung</span>
+                    <span className="text-[10px] font-normal text-slate-400">(PDF, Gambar, atau Foto Kamera)</span>
+                  </label>
+                  <span className="text-[10px] font-mono font-medium text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                    {attachments.length} berkas terlampir
+                  </span>
+                </div>
+
+                {/* Input File Tersembunyi */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                  multiple
+                  accept="image/*,application/pdf"
+                  className="hidden"
+                />
+                <input
+                  type="file"
+                  ref={cameraInputRef}
+                  onChange={handleFileUpload}
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                />
+
+                {/* Tombol Aksi Upload Berkas & Foto Kamera */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100 hover:border-slate-400 font-medium transition cursor-pointer text-xs shadow-2xs"
+                  >
+                    <Paperclip className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Pilih Berkas (PDF / Foto)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 hover:bg-blue-100 font-semibold transition cursor-pointer text-xs shadow-2xs"
+                  >
+                    <Camera className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Ambil Foto Kamera</span>
+                  </button>
+                </div>
+
+                {/* Daftar Preview Berkas Terlampir */}
+                {attachments.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 pt-2 border-t border-slate-200 max-h-48 overflow-y-auto">
+                    {attachments.map((att) => {
+                      const isImage = att.type.startsWith("image/");
+                      const isPdf = att.type.includes("pdf");
+                      return (
+                        <div
+                          key={att.id}
+                          className="flex items-center gap-2 p-1.5 bg-white border border-slate-200 rounded-lg shadow-2xs group relative hover:border-blue-300 transition"
+                        >
+                          {/* Thumbnail / Icon */}
+                          <div className="w-10 h-10 rounded overflow-hidden shrink-0 bg-slate-100 flex items-center justify-center border border-slate-200">
+                            {isImage ? (
+                              <img
+                                src={att.dataUrl}
+                                alt={att.name}
+                                className="w-full h-full object-cover cursor-pointer hover:opacity-80 transition"
+                                onClick={() => setSelectedPreviewAttachment(att)}
+                              />
+                            ) : isPdf ? (
+                              <FileText className="w-5 h-5 text-red-500" />
+                            ) : (
+                              <Paperclip className="w-5 h-5 text-slate-400" />
+                            )}
+                          </div>
+
+                          {/* Info Nama & Ukuran */}
+                          <div className="flex-1 min-w-0 pr-12">
+                            <p className="text-[11px] font-semibold text-slate-800 truncate" title={att.name}>
+                              {att.name}
+                            </p>
+                            <p className="text-[9px] text-slate-400 font-mono">
+                              {(att.size / 1024).toFixed(1)} KB &bull; {att.uploadedAt}
+                            </p>
+                          </div>
+
+                          {/* Tombol Aksi Preview & Hapus */}
+                          <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+                            {isImage ? (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedPreviewAttachment(att)}
+                                className="p-1 text-slate-400 hover:text-blue-600 transition cursor-pointer"
+                                title="Lihat Foto"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                            ) : (
+                              <a
+                                href={att.dataUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="p-1 text-slate-400 hover:text-blue-600 transition cursor-pointer"
+                                title="Buka PDF"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => removeAttachment(att.id)}
+                              className="p-1 text-slate-400 hover:text-red-600 transition cursor-pointer"
+                              title="Hapus Lampiran"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               <div className="pt-3 flex justify-between items-center border-t border-slate-100">
                 <span className="text-slate-500 font-medium">
                   Total Pengajuan: <span className="font-bold text-slate-800 font-mono">Rp {requestItemsSubTotal.toLocaleString("id-ID")}</span>
@@ -3910,6 +4080,50 @@ export default function DashboardPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: PRATINJAU FOTO LAMPIRAN */}
+      {selectedPreviewAttachment && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-4 shadow-2xl border border-slate-200">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100 mb-3">
+              <div>
+                <h4 className="font-bold text-slate-900 text-sm truncate max-w-md">{selectedPreviewAttachment.name}</h4>
+                <span className="text-[10px] text-slate-400 font-mono">{(selectedPreviewAttachment.size / 1024).toFixed(1)} KB &bull; {selectedPreviewAttachment.uploadedAt}</span>
+              </div>
+              <button
+                onClick={() => setSelectedPreviewAttachment(null)}
+                className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="max-h-[65vh] overflow-auto flex items-center justify-center bg-slate-100 rounded-xl p-2 border border-slate-200">
+              <img
+                src={selectedPreviewAttachment.dataUrl}
+                alt={selectedPreviewAttachment.name}
+                className="max-h-[60vh] max-w-full object-contain rounded-lg shadow-sm"
+              />
+            </div>
+            <div className="pt-3 flex justify-end gap-2">
+              <a
+                href={selectedPreviewAttachment.dataUrl}
+                download={selectedPreviewAttachment.name}
+                className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Unduh Foto</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => setSelectedPreviewAttachment(null)}
+                className="px-4 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-semibold hover:bg-slate-900 transition cursor-pointer"
+              >
+                Tutup Preview
+              </button>
+            </div>
           </div>
         </div>
       )}

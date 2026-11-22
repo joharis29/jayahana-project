@@ -220,6 +220,15 @@ export interface BudgetRequestItem {
   notes?: string;
 }
 
+export interface RequestAttachment {
+  id: string;
+  name: string;
+  type: string; // 'application/pdf' | 'image/jpeg' | etc.
+  size: number;
+  dataUrl: string;
+  uploadedAt: string;
+}
+
 export interface BudgetRequest {
   id: string;
   requestNumber: string;
@@ -239,6 +248,7 @@ export interface BudgetRequest {
   realization?: RealizationRecord;
   goodsReceipt?: GoodsReceiptRecord;
   approvalHistory?: ApprovalHistoryEntry[];
+  attachments?: RequestAttachment[];
   purpose: string;
   createdAt: string;
   disbursedAt?: string;
