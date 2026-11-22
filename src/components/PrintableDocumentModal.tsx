@@ -137,7 +137,7 @@ export function PrintableDocumentModal({
 
                 {/* Tujuan / Deskripsi */}
                 <div className="text-xs mb-4">
-                  <span className="font-bold text-slate-700 block mb-1">Keterangan / Keperluan Lengkap:</span>
+                  <span className="font-bold text-slate-700 block mb-1">Catatan / Keterangan:</span>
                   <div className="p-2.5 bg-slate-50 border border-slate-200 rounded text-slate-800 italic">
                     &ldquo;{request.purpose}&rdquo;
                   </div>

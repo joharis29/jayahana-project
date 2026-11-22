@@ -583,17 +583,19 @@ export default function DashboardPage() {
 
   const handleCreateRequest = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle) return;
 
     // Use items table total if items have values, otherwise fall back to newAmount
     const parsedAmount = requestItemsSubTotal > 0 ? requestItemsSubTotal : parseFloat(newAmount || "0");
     if (parsedAmount <= 0) return;
     const newDocNum = `${newType === "CASH_ADVANCE" ? "CA" : "PR"}-2026-${Math.floor(100 + Math.random() * 900)}`;
 
+    const firstItemDesc = requestItems.find(i => i.description.trim())?.description;
+    const autoTitle = firstItemDesc ? `${newCategory} - ${firstItemDesc}` : `${newCategory} (${newUnit})`;
+
     const newReq: BudgetRequest = {
       id: `req-${Date.now()}`,
       requestNumber: newDocNum,
-      title: newTitle,
+      title: autoTitle,
       unit: newUnit,
       category: newCategory,
       costCenterId: newUnit.startsWith("HO") ? "cc-ho-01" : "cc-site-01",
@@ -602,7 +604,7 @@ export default function DashboardPage() {
       requestType: newType,
       totalAmount: parsedAmount,
       status: "PENDING_AUDIT",
-      purpose: newPurpose,
+      purpose: newPurpose || autoTitle,
       createdAt: requestDate,
       items: requestItems.filter(i => i.description).map(i => ({
         id: `item-${Date.now()}-${i.id}`,
@@ -640,7 +642,7 @@ export default function DashboardPage() {
       id: `appr-${Date.now()}`,
       type: "BUDGET_REQUEST",
       docNumber: newDocNum,
-      title: newTitle,
+      title: autoTitle,
       unit: newUnit,
       requester: requesterName,
       amount: parsedAmount,
@@ -3419,19 +3421,6 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Row 3: Judul Dokumen */}
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Judul Dokumen / Keperluan</label>
-                <input
-                  type="text"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="Misal: Biaya Operasional / Pengadaan Material / Kas Bon Lapangan"
-                  className="w-full border border-slate-300 rounded-lg p-2"
-                  required
-                />
-              </div>
-
               {/* TABEL RINCIAN BARANG / ITEM — Accurate Style */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
@@ -3603,11 +3592,11 @@ export default function DashboardPage() {
               )}
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Keterangan / Keperluan Lengkap</label>
+                <label className="block font-semibold text-slate-700 mb-1">Catatan / Keterangan</label>
                 <textarea
                   value={newPurpose}
                   onChange={(e) => setNewPurpose(e.target.value)}
-                  placeholder="Jelaskan kebutuhan pengeluaran atau detail barang yang dipesan..."
+                  placeholder="Tambahkan catatan atau keterangan pengajuan..."
                   rows={2}
                   className="w-full border border-slate-300 rounded-lg p-2"
                 />
