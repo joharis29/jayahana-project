@@ -63,7 +63,7 @@ import {
   type PendingApprovalItem
 } from "@/lib/constants";
 import { formatRupiah, formatDateIndo } from "@/lib/utils";
-import { BusinessUnit, BudgetRequest, RequestType, UserRole, FinancialTransaction, ProcurementItem, SalesInvoice, OfficialReceiptBKM, InvoicePaymentRecord } from "@/types";
+import { BusinessUnit, BudgetRequest, RequestType, UserRole, FinancialTransaction, ProcurementItem, SalesInvoice, OfficialReceiptBKM, InvoicePaymentRecord, SITE_DIVISIONS } from "@/types";
 
 const MONTH_NAMES = [
   { num: 1, name: "Januari", short: "Jan" },
@@ -170,7 +170,7 @@ export default function DashboardPage() {
   
   // New request form state
   const [newTitle, setNewTitle] = useState("");
-  const [newUnit, setNewUnit] = useState<BusinessUnit>("STARLITE_FTTH");
+  const [newUnit, setNewUnit] = useState<string>("Rajeg & Pasar Kemis");
   const [newType, setNewType] = useState<RequestType>("CASH_ADVANCE");
   const [newAmount, setNewAmount] = useState("");
   const [newPurpose, setNewPurpose] = useState("");
@@ -594,7 +594,7 @@ export default function DashboardPage() {
       requestNumber: newDocNum,
       title: newTitle,
       unit: newUnit,
-      costCenterId: newUnit === "STARLITE_FTTH" ? "cc-star-01" : "cc-me-01",
+      costCenterId: newUnit.startsWith("HO") ? "cc-ho-01" : "cc-site-01",
       requesterName: requesterName,
       requesterRole: newType === "CASH_ADVANCE" ? "FIELD_TECH" : "SITE_SPV",
       requestType: newType,
@@ -656,6 +656,7 @@ export default function DashboardPage() {
     setBankAccountNumber("");
     setBankAccountName("");
     setRequestDate(new Date().toISOString().split("T")[0]);
+    setNewUnit("Rajeg & Pasar Kemis");
     setRequestItems([{ id: "ri-1", description: "", quantity: 1, unit: "Pcs", unitPrice: 0, discount: 0 }]);
   };
 
@@ -2059,10 +2060,22 @@ export default function DashboardPage() {
                   onChange={(e) => setSelectedUnit(e.target.value as any)}
                   className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-50 text-slate-700 cursor-pointer"
                 >
-                  <option value="ALL">Semua Divisi / Unit</option>
-                  <option value="ME_CORE">Jasa ME Core</option>
-                  <option value="STARLITE_FTTH">Starlite FTTH</option>
-                  <option value="OVERHEAD_OPERASIONAL">Overhead / Umum</option>
+                  <option value="ALL">Semua Site / Divisi</option>
+                  <optgroup label="Site Operasional">
+                    {SITE_DIVISIONS.filter(s => !s.startsWith("HO")).map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Head Office (HO)">
+                    {SITE_DIVISIONS.filter(s => s.startsWith("HO")).map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Unit Bisnis Legacy">
+                    <option value="ME_CORE">Jasa ME Core</option>
+                    <option value="STARLITE_FTTH">Starlite FTTH</option>
+                    <option value="OVERHEAD_OPERASIONAL">Overhead / Umum</option>
+                  </optgroup>
                 </select>
 
                 <button
@@ -2197,7 +2210,7 @@ export default function DashboardPage() {
                       <tr>
                         <th className="px-4 py-3">No. Dokumen</th>
                         <th className="px-4 py-3">Judul & Peruntukan</th>
-                        <th className="px-4 py-3">Divisi</th>
+                        <th className="px-4 py-3">Site / Divisi</th>
                         <th className="px-4 py-3">Pemohon</th>
                         <th className="px-4 py-3">Nominal Diajukan</th>
                         <th className="px-4 py-3 text-center">Status Approval 3-Pintu</th>
@@ -2233,9 +2246,11 @@ export default function DashboardPage() {
                                     ? "bg-blue-100 text-blue-700" 
                                     : req.unit === "STARLITE_FTTH" 
                                     ? "bg-fuchsia-100 text-fuchsia-700" 
-                                    : "bg-slate-100 text-slate-700"
+                                    : String(req.unit).startsWith("HO")
+                                    ? "bg-purple-100 text-purple-700"
+                                    : "bg-emerald-100 text-emerald-800"
                                 }`}>
-                                  {req.unit === "ME_CORE" ? "ME Core" : req.unit === "STARLITE_FTTH" ? "Starlite FTTH" : "Overhead"}
+                                  {req.unit === "ME_CORE" ? "ME Core" : req.unit === "STARLITE_FTTH" ? "Starlite FTTH" : req.unit}
                                 </span>
                               </td>
                               <td className="px-4 py-3">
@@ -2491,7 +2506,7 @@ export default function DashboardPage() {
                           </div>
 
                           <div className="text-xs text-slate-600">
-                            Pemohon: <strong>{req.requesterName}</strong> &bull; Divisi: {req.unit === "ME_CORE" ? "ME Core" : "Starlite FTTH"}
+                            Pemohon: <strong>{req.requesterName}</strong> &bull; Site / Divisi: <strong>{req.unit === "ME_CORE" ? "ME Core" : req.unit === "STARLITE_FTTH" ? "Starlite FTTH" : req.unit}</strong>
                           </div>
 
                           {/* Box Komparasi Saldo */}
@@ -3297,10 +3312,10 @@ export default function DashboardPage() {
             <div className="flex justify-between items-start pb-2 border-b border-slate-100 mb-4">
               <div>
                 <h3 className="font-bold text-slate-900 text-base">
-                  {newType === "PURCHASE_REQUISITION" ? "Pesanan Pembelian Barang (Purchase Order / PR)" : "Form Pengajuan Kas Bon Lapangan"}
+                  Form Pengajuan
                 </h3>
                 <p className="text-xs text-slate-500">
-                  {newType === "PURCHASE_REQUISITION" ? "Format pengadaan material & perangkat proyek standar ERP Accurate Online." : "Pengajuan uang muka kerja operasional lapangan divisi."}
+                  Pengajuan dana kas bon operasional, reimbursement, maupun pengadaan barang untuk Site &amp; Divisi HO.
                 </p>
               </div>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1">
@@ -3312,15 +3327,40 @@ export default function DashboardPage() {
               {/* Row 1: Unit & Jenis Dokumen */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Unit Bisnis / Divisi</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Site / Divisi</label>
                   <select
                     value={newUnit}
-                    onChange={(e) => setNewUnit(e.target.value as BusinessUnit)}
+                    onChange={(e) => setNewUnit(e.target.value)}
                     className="w-full border border-slate-300 rounded-lg p-2 bg-white"
                   >
-                    <option value="STARLITE_FTTH">Starlite FTTH (Fiber to the Home)</option>
-                    <option value="ME_CORE">Jasa ME Core (Mekanikal &amp; Elektrikal)</option>
-                    <option value="OVERHEAD_OPERASIONAL">Overhead / Operasional Kantor</option>
+                    <optgroup label="Site Operasional">
+                      <option value="Rajeg & Pasar Kemis">Rajeg &amp; Pasar Kemis</option>
+                      <option value="Bandung">Bandung</option>
+                      <option value="Tagogapu">Tagogapu</option>
+                      <option value="Padalarang">Padalarang</option>
+                      <option value="Gadobangkong">Gadobangkong</option>
+                      <option value="Cicalengka">Cicalengka</option>
+                      <option value="Cimahi">Cimahi</option>
+                      <option value="Ciledug">Ciledug</option>
+                      <option value="Songgom">Songgom</option>
+                      <option value="Nganjuk">Nganjuk</option>
+                      <option value="Kediri">Kediri</option>
+                      <option value="Tulungagung">Tulungagung</option>
+                      <option value="Rejotangan">Rejotangan</option>
+                      <option value="Blitar">Blitar</option>
+                    </optgroup>
+                    <optgroup label="Head Office (HO)">
+                      <option value="HO - Purchasing & Logistics">HO - Purchasing &amp; Logistics</option>
+                      <option value="HO - Permit">HO - Permit</option>
+                      <option value="HO - Survey and Design">HO - Survey and Design</option>
+                      <option value="HO - Document Control">HO - Document Control</option>
+                      <option value="HO - Sales">HO - Sales</option>
+                      <option value="HO - HR-GA">HO - HR-GA</option>
+                      <option value="HO - IT">HO - IT</option>
+                      <option value="HO - Finance">HO - Finance</option>
+                      <option value="HO - General Manager">HO - General Manager</option>
+                      <option value="HO - Direktur">HO - Direktur</option>
+                    </optgroup>
                   </select>
                 </div>
                 <div>

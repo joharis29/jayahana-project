@@ -1,4 +1,33 @@
-export type BusinessUnit = 'ME_CORE' | 'STARLITE_FTTH' | 'OVERHEAD_OPERASIONAL';
+export const SITE_DIVISIONS = [
+  "Rajeg & Pasar Kemis",
+  "Bandung",
+  "Tagogapu",
+  "Padalarang",
+  "Gadobangkong",
+  "Cicalengka",
+  "Cimahi",
+  "Ciledug",
+  "Songgom",
+  "Nganjuk",
+  "Kediri",
+  "Tulungagung",
+  "Rejotangan",
+  "Blitar",
+  "HO - Purchasing & Logistics",
+  "HO - Permit",
+  "HO - Survey and Design",
+  "HO - Document Control",
+  "HO - Sales",
+  "HO - HR-GA",
+  "HO - IT",
+  "HO - Finance",
+  "HO - General Manager",
+  "HO - Direktur",
+] as const;
+
+export type SiteDivision = typeof SITE_DIVISIONS[number];
+
+export type BusinessUnit = 'ME_CORE' | 'STARLITE_FTTH' | 'OVERHEAD_OPERASIONAL' | SiteDivision | string;
 
 export type UserRole = 
   | 'FIELD_TECH'

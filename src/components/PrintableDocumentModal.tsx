@@ -41,7 +41,9 @@ export function PrintableDocumentModal({
       ? "Divisi Mekanikal & Elektrikal (ME Core)" 
       : activeUnit === "STARLITE_FTTH" 
       ? "Divisi Starlite FTTH (Fiber Optic)" 
-      : "Divisi Operasional & Umum";
+      : activeUnit === "OVERHEAD_OPERASIONAL"
+      ? "Divisi Operasional & Umum"
+      : String(activeUnit);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
@@ -122,7 +124,7 @@ export function PrintableDocumentModal({
                 {/* Metadata Ringkasan */}
                 <div className="grid grid-cols-2 gap-4 text-xs mb-6 border border-slate-200 rounded-lg p-3 bg-slate-50">
                   <div className="space-y-1">
-                    <div><span className="text-slate-500">Unit / Divisi:</span> <strong>{unitName}</strong></div>
+                    <div><span className="text-slate-500">Site / Divisi:</span> <strong>{unitName}</strong></div>
                     <div><span className="text-slate-500">Pemohon (Requester):</span> <strong>{request.requesterName}</strong> ({request.requesterRole})</div>
                     <div><span className="text-slate-500">Peruntukan Proyek:</span> <strong>{request.title}</strong></div>
                   </div>
@@ -221,7 +223,7 @@ export function PrintableDocumentModal({
                 <div className="grid grid-cols-2 gap-4 text-xs mb-6 border border-slate-200 rounded-lg p-3 bg-emerald-50/40">
                   <div className="space-y-1">
                     <div><span className="text-slate-500">Referensi Pengajuan:</span> <strong>{request.requestNumber}</strong></div>
-                    <div><span className="text-slate-500">Divisi Pemohon:</span> <strong>{unitName}</strong></div>
+                    <div><span className="text-slate-500">Site / Divisi Pemohon:</span> <strong>{unitName}</strong></div>
                     <div><span className="text-slate-500">Penerima Dana:</span> <strong>{request.requesterName}</strong> ({request.requesterRole})</div>
                   </div>
                   <div className="space-y-1">
@@ -259,7 +261,7 @@ export function PrintableDocumentModal({
                   <div className="space-y-1">
                     <div><span className="text-slate-500">No. Kas Bon Awal:</span> <strong>{request.requestNumber}</strong></div>
                     <div><span className="text-slate-500">Pelapor / Pemohon:</span> <strong>{request.requesterName}</strong></div>
-                    <div><span className="text-slate-500">Divisi:</span> <strong>{unitName}</strong></div>
+                    <div><span className="text-slate-500">Site / Divisi:</span> <strong>{unitName}</strong></div>
                   </div>
                   <div className="space-y-1">
                     <div><span className="text-slate-500">Tanggal LPJ:</span> <strong>{request.realization?.submittedAt || "18/11/2026"}</strong></div>
