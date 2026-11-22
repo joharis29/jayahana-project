@@ -27,6 +27,44 @@ export const SITE_DIVISIONS = [
 
 export type SiteDivision = typeof SITE_DIVISIONS[number];
 
+export const EXPENSE_CATEGORIES = [
+  "Akomodasi",
+  "ATP",
+  "Bagi Hasil",
+  "BPJS",
+  "Dinas",
+  "Donasi",
+  "Entertain",
+  "Fee sales",
+  "Gaji",
+  "Insentif",
+  "Kasbon",
+  "Kompensasi",
+  "Mandor",
+  "Operasional",
+  "Operasional Mess",
+  "Operasional Permit",
+  "OTF",
+  "Pajak",
+  "Pengawalan",
+  "Perlengkapan & Peralatan",
+  "Permit",
+  "Petty Cash",
+  "Pinjaman",
+  "PNSI",
+  "PT Lunar Global",
+  "Recurring",
+  "Sewa",
+  "Survey",
+  "Token listrik",
+  "Tukang",
+  "Upah",
+  "Wifi",
+  "WO",
+] as const;
+
+export type ExpenseCategory = typeof EXPENSE_CATEGORIES[number];
+
 export type BusinessUnit = 'ME_CORE' | 'STARLITE_FTTH' | 'OVERHEAD_OPERASIONAL' | SiteDivision | string;
 
 export type UserRole = 
@@ -187,6 +225,7 @@ export interface BudgetRequest {
   requestNumber: string;
   title: string;
   unit: BusinessUnit;
+  category?: ExpenseCategory | string;
   costCenterId: string;
   requesterName: string;
   requesterRole: UserRole;

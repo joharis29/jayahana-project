@@ -130,7 +130,7 @@ export function PrintableDocumentModal({
                   </div>
                   <div className="space-y-1">
                     <div><span className="text-slate-500">Tanggal Pengajuan:</span> <strong>{request.createdAt}</strong></div>
-                    <div><span className="text-slate-500">Tipe Transaksi:</span> <strong>{request.requestType === "CASH_ADVANCE" ? "Uang Muka / Kas Bon" : "Pembelian Barang / PO"}</strong></div>
+                    <div><span className="text-slate-500">Kategori Pengajuan:</span> <strong>{request.category || (request.requestType === "CASH_ADVANCE" ? "Kas Bon Operasional" : "Pembelian Barang / PO")}</strong></div>
                     <div><span className="text-slate-500">Status Persetujuan:</span> <strong className="text-blue-700">{request.status}</strong></div>
                   </div>
                 </div>

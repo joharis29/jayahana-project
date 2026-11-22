@@ -63,7 +63,7 @@ import {
   type PendingApprovalItem
 } from "@/lib/constants";
 import { formatRupiah, formatDateIndo } from "@/lib/utils";
-import { BusinessUnit, BudgetRequest, RequestType, UserRole, FinancialTransaction, ProcurementItem, SalesInvoice, OfficialReceiptBKM, InvoicePaymentRecord, SITE_DIVISIONS } from "@/types";
+import { BusinessUnit, BudgetRequest, RequestType, UserRole, FinancialTransaction, ProcurementItem, SalesInvoice, OfficialReceiptBKM, InvoicePaymentRecord, SITE_DIVISIONS, EXPENSE_CATEGORIES, ExpenseCategory } from "@/types";
 
 const MONTH_NAMES = [
   { num: 1, name: "Januari", short: "Jan" },
@@ -171,6 +171,7 @@ export default function DashboardPage() {
   // New request form state
   const [newTitle, setNewTitle] = useState("");
   const [newUnit, setNewUnit] = useState<string>("Rajeg & Pasar Kemis");
+  const [newCategory, setNewCategory] = useState<ExpenseCategory>("Akomodasi");
   const [newType, setNewType] = useState<RequestType>("CASH_ADVANCE");
   const [newAmount, setNewAmount] = useState("");
   const [newPurpose, setNewPurpose] = useState("");
@@ -594,6 +595,7 @@ export default function DashboardPage() {
       requestNumber: newDocNum,
       title: newTitle,
       unit: newUnit,
+      category: newCategory,
       costCenterId: newUnit.startsWith("HO") ? "cc-ho-01" : "cc-site-01",
       requesterName: requesterName,
       requesterRole: newType === "CASH_ADVANCE" ? "FIELD_TECH" : "SITE_SPV",
@@ -657,6 +659,7 @@ export default function DashboardPage() {
     setBankAccountName("");
     setRequestDate(new Date().toISOString().split("T")[0]);
     setNewUnit("Rajeg & Pasar Kemis");
+    setNewCategory("Akomodasi");
     setRequestItems([{ id: "ri-1", description: "", quantity: 1, unit: "Pcs", unitPrice: 0, discount: 0 }]);
   };
 
@@ -2235,9 +2238,13 @@ export default function DashboardPage() {
                                 <div className="font-bold text-slate-900 truncate">{req.title}</div>
                                 <div className="text-[11px] text-slate-500 line-clamp-1">{req.purpose}</div>
                                 <span className={`inline-block mt-1 px-1.5 py-0.2 rounded text-[9px] font-bold ${
-                                  req.requestType === "CASH_ADVANCE" ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"
+                                  req.category === "Perlengkapan & Peralatan" || req.requestType === "PURCHASE_REQUISITION" 
+                                    ? "bg-blue-100 text-blue-800" 
+                                    : req.category === "Kasbon" || req.requestType === "CASH_ADVANCE"
+                                    ? "bg-amber-100 text-amber-800"
+                                    : "bg-teal-100 text-teal-800"
                                 }`}>
-                                  {req.requestType === "CASH_ADVANCE" ? "Kas Bon Operasional" : "Pengadaan PO Barang"}
+                                  {req.category || (req.requestType === "CASH_ADVANCE" ? "Kas Bon Operasional" : "Pengadaan PO Barang")}
                                 </span>
                               </td>
                               <td className="px-4 py-3">
@@ -3364,15 +3371,25 @@ export default function DashboardPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Jenis Dokumen</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Kategori Pengajuan</label>
                   <select
-                    value={newType}
-                    onChange={(e) => setNewType(e.target.value as RequestType)}
+                    value={newCategory}
+                    onChange={(e) => {
+                      const val = e.target.value as ExpenseCategory;
+                      setNewCategory(val);
+                      if (val === "Perlengkapan & Peralatan") {
+                        setNewType("PURCHASE_REQUISITION");
+                      } else {
+                        setNewType("CASH_ADVANCE");
+                      }
+                    }}
                     className="w-full border border-slate-300 rounded-lg p-2 bg-white"
                   >
-                    <option value="CASH_ADVANCE">Kas Bon Operasional (Cash Advance)</option>
-                    <option value="PURCHASE_REQUISITION">Pesanan Pembelian Barang (PO)</option>
-                    <option value="REIMBURSEMENT">Klaim Reimbursement</option>
+                    {EXPENSE_CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -3409,7 +3426,7 @@ export default function DashboardPage() {
                   type="text"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder={newType === "PURCHASE_REQUISITION" ? "Misal: Pengadaan Switch Core & Patchcord Fiber Optic" : "Misal: Kas Bon Tarik Kabel Sentul City"}
+                  placeholder="Misal: Biaya Operasional / Pengadaan Material / Kas Bon Lapangan"
                   className="w-full border border-slate-300 rounded-lg p-2"
                   required
                 />
