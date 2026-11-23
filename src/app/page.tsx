@@ -238,6 +238,31 @@ export default function DashboardPage() {
   const [bankAccountName, setBankAccountName] = useState("");
   const [shippingAddress, setShippingAddress] = useState("Gudang Utama Jayahana, Sentul City");
 
+  // Form Pengajuan Strict Validation Rules
+  const isRequestItemsValid = useMemo(() => {
+    return (
+      requestItems.length > 0 &&
+      requestItems.every(
+        (item) => item.description.trim() !== "" && item.quantity > 0 && item.unitPrice > 0
+      )
+    );
+  }, [requestItems]);
+
+  const missingFields = useMemo(() => {
+    const list: string[] = [];
+    if (!newUnit) list.push("Site / Divisi");
+    if (!newCategory) list.push("Kategori Pengajuan");
+    if (!requesterName.trim()) list.push("Nama Pemohon");
+    if (!requestDate.trim()) list.push("Tanggal Pengajuan");
+    if (!isRequestItemsValid || requestItemsSubTotal <= 0) list.push("Rincian Barang/Jasa (Nama & Harga)");
+    if (!newPurpose.trim()) list.push("Catatan / Keterangan");
+    if (newType === "PURCHASE_REQUISITION" && !vendorName.trim()) list.push("Nama Pemasok / Vendor");
+    if (attachments.length === 0) list.push("Lampiran Dokumen/Foto");
+    return list;
+  }, [newUnit, newCategory, requesterName, requestDate, isRequestItemsValid, requestItemsSubTotal, newPurpose, newType, vendorName, attachments]);
+
+  const isFormValid = missingFields.length === 0;
+
   // New Income form state
   const [incomeTitle, setIncomeTitle] = useState("");
   const [incomeUnit, setIncomeUnit] = useState<BusinessUnit>("ME_CORE");
@@ -624,6 +649,10 @@ export default function DashboardPage() {
 
   const handleCreateRequest = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isFormValid) {
+      alert(`Mohon lengkapi semua data wajib sebelum mengirim:\n- ${missingFields.join("\n- ")}`);
+      return;
+    }
 
     // Use items table total if items have values, otherwise fall back to newAmount
     const parsedAmount = requestItemsSubTotal > 0 ? requestItemsSubTotal : parseFloat(newAmount || "0");
@@ -3379,11 +3408,14 @@ export default function DashboardPage() {
               {/* Row 1: Unit & Jenis Dokumen */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Site / Divisi</label>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Site / Divisi <span className="text-red-500">*</span>
+                  </label>
                   <select
                     value={newUnit}
                     onChange={(e) => setNewUnit(e.target.value)}
                     className="w-full border border-slate-300 rounded-lg p-2 bg-white"
+                    required
                   >
                     <optgroup label="Site Operasional">
                       <option value="Rajeg & Pasar Kemis">Rajeg &amp; Pasar Kemis</option>
@@ -3416,7 +3448,9 @@ export default function DashboardPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Kategori Pengajuan</label>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Kategori Pengajuan <span className="text-red-500">*</span>
+                  </label>
                   <select
                     value={newCategory}
                     onChange={(e) => {
@@ -3429,6 +3463,7 @@ export default function DashboardPage() {
                       }
                     }}
                     className="w-full border border-slate-300 rounded-lg p-2 bg-white"
+                    required
                   >
                     {EXPENSE_CATEGORIES.map((cat) => (
                       <option key={cat} value={cat}>
@@ -3442,7 +3477,9 @@ export default function DashboardPage() {
               {/* Row 2: Pemohon & Tanggal */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Nama Pemohon (Requester)</label>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Nama Pemohon (Requester) <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="text"
                     value={requesterName}
@@ -3453,7 +3490,9 @@ export default function DashboardPage() {
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Tanggal Pengajuan</label>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Tanggal Pengajuan <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="date"
                     value={requestDate}
@@ -3467,7 +3506,9 @@ export default function DashboardPage() {
               {/* TABEL RINCIAN BARANG / ITEM — Accurate Style */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="font-semibold text-slate-700">Rincian Barang / Jasa</label>
+                  <label className="font-semibold text-slate-700">
+                    Rincian Barang / Jasa <span className="text-red-500">*</span>
+                  </label>
                   <button
                     type="button"
                     onClick={addRequestItem}
@@ -3499,8 +3540,11 @@ export default function DashboardPage() {
                                 type="text"
                                 value={item.description}
                                 onChange={(e) => updateRequestItem(item.id, "description", e.target.value)}
-                                placeholder="Nama barang/jasa..."
-                                className="w-full border border-slate-200 rounded px-1.5 py-1 focus:outline-none focus:border-blue-400"
+                                placeholder="Nama barang/jasa (wajib)..."
+                                className={`w-full border rounded px-1.5 py-1 focus:outline-none ${
+                                  !item.description.trim() ? "border-amber-300 bg-amber-50/20 focus:border-amber-500" : "border-slate-200 focus:border-blue-400"
+                                }`}
+                                required
                               />
                             </td>
                             <td className="px-1 py-1">
@@ -3510,6 +3554,7 @@ export default function DashboardPage() {
                                 value={item.quantity}
                                 onChange={(e) => updateRequestItem(item.id, "quantity", parseFloat(e.target.value) || 1)}
                                 className="w-full border border-slate-200 rounded px-1 py-1 text-center focus:outline-none focus:border-blue-400"
+                                required
                               />
                             </td>
                             <td className="px-1 py-1">
@@ -3533,11 +3578,14 @@ export default function DashboardPage() {
                             <td className="px-1 py-1">
                               <input
                                 type="number"
-                                min={0}
+                                min={1}
                                 value={item.unitPrice || ""}
                                 onChange={(e) => updateRequestItem(item.id, "unitPrice", parseFloat(e.target.value) || 0)}
                                 placeholder="0"
-                                className="w-full border border-slate-200 rounded px-1 py-1 text-right font-mono focus:outline-none focus:border-blue-400"
+                                className={`w-full border rounded px-1 py-1 text-right font-mono focus:outline-none ${
+                                  item.unitPrice <= 0 ? "border-amber-300 bg-amber-50/20 focus:border-amber-500" : "border-slate-200 focus:border-blue-400"
+                                }`}
+                                required
                               />
                             </td>
                             <td className="px-1 py-1">
@@ -3635,13 +3683,16 @@ export default function DashboardPage() {
               )}
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Catatan / Keterangan</label>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Catatan / Keterangan <span className="text-red-500">*</span>
+                </label>
                 <textarea
                   value={newPurpose}
                   onChange={(e) => setNewPurpose(e.target.value)}
-                  placeholder="Tambahkan catatan atau keterangan pengajuan..."
+                  placeholder="Tambahkan catatan atau keterangan pengajuan (wajib diisi)..."
                   rows={2}
                   className="w-full border border-slate-300 rounded-lg p-2"
+                  required
                 />
               </div>
 
@@ -3651,11 +3702,18 @@ export default function DashboardPage() {
                   <label className="font-semibold text-slate-700 flex items-center gap-1.5 text-xs">
                     <Paperclip className="w-3.5 h-3.5 text-blue-600" />
                     <span>Lampiran Dokumen / Bukti Pendukung</span>
+                    <span className="text-red-500 font-bold">*</span>
                     <span className="text-[10px] font-normal text-slate-400">(PDF, Gambar, atau Foto Kamera)</span>
                   </label>
-                  <span className="text-[10px] font-mono font-medium text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
-                    {attachments.length} berkas terlampir
-                  </span>
+                  {attachments.length === 0 ? (
+                    <span className="text-[10px] font-mono font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                      Wajib lampirkan min. 1 berkas / foto
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-mono font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      ✓ {attachments.length} berkas terlampir
+                    </span>
+                  )}
                 </div>
 
                 {/* Input File Tersembunyi */}
@@ -3772,6 +3830,28 @@ export default function DashboardPage() {
                 )}
               </div>
 
+              {/* Box Peringatan Kelengkapan Formulir jika ada kolom belum terisi */}
+              {!isFormValid && (
+                <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2 text-xs text-amber-800">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-[11px] text-amber-900">
+                      Semua kolom wajib diisi lengkap termasuk lampiran agar tombol Kirim aktif:
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {missingFields.map((field) => (
+                        <span
+                          key={field}
+                          className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100/90 border border-amber-300 text-[10px] font-medium text-amber-900"
+                        >
+                          ✕ {field}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="pt-3 flex justify-between items-center border-t border-slate-100">
                 <span className="text-slate-500 font-medium">
                   Total Pengajuan: <span className="font-bold text-slate-800 font-mono">Rp {requestItemsSubTotal.toLocaleString("id-ID")}</span>
@@ -3786,7 +3866,13 @@ export default function DashboardPage() {
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition cursor-pointer shadow-xs"
+                    disabled={!isFormValid}
+                    className={`px-4 py-2 rounded-lg font-semibold transition shadow-xs flex items-center gap-1.5 ${
+                      isFormValid
+                        ? "bg-blue-600 text-white hover:bg-blue-700 cursor-pointer"
+                        : "bg-slate-300 text-slate-500 cursor-not-allowed opacity-75"
+                    }`}
+                    title={!isFormValid ? `Lengkapi semua kolom: ${missingFields.join(", ")}` : "Kirim ke Tim Audit"}
                   >
                     Kirim ke Tim Audit (Step 1)
                   </button>
