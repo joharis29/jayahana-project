@@ -233,6 +233,11 @@ export default function DashboardPage() {
   const [newPurpose, setNewPurpose] = useState("");
   const [requesterName, setRequesterName] = useState("Tim Lapangan");
   const [requestDate, setRequestDate] = useState(new Date().toISOString().split("T")[0]);
+  const [dueDate, setDueDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().split("T")[0];
+  });
 
   // Item table for request form (Accurate style)
   type RequestLineItem = { id: string; description: string; quantity: number; unit: string; unitPrice: number; discount: number };
@@ -305,12 +310,13 @@ export default function DashboardPage() {
     if (!newCategory) list.push("Kategori Pengajuan");
     if (!requesterName.trim()) list.push("Nama Pemohon");
     if (!requestDate.trim()) list.push("Tanggal Pengajuan");
+    if (!dueDate.trim()) list.push("Tanggal Jatuh Tempo");
     if (!isRequestItemsValid || requestItemsSubTotal <= 0) list.push("Rincian Barang/Jasa (Nama & Harga)");
     if (!newPurpose.trim()) list.push("Catatan / Keterangan");
     if (newType === "PURCHASE_REQUISITION" && !vendorName.trim()) list.push("Nama Pemasok / Vendor");
     if (attachments.length === 0) list.push("Lampiran Dokumen/Foto");
     return list;
-  }, [newUnit, newCategory, requesterName, requestDate, isRequestItemsValid, requestItemsSubTotal, newPurpose, newType, vendorName, attachments]);
+  }, [newUnit, newCategory, requesterName, requestDate, dueDate, isRequestItemsValid, requestItemsSubTotal, newPurpose, newType, vendorName, attachments]);
 
   const isFormValid = missingFields.length === 0;
 
@@ -727,6 +733,7 @@ export default function DashboardPage() {
       status: "PENDING_AUDIT",
       purpose: newPurpose || autoTitle,
       createdAt: requestDate,
+      dueDate: dueDate,
       items: requestItems.filter(i => i.description).map(i => ({
         id: `item-${Date.now()}-${i.id}`,
         description: i.description,
@@ -782,6 +789,9 @@ export default function DashboardPage() {
     setBankAccountNumber("");
     setBankAccountName("");
     setRequestDate(new Date().toISOString().split("T")[0]);
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    setDueDate(nextWeek.toISOString().split("T")[0]);
     setNewUnit("Rajeg & Pasar Kemis");
     setNewCategory("Akomodasi");
     setAttachments([]);
@@ -2463,6 +2473,7 @@ export default function DashboardPage() {
                         <th className="px-4 py-3">Site / Divisi</th>
                         <th className="px-4 py-3">Pemohon</th>
                         <th className="px-4 py-3">Nominal Diajukan</th>
+                        <th className="px-4 py-3 text-center">Tanggal Jatuh Tempo</th>
                         <th className="px-4 py-3 text-center">Status Approval 3-Pintu</th>
                         <th className="px-4 py-3 text-right">Aksi &amp; Cetak</th>
                       </tr>
@@ -2514,6 +2525,16 @@ export default function DashboardPage() {
                               </td>
                               <td className="px-4 py-3 font-bold text-slate-900 text-xs font-mono">
                                 {formatRupiah(req.totalAmount)}
+                              </td>
+                              <td className="px-4 py-3 text-center whitespace-nowrap">
+                                {req.dueDate ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-xs font-medium border border-slate-200">
+                                    <Calendar className="w-3 h-3 text-slate-400" />
+                                    {req.dueDate}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400 font-mono text-[11px]">-</span>
+                                )}
                               </td>
                               <td className="px-4 py-3 text-center">
                                 {/* 3 Pintu Stepper Badges */}
@@ -2615,7 +2636,7 @@ export default function DashboardPage() {
 
                       {filteredRequests.length === 0 && (
                         <tr>
-                          <td colSpan={7} className="text-center py-10 text-slate-400 bg-white">
+                          <td colSpan={8} className="text-center py-10 text-slate-400 bg-white">
                             <div className="flex flex-col items-center justify-center gap-1.5">
                               <Filter className="w-6 h-6 text-slate-300" />
                               <span className="text-xs font-semibold text-slate-600">Tidak ada pengajuan yang sesuai dengan kriteria filter</span>
@@ -3667,8 +3688,8 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Row 2: Pemohon & Tanggal */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Row 2: Pemohon, Tanggal Pengajuan, & Tanggal Jatuh Tempo */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     Nama Pemohon (Requester) <span className="text-red-500">*</span>
@@ -3690,6 +3711,18 @@ export default function DashboardPage() {
                     type="date"
                     value={requestDate}
                     onChange={(e) => setRequestDate(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg p-2 bg-white"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Tanggal Jatuh Tempo <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
                     className="w-full border border-slate-300 rounded-lg p-2 bg-white"
                     required
                   />

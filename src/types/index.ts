@@ -251,6 +251,7 @@ export interface BudgetRequest {
   attachments?: RequestAttachment[];
   purpose: string;
   createdAt: string;
+  dueDate?: string; // Tanggal Jatuh Tempo (YYYY-MM-DD)
   disbursedAt?: string;
   settledAt?: string;
 }

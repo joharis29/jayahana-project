@@ -91,6 +91,7 @@ export const INITIAL_REQUESTS: BudgetRequest[] = [
     status: "COMPLETED",
     purpose: "Material lanjutan instalasi panel incoming pabrik KIIC Karawang",
     createdAt: "2026-11-10",
+    dueDate: "2026-11-25",
     items: [
       { id: "itm-1", description: "Kabel NYY 4x16mm Supreme (100 meter)", quantity: 2, unit: "Roll", estimatedPrice: 7500000, totalPrice: 15000000 },
       { id: "itm-2", description: "MCB 3 Phase 63A Schneider Acti9", quantity: 5, unit: "Pcs", estimatedPrice: 700000, totalPrice: 3500000 }
@@ -151,6 +152,7 @@ export const INITIAL_REQUESTS: BudgetRequest[] = [
     status: "DISBURSED",
     purpose: "BBM mobil operasional tangga, konsumsi lembur tim teknisi, dan klem tiang darurat penarikan fiber Sentul",
     createdAt: "2026-11-15",
+    dueDate: "2026-11-22",
     items: [
       { id: "itm-3", description: "BBM Operasional Lapangan (2 Mobil)", quantity: 1, unit: "Paket", estimatedPrice: 1000000, totalPrice: 1000000 },
       { id: "itm-4", description: "Aksesoris Klem Tiang & Suspension", quantity: 50, unit: "Pcs", estimatedPrice: 30000, totalPrice: 1500000 },
@@ -198,6 +200,7 @@ export const INITIAL_REQUESTS: BudgetRequest[] = [
     status: "PENDING_AUDIT",
     purpose: "Penguatan backbone dan ekspansi 2 cluster baru perumahan Sentul City Tahap 3",
     createdAt: "2026-11-18",
+    dueDate: "2026-11-30",
     items: [
       { id: "itm-6", description: "OLT EPON 8-Port Rackmount 1U", quantity: 2, unit: "Unit", estimatedPrice: 9500000, totalPrice: 19000000 },
       { id: "itm-7", description: "Optical Splitter PLC 1:16 Cassette", quantity: 10, unit: "Box", estimatedPrice: 550000, totalPrice: 5500000 }
@@ -231,6 +234,7 @@ export const INITIAL_REQUESTS: BudgetRequest[] = [
     status: "APPROVED_READY_PAY",
     purpose: "Sewa scaffolding 4 set untuk pekerjaan kabel tray di ketinggian 8 meter dan kalibrasi alat uji",
     createdAt: "2026-11-17",
+    dueDate: "2026-11-28",
     items: [
       { id: "itm-8", description: "Sewa Scaffolding 4 Set (7 Hari)", quantity: 4, unit: "Set", estimatedPrice: 650000, totalPrice: 2600000 },
       { id: "itm-9", description: "Jasa Kalibrasi Megger & Safety Inspector", quantity: 1, unit: "Paket", estimatedPrice: 1600000, totalPrice: 1600000 }

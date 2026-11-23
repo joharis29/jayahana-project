@@ -130,6 +130,9 @@ export function PrintableDocumentModal({
                   </div>
                   <div className="space-y-1">
                     <div><span className="text-slate-500">Tanggal Pengajuan:</span> <strong>{request.createdAt}</strong></div>
+                    {request.dueDate && (
+                      <div><span className="text-slate-500">Tgl Jatuh Tempo:</span> <strong className="text-amber-900 font-mono">{request.dueDate}</strong></div>
+                    )}
                     <div><span className="text-slate-500">Kategori Pengajuan:</span> <strong>{request.category || (request.requestType === "CASH_ADVANCE" ? "Kas Bon Operasional" : "Pembelian Barang / PO")}</strong></div>
                     <div><span className="text-slate-500">Status Persetujuan:</span> <strong className="text-blue-700">{request.status}</strong></div>
                   </div>
