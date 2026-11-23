@@ -420,6 +420,9 @@ export default function DashboardPage() {
   // Bukti Transfer Zoom Preview Modal
   const [selectedProofPreview, setSelectedProofPreview] = useState<RequestAttachment | null>(null);
 
+  // Pop-up Modal Detail Pengajuan Lengkap (Ketika No Dokumen / Judul diklik)
+  const [selectedDetailRequest, setSelectedDetailRequest] = useState<BudgetRequest | null>(null);
+
   // New Income form state
   const [incomeTitle, setIncomeTitle] = useState("");
   const [incomeUnit, setIncomeUnit] = useState<BusinessUnit>("ME_CORE");
@@ -2965,13 +2968,26 @@ export default function DashboardPage() {
                         return (
                           <tr key={req.id} className="hover:bg-slate-50/70 transition">
                             <td className="px-4 py-3 font-mono">
-                              <span className="font-bold text-slate-900 block">{req.requestNumber}</span>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedDetailRequest(req)}
+                                className="font-bold text-slate-900 hover:text-blue-600 block text-left transition cursor-pointer group"
+                                title="Klik untuk melihat detail lengkap pengajuan"
+                              >
+                                <span className="group-hover:underline">{req.requestNumber}</span>
+                              </button>
                               <span className="text-[10px] text-slate-400 block">{req.createdAt}</span>
                             </td>
                             <td className="px-4 py-3 max-w-[280px]">
-                              {/* Kategori Pengajuan (Tulisan yang di-bold) */}
-                              <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                                <span>{req.category || (req.requestType === "CASH_ADVANCE" ? "Kasbon" : "Perlengkapan & Peralatan")}</span>
+                              {/* Kategori Pengajuan (Tulisan yang di-bold) - Klik untuk buka modal detail */}
+                              <div
+                                onClick={() => setSelectedDetailRequest(req)}
+                                className="font-bold text-slate-900 hover:text-blue-600 flex items-center gap-1.5 cursor-pointer group transition"
+                                title="Klik untuk melihat detail lengkap pengajuan"
+                              >
+                                <span className="group-hover:underline">
+                                  {req.category || (req.requestType === "CASH_ADVANCE" ? "Kasbon" : "Perlengkapan & Peralatan")}
+                                </span>
                                 {req.attachments && req.attachments.length > 0 && (
                                   <span className="inline-flex items-center text-[10px] text-blue-600 bg-blue-50 px-1 py-0.2 rounded border border-blue-200 font-normal">
                                     <Paperclip className="w-2.5 h-2.5 mr-0.5" />
@@ -2980,7 +2996,11 @@ export default function DashboardPage() {
                                 )}
                               </div>
                               {/* Catatan / Keterangan pada saat pengaju mengisi form (Tulisan yang tidak di-bold) */}
-                              <div className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug" title={req.purpose}>
+                              <div
+                                onClick={() => setSelectedDetailRequest(req)}
+                                className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug cursor-pointer hover:text-slate-700 transition"
+                                title="Klik untuk melihat detail lengkap pengajuan"
+                              >
                                 {req.purpose || "-"}
                               </div>
                             </td>
@@ -3348,9 +3368,24 @@ export default function DashboardPage() {
                         .filter(r => r.status === "APPROVED_READY_PAY" || r.disbursement)
                         .map((req) => (
                           <tr key={req.id} className="hover:bg-slate-50/70 transition">
-                            <td className="px-4 py-3 font-mono font-bold text-slate-900">{req.requestNumber}</td>
+                            <td className="px-4 py-3 font-mono font-bold text-slate-900">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedDetailRequest(req)}
+                                className="hover:text-blue-600 hover:underline cursor-pointer text-left"
+                                title="Klik untuk melihat detail lengkap pengajuan"
+                              >
+                                {req.requestNumber}
+                              </button>
+                            </td>
                             <td className="px-4 py-3">
-                              <div className="font-bold text-slate-900">{req.title}</div>
+                              <div
+                                onClick={() => setSelectedDetailRequest(req)}
+                                className="font-bold text-slate-900 hover:text-blue-600 hover:underline cursor-pointer"
+                                title="Klik untuk melihat detail lengkap pengajuan"
+                              >
+                                {req.title}
+                              </div>
                               <span className="text-[10px] text-slate-400 font-mono">
                                 Tipe: {req.requestType === "CASH_ADVANCE" ? "Kas Bon Lapangan" : "Pengadaan PO"}
                               </span>
@@ -5601,6 +5636,366 @@ export default function DashboardPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedProofPreview(null)}
+                  className="px-4 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-semibold hover:bg-slate-900 transition cursor-pointer"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 10: POP-UP DETAIL LENGKAP PENGAJUAN */}
+      {selectedDetailRequest && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 my-6 max-h-[92vh] overflow-y-auto">
+            {/* Header Modal Detail */}
+            <div className="flex justify-between items-start pb-3 border-b border-slate-100 mb-4">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-bold text-slate-900 text-base font-mono">
+                    {selectedDetailRequest.requestNumber}
+                  </h3>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    selectedDetailRequest.requestType === "CASH_ADVANCE"
+                      ? "bg-amber-100 text-amber-800"
+                      : "bg-blue-100 text-blue-800"
+                  }`}>
+                    {selectedDetailRequest.requestType === "CASH_ADVANCE" ? "Kas Bon Operasional" : "Pesanan Pembelian (PO)"}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                    {selectedDetailRequest.unit}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Kategori: <strong>{selectedDetailRequest.category || "Operasional"}</strong> &bull; Dibuat: {selectedDetailRequest.createdAt}
+                  {selectedDetailRequest.dueDate && (
+                    <> &bull; Jatuh Tempo: <span className="font-mono font-medium text-slate-700">{selectedDetailRequest.dueDate}</span></>
+                  )}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedDetailRequest(null)}
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Banner Status Approval */}
+            <div className="mb-4">
+              {selectedDetailRequest.status === "NEED_REVISION" && (
+                <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <strong className="block font-bold text-amber-950">Pengajuan Ini Perlu Direvisi:</strong>
+                    <p className="mt-1 font-mono text-[11px] bg-white/70 p-2 rounded border border-amber-200 italic">
+                      "{selectedDetailRequest.revisionNote || "Mohon perbaiki data pengajuan sesuai instruksi."}"
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {selectedDetailRequest.status === "REJECTED" && (
+                <div className="p-3 bg-red-50 border border-red-300 rounded-xl text-xs text-red-900 flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <strong className="block font-bold text-red-950">Pengajuan Ditolak:</strong>
+                    <p className="mt-1 font-mono text-[11px] bg-white/70 p-2 rounded border border-red-200 italic">
+                      "{selectedDetailRequest.rejectedNote || "Pengajuan ini tidak disetujui reviewer."}"
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {selectedDetailRequest.disbursement && (
+                <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-xs text-emerald-950 flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <strong className="block font-bold text-emerald-900">Dana Telah Dicairkan oleh Finance:</strong>
+                    <div className="mt-1 grid grid-cols-2 gap-2 text-[11px] text-emerald-800">
+                      <div>No. Voucher BKK: <strong className="font-mono text-emerald-950">{selectedDetailRequest.disbursement.voucherNumber}</strong></div>
+                      <div>Tanggal Bayar: <strong className="font-mono text-emerald-950">{selectedDetailRequest.disbursement.disbursedAt}</strong></div>
+                      <div>Rekening Sumber: <strong>{selectedDetailRequest.disbursement.sourceAccount}</strong></div>
+                      <div>Ref Transaksi: <strong className="font-mono text-blue-900">{selectedDetailRequest.disbursement.transferReference}</strong></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Grid Informasi Pokok Pengajuan */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs mb-4">
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                <span className="text-[10px] text-slate-500 uppercase font-semibold block">Pemohon</span>
+                <strong className="text-slate-900 block mt-0.5 truncate">{selectedDetailRequest.requesterName}</strong>
+                <span className="text-[10px] text-slate-400 block truncate">{selectedDetailRequest.requesterRole}</span>
+              </div>
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                <span className="text-[10px] text-slate-500 uppercase font-semibold block">Site / Divisi</span>
+                <strong className="text-slate-900 block mt-0.5 truncate">{selectedDetailRequest.unit}</strong>
+                <span className="text-[10px] text-slate-400 block truncate">{selectedDetailRequest.costCenterId}</span>
+              </div>
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                <span className="text-[10px] text-slate-500 uppercase font-semibold block">Status Saat Ini</span>
+                <div className="mt-1">
+                  {selectedDetailRequest.status === "PENDING_AUDIT" && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Menunggu Audit</span>
+                  )}
+                  {selectedDetailRequest.status === "PENDING_PM" && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-300">Menunggu PM</span>
+                  )}
+                  {selectedDetailRequest.status === "PENDING_GM" && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-300">Menunggu GM</span>
+                  )}
+                  {selectedDetailRequest.status === "PENDING_DIRECTOR" && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-300">Menunggu Dirut</span>
+                  )}
+                  {selectedDetailRequest.status === "APPROVED_READY_PAY" && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-400">Siap Dicairkan</span>
+                  )}
+                  {["DISBURSED", "COMPLETED"].includes(selectedDetailRequest.status) && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">Sudah Cair</span>
+                  )}
+                  {selectedDetailRequest.status === "NEED_REVISION" && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-300">Perlu Revisi</span>
+                  )}
+                  {selectedDetailRequest.status === "REJECTED" && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800 border border-red-300">Ditolak</span>
+                  )}
+                </div>
+              </div>
+              <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-right">
+                <span className="text-[10px] text-emerald-700 uppercase font-bold block">Total Nominal</span>
+                <strong className="text-base font-black text-emerald-950 font-mono block mt-0.5">
+                  {formatRupiah(selectedDetailRequest.totalAmount)}
+                </strong>
+              </div>
+            </div>
+
+            {/* Catatan / Keterangan Keperluan */}
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs mb-4">
+              <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Catatan / Keterangan Pengajuan:</span>
+              <p className="text-slate-800 leading-relaxed">
+                {selectedDetailRequest.purpose || selectedDetailRequest.title}
+              </p>
+            </div>
+
+            {/* Rincian Barang / Jasa */}
+            <div className="mb-4">
+              <h4 className="font-bold text-slate-800 text-xs uppercase mb-2 flex items-center justify-between">
+                <span>Rincian Barang &amp; Jasa yang Diajukan</span>
+                <span className="text-slate-400 font-mono text-[11px] font-normal">
+                  {(selectedDetailRequest.items || []).length} Item
+                </span>
+              </h4>
+              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+                <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
+                  <thead className="bg-slate-50 font-semibold text-slate-600">
+                    <tr>
+                      <th className="px-3 py-2 w-10 text-center">No</th>
+                      <th className="px-3 py-2">Nama Barang / Uraian Jasa</th>
+                      <th className="px-3 py-2 text-center w-16">Qty</th>
+                      <th className="px-3 py-2 text-center w-16">Satuan</th>
+                      <th className="px-3 py-2 text-right w-28">Harga Satuan</th>
+                      <th className="px-3 py-2 text-right w-32">Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {(selectedDetailRequest.items && selectedDetailRequest.items.length > 0) ? (
+                      selectedDetailRequest.items.map((it, idx) => (
+                        <tr key={it.id || idx} className="hover:bg-slate-50/70">
+                          <td className="px-3 py-2 text-center text-slate-400 font-mono">{idx + 1}</td>
+                          <td className="px-3 py-2 font-medium text-slate-800">{it.description}</td>
+                          <td className="px-3 py-2 text-center font-mono">{it.quantity}</td>
+                          <td className="px-3 py-2 text-center text-slate-500">{it.unit}</td>
+                          <td className="px-3 py-2 text-right font-mono">{formatRupiah(it.estimatedPrice)}</td>
+                          <td className="px-3 py-2 text-right font-bold font-mono text-slate-900">{formatRupiah(it.totalPrice)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={6} className="px-3 py-3 text-center text-slate-400 italic">
+                          Tidak ada rincian item.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                  <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
+                    <tr>
+                      <td colSpan={5} className="px-3 py-2 text-right text-slate-700">Total Pengajuan:</td>
+                      <td className="px-3 py-2 text-right font-mono text-emerald-800 text-sm">
+                        {formatRupiah(selectedDetailRequest.totalAmount)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+
+            {/* Informasi Vendor / Rekening (Khusus PO / Pembelian) */}
+            {selectedDetailRequest.vendorInfo && (
+              <div className="p-3 bg-blue-50/50 border border-blue-200 rounded-xl text-xs mb-4">
+                <span className="text-[10px] text-blue-800 uppercase font-bold block mb-1.5">Informasi Vendor &amp; Rekening Pembayaran:</span>
+                <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-700">
+                  <div>Nama Vendor: <strong className="text-slate-900">{selectedDetailRequest.vendorInfo.vendorName}</strong></div>
+                  <div>Syarat Bayar: <strong>{selectedDetailRequest.vendorInfo.paymentTerms || "Net 30"}</strong></div>
+                  <div>Bank: <strong>{selectedDetailRequest.vendorInfo.bankName}</strong></div>
+                  <div>No. Rekening: <strong className="font-mono text-blue-900">{selectedDetailRequest.vendorInfo.bankAccountNumber}</strong> (a.n. {selectedDetailRequest.vendorInfo.bankAccountName})</div>
+                  <div className="col-span-2">Alamat Pengiriman: <span className="text-slate-600">{selectedDetailRequest.vendorInfo.shippingAddress}</span></div>
+                </div>
+              </div>
+            )}
+
+            {/* Lampiran Dokumen Pemohon */}
+            <div className="mb-4">
+              <h4 className="font-bold text-slate-800 text-xs uppercase mb-2 flex items-center gap-1.5">
+                <Paperclip className="w-3.5 h-3.5 text-blue-600" />
+                <span>Lampiran Dokumen / Bukti Pendukung ({(selectedDetailRequest.attachments || []).length})</span>
+              </h4>
+              {selectedDetailRequest.attachments && selectedDetailRequest.attachments.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  {selectedDetailRequest.attachments.map((att) => (
+                    <div
+                      key={att.id}
+                      className="flex items-center justify-between p-2 bg-slate-50 border border-slate-200 rounded-lg hover:border-blue-300 transition"
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        {att.type.startsWith("image/") ? (
+                          <img
+                            src={att.dataUrl}
+                            alt={att.name}
+                            className="w-8 h-8 object-cover rounded border border-slate-200 shrink-0 cursor-pointer"
+                            onClick={() => setSelectedPreviewAttachment(att)}
+                          />
+                        ) : (
+                          <FileText className="w-6 h-6 text-red-500 shrink-0" />
+                        )}
+                        <div className="truncate">
+                          <span className="font-semibold text-slate-800 block truncate text-[11px]">{att.name}</span>
+                          <span className="text-[9px] text-slate-400 font-mono">{(att.size / 1024).toFixed(1)} KB &bull; {att.uploadedAt}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {att.type.startsWith("image/") ? (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPreviewAttachment(att)}
+                            className="p-1 text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
+                            title="Lihat Pratinjau Foto"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <a
+                            href={att.dataUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-1 text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
+                            title="Buka PDF"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-400 text-xs italic text-center">
+                  Tidak ada lampiran dokumen atau foto pendukung.
+                </div>
+              )}
+            </div>
+
+            {/* Bukti Transfer Pencairan oleh Finance jika ada */}
+            {selectedDetailRequest.disbursement?.proofAttachment && (
+              <div className="p-3 bg-emerald-50/70 border border-emerald-300 rounded-xl text-xs mb-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-[10px] text-emerald-800 uppercase font-bold flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    <span>Bukti Transfer / Pembayaran oleh Finance:</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedProofPreview(selectedDetailRequest.disbursement?.proofAttachment || null)}
+                    className="text-[10px] text-blue-700 hover:text-blue-900 font-bold underline cursor-pointer"
+                  >
+                    Buka Ukuran Penuh
+                  </button>
+                </div>
+                <div className="flex items-center gap-3">
+                  {selectedDetailRequest.disbursement.proofAttachment.type.startsWith("image/") ? (
+                    <img
+                      src={selectedDetailRequest.disbursement.proofAttachment.dataUrl}
+                      alt="Bukti Transfer"
+                      className="w-14 h-14 object-cover rounded border border-emerald-200 shrink-0 cursor-pointer shadow-2xs"
+                      onClick={() => setSelectedProofPreview(selectedDetailRequest.disbursement?.proofAttachment || null)}
+                    />
+                  ) : (
+                    <FileText className="w-10 h-10 text-red-500 shrink-0" />
+                  )}
+                  <div className="text-[11px] text-slate-700">
+                    <span className="font-bold text-slate-900 block">{selectedDetailRequest.disbursement.proofAttachment.name}</span>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      Ref: {selectedDetailRequest.disbursement.transferReference} &bull; {(selectedDetailRequest.disbursement.proofAttachment.size / 1024).toFixed(1)} KB
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Tombol Aksi di Bawah Modal */}
+            <div className="pt-3 flex justify-between items-center border-t border-slate-100 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const req = selectedDetailRequest;
+                    handleOpenPrintModal(req, "REQUEST");
+                  }}
+                  className="flex items-center gap-1 px-3 py-1.5 text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-xs font-semibold transition cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5 text-slate-600" />
+                  <span>Cetak Form Pengajuan (A4)</span>
+                </button>
+
+                {selectedDetailRequest.disbursement && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const req = selectedDetailRequest;
+                      handleOpenPrintModal(req, "DISBURSEMENT");
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg text-xs font-bold transition cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Cetak Voucher BKK</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {selectedDetailRequest.status === "NEED_REVISION" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const req = selectedDetailRequest;
+                      setSelectedDetailRequest(null);
+                      handleEditForRevision(req);
+                    }}
+                    className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Edit &amp; Ajukan Ulang</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedDetailRequest(null)}
                   className="px-4 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-semibold hover:bg-slate-900 transition cursor-pointer"
                 >
                   Tutup
