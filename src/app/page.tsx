@@ -43,7 +43,10 @@ import {
   Camera,
   Image as ImageIcon,
   Trash2,
-  Eye
+  Eye,
+  ArrowUpDown,
+  ArrowDownWideNarrow,
+  ArrowUpNarrowWide
 } from "lucide-react";
 import { PrintableDocumentModal } from "@/components/PrintableDocumentModal";
 import { 
@@ -95,14 +98,40 @@ export default function DashboardPage() {
   const [pendingApprovals, setPendingApprovals] = useState<PendingApprovalItem[]>(INITIAL_PENDING_APPROVALS);
   const [transactions, setTransactions] = useState<FinancialTransaction[]>(INITIAL_TRANSACTIONS);
 
+  // Request Sorting State
+  type RequestSortField = "docNumber" | "category" | "unit" | "requester" | "amount" | "dueDate" | "status";
+  type SortOrder = "ASC" | "DESC" | null;
+
+  const [requestSortField, setRequestSortField] = useState<RequestSortField | null>(null);
+  const [requestSortOrder, setRequestSortOrder] = useState<SortOrder>(null);
+
+  const handleToggleRequestSort = (field: RequestSortField) => {
+    if (requestSortField !== field) {
+      setRequestSortField(field);
+      setRequestSortOrder("ASC");
+    } else if (requestSortOrder === "ASC") {
+      setRequestSortOrder("DESC");
+    } else {
+      setRequestSortField(null);
+      setRequestSortOrder(null);
+    }
+  };
+
   // Request Filter Logic
-  const isRequestFilterActive = selectedUnit !== "ALL" || selectedCategoryFilter !== "ALL" || selectedStatusFilter !== "ALL" || requestSearchQuery.trim() !== "";
+  const isRequestFilterActive =
+    selectedUnit !== "ALL" ||
+    selectedCategoryFilter !== "ALL" ||
+    selectedStatusFilter !== "ALL" ||
+    requestSearchQuery.trim() !== "" ||
+    requestSortField !== null;
 
   const handleResetRequestFilters = () => {
     setSelectedUnit("ALL");
     setSelectedCategoryFilter("ALL");
     setSelectedStatusFilter("ALL");
     setRequestSearchQuery("");
+    setRequestSortField(null);
+    setRequestSortOrder(null);
   };
 
   const filteredRequests = useMemo(() => {
@@ -142,6 +171,42 @@ export default function DashboardPage() {
       return true;
     });
   }, [requests, selectedUnit, selectedCategoryFilter, selectedStatusFilter, requestSearchQuery]);
+
+  const sortedRequests = useMemo(() => {
+    const list = [...filteredRequests];
+    if (!requestSortField || !requestSortOrder) return list;
+
+    return list.sort((a, b) => {
+      let comp = 0;
+      switch (requestSortField) {
+        case "docNumber":
+          comp = (a.requestNumber || "").localeCompare(b.requestNumber || "");
+          break;
+        case "category": {
+          const catA = a.category || (a.requestType === "CASH_ADVANCE" ? "Kasbon" : "Perlengkapan & Peralatan");
+          const catB = b.category || (b.requestType === "CASH_ADVANCE" ? "Kasbon" : "Perlengkapan & Peralatan");
+          comp = catA.localeCompare(catB);
+          break;
+        }
+        case "unit":
+          comp = String(a.unit || "").localeCompare(String(b.unit || ""));
+          break;
+        case "requester":
+          comp = (a.requesterName || "").localeCompare(b.requesterName || "");
+          break;
+        case "amount":
+          comp = a.totalAmount - b.totalAmount;
+          break;
+        case "dueDate":
+          comp = (a.dueDate || "").localeCompare(b.dueDate || "");
+          break;
+        case "status":
+          comp = a.status.localeCompare(b.status);
+          break;
+      }
+      return requestSortOrder === "ASC" ? comp : -comp;
+    });
+  }, [filteredRequests, requestSortField, requestSortOrder]);
 
   // Period Filter State (Monthly vs Yearly)
   const [filterPeriodType, setFilterPeriodType] = useState<"MONTHLY" | "YEARLY">("MONTHLY");
@@ -2460,26 +2525,162 @@ export default function DashboardPage() {
                       </button>
                     )}
 
+                    {/* Status Sort Aktif Indicator */}
+                    {requestSortField && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-medium">
+                        <span>
+                          Sort: <strong>{
+                            requestSortField === "docNumber" ? "No. Dokumen" :
+                            requestSortField === "category" ? "Kategori" :
+                            requestSortField === "unit" ? "Site" :
+                            requestSortField === "requester" ? "Pemohon" :
+                            requestSortField === "amount" ? "Nominal" :
+                            requestSortField === "dueDate" ? "Jatuh Tempo" : "Status"
+                          }</strong> ({requestSortOrder === "ASC" ? "A-Z / Naik" : "Z-A / Turun"})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => { setRequestSortField(null); setRequestSortOrder(null); }}
+                          className="ml-0.5 text-blue-500 hover:text-blue-800 cursor-pointer font-bold"
+                          title="Hapus urutan"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    )}
+
                     <span className="text-[11px] text-slate-400 ml-auto shrink-0 font-mono">
-                      Menampilkan <strong className="text-slate-700">{filteredRequests.length}</strong> dari {requests.length} data
+                      Menampilkan <strong className="text-slate-700">{sortedRequests.length}</strong> dari {requests.length} data
                     </span>
                   </div>
 
                   <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
                     <thead className="bg-slate-50 font-semibold text-slate-600">
                       <tr>
-                        <th className="px-4 py-3">No. Dokumen</th>
-                        <th className="px-4 py-3">Kategori Pengajuan</th>
-                        <th className="px-4 py-3">Site / Divisi</th>
-                        <th className="px-4 py-3">Pemohon</th>
-                        <th className="px-4 py-3">Nominal Diajukan</th>
-                        <th className="px-4 py-3 text-center">Tanggal Jatuh Tempo</th>
-                        <th className="px-4 py-3 text-center">Status Approval 3-Pintu</th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleRequestSort("docNumber")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-600 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan No. Dokumen"
+                          >
+                            <span>No. Dokumen</span>
+                            <span className={`p-0.5 rounded transition ${requestSortField === "docNumber" ? "text-blue-600 bg-blue-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {requestSortField === "docNumber" ? (
+                                requestSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleRequestSort("category")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-600 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Kategori Pengajuan"
+                          >
+                            <span>Kategori Pengajuan</span>
+                            <span className={`p-0.5 rounded transition ${requestSortField === "category" ? "text-blue-600 bg-blue-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {requestSortField === "category" ? (
+                                requestSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleRequestSort("unit")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-600 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Site / Divisi"
+                          >
+                            <span>Site / Divisi</span>
+                            <span className={`p-0.5 rounded transition ${requestSortField === "unit" ? "text-blue-600 bg-blue-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {requestSortField === "unit" ? (
+                                requestSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleRequestSort("requester")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-600 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Pemohon"
+                          >
+                            <span>Pemohon</span>
+                            <span className={`p-0.5 rounded transition ${requestSortField === "requester" ? "text-blue-600 bg-blue-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {requestSortField === "requester" ? (
+                                requestSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleRequestSort("amount")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-600 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Nominal Diajukan"
+                          >
+                            <span>Nominal Diajukan</span>
+                            <span className={`p-0.5 rounded transition ${requestSortField === "amount" ? "text-blue-600 bg-blue-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {requestSortField === "amount" ? (
+                                requestSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleRequestSort("dueDate")}
+                            className="inline-flex items-center justify-center gap-1.5 font-semibold hover:text-blue-600 transition cursor-pointer select-none group w-full"
+                            title="Urutkan berdasarkan Tanggal Jatuh Tempo"
+                          >
+                            <span>Tanggal Jatuh Tempo</span>
+                            <span className={`p-0.5 rounded transition ${requestSortField === "dueDate" ? "text-blue-600 bg-blue-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {requestSortField === "dueDate" ? (
+                                requestSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleRequestSort("status")}
+                            className="inline-flex items-center justify-center gap-1.5 font-semibold hover:text-blue-600 transition cursor-pointer select-none group w-full"
+                            title="Urutkan berdasarkan Status Approval"
+                          >
+                            <span>Status Approval 3-Pintu</span>
+                            <span className={`p-0.5 rounded transition ${requestSortField === "status" ? "text-blue-600 bg-blue-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {requestSortField === "status" ? (
+                                requestSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
                         <th className="px-4 py-3 text-right">Aksi &amp; Cetak</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700">
-                      {filteredRequests.map((req) => {
+                      {sortedRequests.map((req) => {
                         const isAuditPassed = !["PENDING_AUDIT", "DRAFT"].includes(req.status);
                         const isFinancePassed = !["PENDING_AUDIT", "PENDING_FINANCE", "DRAFT"].includes(req.status);
                         const isDirectorPassed = ["APPROVED_READY_PAY", "DISBURSED", "COMPLETED"].includes(req.status);
@@ -2634,7 +2835,7 @@ export default function DashboardPage() {
                           );
                         })}
 
-                      {filteredRequests.length === 0 && (
+                      {sortedRequests.length === 0 && (
                         <tr>
                           <td colSpan={8} className="text-center py-10 text-slate-400 bg-white">
                             <div className="flex flex-col items-center justify-center gap-1.5">
