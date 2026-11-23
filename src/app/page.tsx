@@ -88,9 +88,60 @@ const MONTH_NAMES = [
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<"overview" | "requests" | "lpj" | "starlite" | "reports">("overview");
   const [selectedUnit, setSelectedUnit] = useState<BusinessUnit | "ALL">("ALL");
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>("ALL");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>("ALL");
+  const [requestSearchQuery, setRequestSearchQuery] = useState<string>("");
   const [requests, setRequests] = useState<BudgetRequest[]>(INITIAL_REQUESTS);
   const [pendingApprovals, setPendingApprovals] = useState<PendingApprovalItem[]>(INITIAL_PENDING_APPROVALS);
   const [transactions, setTransactions] = useState<FinancialTransaction[]>(INITIAL_TRANSACTIONS);
+
+  // Request Filter Logic
+  const isRequestFilterActive = selectedUnit !== "ALL" || selectedCategoryFilter !== "ALL" || selectedStatusFilter !== "ALL" || requestSearchQuery.trim() !== "";
+
+  const handleResetRequestFilters = () => {
+    setSelectedUnit("ALL");
+    setSelectedCategoryFilter("ALL");
+    setSelectedStatusFilter("ALL");
+    setRequestSearchQuery("");
+  };
+
+  const filteredRequests = useMemo(() => {
+    return requests.filter((r) => {
+      // 1. Site / Divisi filter
+      if (selectedUnit !== "ALL" && r.unit !== selectedUnit) return false;
+
+      // 2. Kategori filter
+      if (selectedCategoryFilter !== "ALL") {
+        const cat = r.category || (r.requestType === "CASH_ADVANCE" ? "Kasbon" : "Perlengkapan & Peralatan");
+        if (cat !== selectedCategoryFilter) return false;
+      }
+
+      // 3. Status filter
+      if (selectedStatusFilter !== "ALL") {
+        if (selectedStatusFilter === "PENDING_AUDIT" && r.status !== "PENDING_AUDIT") return false;
+        if (selectedStatusFilter === "PENDING_FINANCE" && r.status !== "PENDING_FINANCE") return false;
+        if (selectedStatusFilter === "PENDING_DIRECTOR" && r.status !== "PENDING_DIRECTOR") return false;
+        if (selectedStatusFilter === "APPROVED_READY_PAY" && r.status !== "APPROVED_READY_PAY") return false;
+        if (selectedStatusFilter === "DISBURSED" && !["DISBURSED", "COMPLETED"].includes(r.status)) return false;
+      }
+
+      // 4. Search query
+      if (requestSearchQuery.trim()) {
+        const q = requestSearchQuery.toLowerCase();
+        const matchDoc = (r.requestNumber || "").toLowerCase().includes(q);
+        const matchCat = (r.category || "").toLowerCase().includes(q);
+        const matchTitle = (r.title || "").toLowerCase().includes(q);
+        const matchPurpose = (r.purpose || "").toLowerCase().includes(q);
+        const matchRequester = (r.requesterName || "").toLowerCase().includes(q);
+        const matchUnit = String(r.unit || "").toLowerCase().includes(q);
+        if (!matchDoc && !matchCat && !matchTitle && !matchPurpose && !matchRequester && !matchUnit) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [requests, selectedUnit, selectedCategoryFilter, selectedStatusFilter, requestSearchQuery]);
 
   // Period Filter State (Monthly vs Yearly)
   const [filterPeriodType, setFilterPeriodType] = useState<"MONTHLY" | "YEARLY">("MONTHLY");
@@ -2243,30 +2294,50 @@ export default function DashboardPage() {
             {/* KONTEN TAHAP 1: PENGAJUAN & PO (APPROVAL 3 PINTU) */}
             {requestWorkflowSubTab === "PROPOSAL" && (
               <div className="space-y-4">
-                {/* Stats Alert Box */}
+                {/* Stats Alert Box with Quick Filter Click */}
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
-                  <div className="p-3 bg-white rounded-xl border border-slate-200">
+                  <div
+                    onClick={() => setSelectedStatusFilter(prev => prev === "PENDING_AUDIT" ? "ALL" : "PENDING_AUDIT")}
+                    className={`p-3 bg-white rounded-xl border transition cursor-pointer hover:shadow-xs ${
+                      selectedStatusFilter === "PENDING_AUDIT" ? "border-amber-400 bg-amber-50/50 ring-1 ring-amber-300" : "border-slate-200"
+                    }`}
+                  >
                     <span className="text-slate-500 block">Menunggu Audit</span>
                     <strong className="text-base text-amber-700 font-extrabold">
                       {requests.filter(r => r.status === "PENDING_AUDIT").length} Dokumen
                     </strong>
-                    <span className="text-[10px] text-slate-400 block mt-0.5">Uji kepatuhan SOP & pagu</span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Uji kepatuhan SOP &amp; pagu</span>
                   </div>
-                  <div className="p-3 bg-white rounded-xl border border-slate-200">
+                  <div
+                    onClick={() => setSelectedStatusFilter(prev => prev === "PENDING_FINANCE" ? "ALL" : "PENDING_FINANCE")}
+                    className={`p-3 bg-white rounded-xl border transition cursor-pointer hover:shadow-xs ${
+                      selectedStatusFilter === "PENDING_FINANCE" ? "border-blue-400 bg-blue-50/50 ring-1 ring-blue-300" : "border-slate-200"
+                    }`}
+                  >
                     <span className="text-slate-500 block">Menunggu Finance</span>
                     <strong className="text-base text-blue-700 font-extrabold">
                       {requests.filter(r => r.status === "PENDING_FINANCE").length} Dokumen
                     </strong>
-                    <span className="text-[10px] text-slate-400 block mt-0.5">Cek saldo kas & bank</span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Cek saldo kas &amp; bank</span>
                   </div>
-                  <div className="p-3 bg-white rounded-xl border border-slate-200">
+                  <div
+                    onClick={() => setSelectedStatusFilter(prev => prev === "PENDING_DIRECTOR" ? "ALL" : "PENDING_DIRECTOR")}
+                    className={`p-3 bg-white rounded-xl border transition cursor-pointer hover:shadow-xs ${
+                      selectedStatusFilter === "PENDING_DIRECTOR" ? "border-indigo-400 bg-indigo-50/50 ring-1 ring-indigo-300" : "border-slate-200"
+                    }`}
+                  >
                     <span className="text-slate-500 block">Menunggu Direktur</span>
                     <strong className="text-base text-indigo-700 font-extrabold">
                       {requests.filter(r => r.status === "PENDING_DIRECTOR").length} Dokumen
                     </strong>
                     <span className="text-[10px] text-slate-400 block mt-0.5">Otorisasi final direksi</span>
                   </div>
-                  <div className="p-3 bg-white rounded-xl border border-slate-200 bg-emerald-50/50">
+                  <div
+                    onClick={() => setSelectedStatusFilter(prev => prev === "APPROVED_READY_PAY" ? "ALL" : "APPROVED_READY_PAY")}
+                    className={`p-3 bg-white rounded-xl border transition cursor-pointer hover:shadow-xs ${
+                      selectedStatusFilter === "APPROVED_READY_PAY" ? "border-emerald-400 bg-emerald-100/60 ring-1 ring-emerald-300" : "border-slate-200 bg-emerald-50/50"
+                    }`}
+                  >
                     <span className="text-emerald-800 block">Siap Dicairkan (Approved)</span>
                     <strong className="text-base text-emerald-800 font-extrabold">
                       {requests.filter(r => r.status === "APPROVED_READY_PAY").length} Dokumen
@@ -2277,50 +2348,153 @@ export default function DashboardPage() {
 
                 {/* Tabel Pengajuan */}
                 <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
-                  <div className="p-3 border-b border-slate-100 flex justify-between items-center text-xs">
-                    <span className="font-bold text-slate-900">Daftar Pengajuan Anggaran & Pesanan Pembelian (PO)</span>
-                    <span className="text-slate-400 font-mono text-[11px]">Memerlukan Approval 3-Pintu: Audit &rarr; Finance &rarr; Direktur</span>
+                  <div className="p-3 border-b border-slate-100 flex flex-wrap justify-between items-center gap-2 text-xs">
+                    <div>
+                      <span className="font-bold text-slate-900 text-sm block">Daftar Pengajuan Anggaran &amp; Pesanan Pembelian (PO)</span>
+                      <span className="text-slate-400 font-mono text-[11px]">Memerlukan Approval 3-Pintu: Audit &rarr; Finance &rarr; Direktur</span>
+                    </div>
+                  </div>
+
+                  {/* BAR FILTER LENGKAP & PENCARIAN */}
+                  <div className="p-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center gap-2.5 text-xs">
+                    {/* Search Input */}
+                    <div className="relative flex-1 min-w-[200px]">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={requestSearchQuery}
+                        onChange={(e) => setRequestSearchQuery(e.target.value)}
+                        placeholder="Cari no. dokumen, catatan, pemohon..."
+                        className="w-full bg-white border border-slate-200 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-400 shadow-2xs"
+                      />
+                      {requestSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setRequestSearchQuery("")}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Filter Site / Divisi */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-500 font-medium shrink-0">Site:</span>
+                      <select
+                        value={selectedUnit}
+                        onChange={(e) => setSelectedUnit(e.target.value as any)}
+                        className="border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 cursor-pointer focus:outline-none focus:border-blue-400 shadow-2xs"
+                      >
+                        <option value="ALL">Semua Site / Divisi</option>
+                        <optgroup label="Site Operasional">
+                          {SITE_DIVISIONS.filter(s => !s.startsWith("HO")).map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Head Office (HO)">
+                          {SITE_DIVISIONS.filter(s => s.startsWith("HO")).map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Unit Bisnis Legacy">
+                          <option value="ME_CORE">Jasa ME Core</option>
+                          <option value="STARLITE_FTTH">Starlite FTTH</option>
+                          <option value="OVERHEAD_OPERASIONAL">Overhead / Umum</option>
+                        </optgroup>
+                      </select>
+                    </div>
+
+                    {/* Filter Kategori Pengajuan */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-500 font-medium shrink-0">Kategori:</span>
+                      <select
+                        value={selectedCategoryFilter}
+                        onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+                        className="border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 cursor-pointer focus:outline-none focus:border-blue-400 shadow-2xs max-w-[170px]"
+                      >
+                        <option value="ALL">Semua Kategori</option>
+                        {EXPENSE_CATEGORIES.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Filter Status Approval */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-500 font-medium shrink-0">Status:</span>
+                      <select
+                        value={selectedStatusFilter}
+                        onChange={(e) => setSelectedStatusFilter(e.target.value)}
+                        className="border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 cursor-pointer focus:outline-none focus:border-blue-400 shadow-2xs"
+                      >
+                        <option value="ALL">Semua Status</option>
+                        <option value="PENDING_AUDIT">Menunggu Audit</option>
+                        <option value="PENDING_FINANCE">Menunggu Finance</option>
+                        <option value="PENDING_DIRECTOR">Menunggu Direktur</option>
+                        <option value="APPROVED_READY_PAY">Siap Dicairkan</option>
+                        <option value="DISBURSED">Sudah Cair / Selesai</option>
+                      </select>
+                    </div>
+
+                    {/* Tombol Reset Filter */}
+                    {isRequestFilterActive && (
+                      <button
+                        type="button"
+                        onClick={handleResetRequestFilters}
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-medium text-xs transition cursor-pointer"
+                        title="Reset semua filter"
+                      >
+                        <RotateCw className="w-3 h-3" />
+                        <span>Reset</span>
+                      </button>
+                    )}
+
+                    <span className="text-[11px] text-slate-400 ml-auto shrink-0 font-mono">
+                      Menampilkan <strong className="text-slate-700">{filteredRequests.length}</strong> dari {requests.length} data
+                    </span>
                   </div>
 
                   <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
                     <thead className="bg-slate-50 font-semibold text-slate-600">
                       <tr>
                         <th className="px-4 py-3">No. Dokumen</th>
-                        <th className="px-4 py-3">Judul & Peruntukan</th>
+                        <th className="px-4 py-3">Kategori Pengajuan</th>
                         <th className="px-4 py-3">Site / Divisi</th>
                         <th className="px-4 py-3">Pemohon</th>
                         <th className="px-4 py-3">Nominal Diajukan</th>
                         <th className="px-4 py-3 text-center">Status Approval 3-Pintu</th>
-                        <th className="px-4 py-3 text-right">Aksi & Cetak</th>
+                        <th className="px-4 py-3 text-right">Aksi &amp; Cetak</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700">
-                      {requests
-                        .filter(r => selectedUnit === "ALL" || r.unit === selectedUnit)
-                        .map((req) => {
-                          const isAuditPassed = !["PENDING_AUDIT", "DRAFT"].includes(req.status);
-                          const isFinancePassed = !["PENDING_AUDIT", "PENDING_FINANCE", "DRAFT"].includes(req.status);
-                          const isDirectorPassed = ["APPROVED_READY_PAY", "DISBURSED", "COMPLETED"].includes(req.status);
+                      {filteredRequests.map((req) => {
+                        const isAuditPassed = !["PENDING_AUDIT", "DRAFT"].includes(req.status);
+                        const isFinancePassed = !["PENDING_AUDIT", "PENDING_FINANCE", "DRAFT"].includes(req.status);
+                        const isDirectorPassed = ["APPROVED_READY_PAY", "DISBURSED", "COMPLETED"].includes(req.status);
 
-                          return (
-                            <tr key={req.id} className="hover:bg-slate-50/70 transition">
-                              <td className="px-4 py-3 font-mono">
-                                <span className="font-bold text-slate-900 block">{req.requestNumber}</span>
-                                <span className="text-[10px] text-slate-400 block">{req.createdAt}</span>
-                              </td>
-                              <td className="px-4 py-3 max-w-[260px]">
-                                <div className="font-bold text-slate-900 truncate">{req.title}</div>
-                                <div className="text-[11px] text-slate-500 line-clamp-1">{req.purpose}</div>
-                                <span className={`inline-block mt-1 px-1.5 py-0.2 rounded text-[9px] font-bold ${
-                                  req.category === "Perlengkapan & Peralatan" || req.requestType === "PURCHASE_REQUISITION" 
-                                    ? "bg-blue-100 text-blue-800" 
-                                    : req.category === "Kasbon" || req.requestType === "CASH_ADVANCE"
-                                    ? "bg-amber-100 text-amber-800"
-                                    : "bg-teal-100 text-teal-800"
-                                }`}>
-                                  {req.category || (req.requestType === "CASH_ADVANCE" ? "Kas Bon Operasional" : "Pengadaan PO Barang")}
-                                </span>
-                              </td>
+                        return (
+                          <tr key={req.id} className="hover:bg-slate-50/70 transition">
+                            <td className="px-4 py-3 font-mono">
+                              <span className="font-bold text-slate-900 block">{req.requestNumber}</span>
+                              <span className="text-[10px] text-slate-400 block">{req.createdAt}</span>
+                            </td>
+                            <td className="px-4 py-3 max-w-[280px]">
+                              {/* Kategori Pengajuan (Tulisan yang di-bold) */}
+                              <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                                <span>{req.category || (req.requestType === "CASH_ADVANCE" ? "Kasbon" : "Perlengkapan & Peralatan")}</span>
+                                {req.attachments && req.attachments.length > 0 && (
+                                  <span className="inline-flex items-center text-[10px] text-blue-600 bg-blue-50 px-1 py-0.2 rounded border border-blue-200 font-normal">
+                                    <Paperclip className="w-2.5 h-2.5 mr-0.5" />
+                                    {req.attachments.length}
+                                  </span>
+                                )}
+                              </div>
+                              {/* Catatan / Keterangan pada saat pengaju mengisi form (Tulisan yang tidak di-bold) */}
+                              <div className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug" title={req.purpose}>
+                                {req.purpose || "-"}
+                              </div>
+                            </td>
                               <td className="px-4 py-3">
                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                                   req.unit === "ME_CORE" 
@@ -2438,6 +2612,25 @@ export default function DashboardPage() {
                             </tr>
                           );
                         })}
+
+                      {filteredRequests.length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="text-center py-10 text-slate-400 bg-white">
+                            <div className="flex flex-col items-center justify-center gap-1.5">
+                              <Filter className="w-6 h-6 text-slate-300" />
+                              <span className="text-xs font-semibold text-slate-600">Tidak ada pengajuan yang sesuai dengan kriteria filter</span>
+                              <span className="text-[11px] text-slate-400">Coba ubah kata kunci pencarian atau sesuaikan opsi filter di atas.</span>
+                              <button
+                                type="button"
+                                onClick={handleResetRequestFilters}
+                                className="mt-2 text-xs text-blue-600 hover:text-blue-800 font-semibold underline cursor-pointer"
+                              >
+                                Reset Semua Filter
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
