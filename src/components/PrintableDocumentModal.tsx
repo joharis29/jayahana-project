@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Printer, X, CheckCircle2, AlertTriangle, ShieldCheck, FileText, Building2, Wifi } from "lucide-react";
+import { Printer, X, CheckCircle2, AlertTriangle, ShieldCheck, FileText, Building2, Wifi, Paperclip } from "lucide-react";
 import type { BudgetRequest, GoodsReceiptRecord, RealizationRecord, SalesInvoice, OfficialReceiptBKM } from "@/types";
 
 interface PrintableDocumentModalProps {
@@ -267,6 +267,52 @@ export function PrintableDocumentModal({
                     Keterangan: {request.title} &bull; Ref Transfer: {request.disbursement?.transferReference || "TRF-BCA-981240"}
                   </span>
                 </div>
+
+                {/* Lampiran Bukti Transfer / Slip Setoran Bank */}
+                {request.disbursement?.proofAttachment && (
+                  <div className="my-4 p-3.5 bg-slate-50 border border-slate-300 rounded-lg text-xs">
+                    <div className="flex justify-between items-center mb-2 pb-1.5 border-b border-slate-200">
+                      <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                        <Paperclip className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Lampiran Bukti Transfer / Bukti Pembayaran Resmi:</span>
+                      </span>
+                      <span className="text-[10px] text-emerald-800 font-bold bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
+                        ✓ Bukti Kas Keluar (BKK) Sah &amp; Terverifikasi
+                      </span>
+                    </div>
+
+                    <div className="flex items-start gap-4">
+                      {request.disbursement.proofAttachment.type.startsWith("image/") ? (
+                        <div className="border border-slate-300 rounded-lg p-1 bg-white shadow-2xs shrink-0">
+                          <img
+                            src={request.disbursement.proofAttachment.dataUrl}
+                            alt="Bukti Transfer"
+                            className="max-h-48 max-w-[260px] object-contain rounded"
+                          />
+                        </div>
+                      ) : (
+                        <div className="p-4 border border-slate-300 rounded-lg bg-white flex items-center gap-2">
+                          <FileText className="w-8 h-8 text-red-500 shrink-0" />
+                          <div>
+                            <span className="font-bold text-slate-900 block">{request.disbursement.proofAttachment.name}</span>
+                            <span className="text-[10px] text-slate-400 font-mono">Dokumen Bukti Transfer PDF Terlampir</span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="space-y-1.5 text-[11px] text-slate-600">
+                        <div>Nama Berkas: <strong className="text-slate-900">{request.disbursement.proofAttachment.name}</strong></div>
+                        <div>Ukuran: <strong className="font-mono text-slate-800">{(request.disbursement.proofAttachment.size / 1024).toFixed(1)} KB</strong></div>
+                        <div>Waktu Unggah: <strong className="font-mono text-slate-800">{request.disbursement.proofAttachment.uploadedAt}</strong></div>
+                        <div>No. Ref Transaksi: <strong className="font-mono text-blue-800">{request.disbursement.transferReference}</strong></div>
+                        <div>Sumber Kas/Bank: <strong className="text-slate-800">{request.disbursement.sourceAccount}</strong></div>
+                        <p className="text-[10px] text-slate-400 italic mt-2">
+                          Bukti transfer di atas telah divalidasi oleh Finance Staff dan menjadi lampiran fisik/digital yang mengikat pada voucher pengeluaran ini.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -707,71 +753,179 @@ export function PrintableDocumentModal({
               </div>
             )}
 
-            {/* 4 KOLOM TANDA TANGAN RESMI PERUSAHAAN (KONSISTEN DI SEMUA FORM) */}
+            {/* TANDA TANGAN RESMI PERUSAHAAN SESUAI ALUR BERJENJANG */}
             <div className="mt-8 pt-4 border-t-2 border-slate-800">
-              <div className="grid grid-cols-4 gap-4 text-center text-xs">
-                
-                {/* 1. Diajukan / Dibuat Oleh */}
-                <div className="flex flex-col justify-between h-32 border border-slate-200 p-2 rounded bg-slate-50/50">
-                  <span className="text-[10px] uppercase font-bold text-slate-500">
-                    {invoice ? "Disiapkan Oleh (AR):" : "Diajukan Oleh:"}
-                  </span>
-                  <div className="font-serif italic text-slate-400 text-xs my-auto">
-                    [Tanda Tangan Digital]
-                  </div>
-                  <div>
-                    <strong className="block text-slate-900 underline">
-                      {invoice ? "Siti Rahmawati" : (request?.requesterName || "Pemohon")}
-                    </strong>
-                    <span className="text-[10px] text-slate-500 block">
-                      {invoice ? "Staf Billing & AR" : (request?.requesterRole || "Pemohon")}
+              {request ? (
+                /* Alur Approval Berjenjang untuk Pengajuan Anggaran & Kas Keluar */
+                <div className={`grid ${docType === "DISBURSEMENT" ? "grid-cols-6" : "grid-cols-5"} gap-2 text-center text-xs`}>
+                  {/* 1. Pemohon */}
+                  <div className="flex flex-col justify-between h-32 border border-slate-200 p-1.5 rounded bg-slate-50/50">
+                    <span className="text-[9px] uppercase font-bold text-slate-500">
+                      1. Diajukan Oleh:
                     </span>
+                    <div className="font-serif italic text-slate-400 text-[11px] my-auto">
+                      [Tanda Tangan Digital]
+                    </div>
+                    <div>
+                      <strong className="block text-slate-900 underline text-[11px]">
+                        {request.requesterName}
+                      </strong>
+                      <span className="text-[9px] text-slate-500 block truncate">
+                        {request.requesterRole} ({unitName})
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 2. Audit Internal */}
+                  <div className="flex flex-col justify-between h-32 border border-slate-200 p-1.5 rounded bg-slate-50/50">
+                    <span className="text-[9px] uppercase font-bold text-slate-500">
+                      2. Diperiksa (Audit):
+                    </span>
+                    <div className="font-serif italic text-blue-700 text-[11px] my-auto">
+                      [Verified by Audit]
+                    </div>
+                    <div>
+                      <strong className="block text-slate-900 underline text-[11px]">Budi Santoso, S.Ak</strong>
+                      <span className="text-[9px] text-slate-500 block">Internal Audit SOP &amp; Pagu</span>
+                    </div>
+                  </div>
+
+                  {/* 3. Project Manager (PM) */}
+                  <div className="flex flex-col justify-between h-32 border border-slate-200 p-1.5 rounded bg-slate-50/50">
+                    <span className="text-[9px] uppercase font-bold text-slate-500">
+                      3. Disetujui (PM):
+                    </span>
+                    <div className="font-serif italic text-sky-700 text-[11px] my-auto">
+                      [Approved by PM]
+                    </div>
+                    <div>
+                      <strong className="block text-slate-900 underline text-[11px]">Hendra Kurniawan, ST</strong>
+                      <span className="text-[9px] text-slate-500 block">Project Manager</span>
+                    </div>
+                  </div>
+
+                  {/* 4. General Manager (GM) */}
+                  <div className="flex flex-col justify-between h-32 border border-slate-200 p-1.5 rounded bg-slate-50/50">
+                    <span className="text-[9px] uppercase font-bold text-slate-500">
+                      4. Diketahui (GM):
+                    </span>
+                    <div className="font-serif italic text-purple-700 text-[11px] my-auto">
+                      [Approved by GM]
+                    </div>
+                    <div>
+                      <strong className="block text-slate-900 underline text-[11px]">Bambang Wicaksono, SE</strong>
+                      <span className="text-[9px] text-slate-500 block">General Manager</span>
+                    </div>
+                  </div>
+
+                  {/* 5. Direktur Utama (Khusus Transaksi > Rp 5.000.000) */}
+                  <div className="flex flex-col justify-between h-32 border border-slate-200 p-1.5 rounded bg-slate-50/50">
+                    <span className="text-[9px] uppercase font-bold text-slate-500">
+                      5. Otorisasi Dirut:
+                    </span>
+                    {request.totalAmount > 5000000 ? (
+                      <>
+                        <div className="font-serif italic text-indigo-700 text-[11px] my-auto font-bold">
+                          [Approved by Dirut]
+                        </div>
+                        <div>
+                          <strong className="block text-slate-900 underline text-[11px]">Ir. H. Sidqi Johari, MT</strong>
+                          <span className="text-[9px] text-slate-500 block">Direktur Utama (&gt; 5 Juta)</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="font-serif italic text-slate-400 text-[10px] my-auto px-1">
+                          Tidak Diperlukan<br />(Nominal &le; Rp 5 Jt)
+                        </div>
+                        <div>
+                          <span className="block text-slate-500 font-medium text-[10px]">Cukup Level GM</span>
+                          <span className="text-[8px] text-slate-400 block">SOP Threshold &le; 5 Juta</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* 6. Kasir / Finance (Khusus Form Pencairan BKK) */}
+                  {docType === "DISBURSEMENT" && (
+                    <div className="flex flex-col justify-between h-32 border border-emerald-300 p-1.5 rounded bg-emerald-50/50">
+                      <span className="text-[9px] uppercase font-bold text-emerald-800">
+                        6. Dibayarkan (Kasir):
+                      </span>
+                      <div className="font-serif italic text-emerald-800 text-[11px] my-auto font-bold">
+                        [Paid &amp; Attached]
+                      </div>
+                      <div>
+                        <strong className="block text-emerald-950 underline text-[11px]">Dewi Anggraeni, SE</strong>
+                        <span className="text-[9px] text-emerald-700 block">Finance Head &amp; Kasir</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* 4 Kolom Tanda Tangan untuk Faktur Penjualan / Tagihan Klien (AR) */
+                <div className="grid grid-cols-4 gap-4 text-center text-xs">
+                  {/* 1. Diajukan / Dibuat Oleh */}
+                  <div className="flex flex-col justify-between h-32 border border-slate-200 p-2 rounded bg-slate-50/50">
+                    <span className="text-[10px] uppercase font-bold text-slate-500">
+                      Disiapkan Oleh (AR):
+                    </span>
+                    <div className="font-serif italic text-slate-400 text-xs my-auto">
+                      [Tanda Tangan Digital]
+                    </div>
+                    <div>
+                      <strong className="block text-slate-900 underline">
+                        Siti Rahmawati
+                      </strong>
+                      <span className="text-[10px] text-slate-500 block">
+                        Staf Billing &amp; AR
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 2. Diperiksa Oleh (Audit) */}
+                  <div className="flex flex-col justify-between h-32 border border-slate-200 p-2 rounded bg-slate-50/50">
+                    <span className="text-[10px] uppercase font-bold text-slate-500">
+                      Audit Opname Fisik:
+                    </span>
+                    <div className="font-serif italic text-blue-700 text-xs my-auto">
+                      [Verified by Audit]
+                    </div>
+                    <div>
+                      <strong className="block text-slate-900 underline">Budi Santoso, S.Ak</strong>
+                      <span className="text-[10px] text-slate-500 block">Tim Audit Internal</span>
+                    </div>
+                  </div>
+
+                  {/* 3. Diverifikasi Oleh (Finance & Tax) */}
+                  <div className="flex flex-col justify-between h-32 border border-slate-200 p-2 rounded bg-slate-50/50">
+                    <span className="text-[10px] uppercase font-bold text-slate-500">
+                      Verifikasi Tax &amp; Treasury:
+                    </span>
+                    <div className="font-serif italic text-emerald-700 text-xs my-auto">
+                      [Verified by Finance]
+                    </div>
+                    <div>
+                      <strong className="block text-slate-900 underline">Dewi Anggraeni, SE</strong>
+                      <span className="text-[10px] text-slate-500 block">Finance &amp; Treasury Head</span>
+                    </div>
+                  </div>
+
+                  {/* 4. Disetujui Oleh (Direktur) */}
+                  <div className="flex flex-col justify-between h-32 border border-slate-200 p-2 rounded bg-slate-50/50">
+                    <span className="text-[10px] uppercase font-bold text-slate-500">
+                      Disahkan Oleh (Direksi):
+                    </span>
+                    <div className="font-serif italic text-slate-800 text-xs my-auto">
+                      [Approved by Director]
+                    </div>
+                    <div>
+                      <strong className="block text-slate-900 underline">Ir. H. Sidqi Johari, MT</strong>
+                      <span className="text-[10px] text-slate-500 block">Direktur Utama</span>
+                    </div>
                   </div>
                 </div>
-
-                {/* 2. Diperiksa Oleh (Audit) */}
-                <div className="flex flex-col justify-between h-32 border border-slate-200 p-2 rounded bg-slate-50/50">
-                  <span className="text-[10px] uppercase font-bold text-slate-500">
-                    {invoice ? "Audit Opname Fisik:" : "Diperiksa Oleh:"}
-                  </span>
-                  <div className="font-serif italic text-blue-700 text-xs my-auto">
-                    [Verified by Audit]
-                  </div>
-                  <div>
-                    <strong className="block text-slate-900 underline">Budi Santoso, S.Ak</strong>
-                    <span className="text-[10px] text-slate-500 block">Tim Audit Internal</span>
-                  </div>
-                </div>
-
-                {/* 3. Diverifikasi Oleh (Finance & Tax) */}
-                <div className="flex flex-col justify-between h-32 border border-slate-200 p-2 rounded bg-slate-50/50">
-                  <span className="text-[10px] uppercase font-bold text-slate-500">
-                    {invoice ? "Verifikasi Tax & Treasury:" : "Diverifikasi Oleh:"}
-                  </span>
-                  <div className="font-serif italic text-emerald-700 text-xs my-auto">
-                    [Verified by Finance]
-                  </div>
-                  <div>
-                    <strong className="block text-slate-900 underline">Dewi Anggraeni, SE</strong>
-                    <span className="text-[10px] text-slate-500 block">Finance & Treasury Head</span>
-                  </div>
-                </div>
-
-                {/* 4. Disetujui Oleh (Direktur) */}
-                <div className="flex flex-col justify-between h-32 border border-slate-200 p-2 rounded bg-slate-50/50">
-                  <span className="text-[10px] uppercase font-bold text-slate-500">
-                    {invoice ? "Disahkan Oleh (Direksi):" : "Disetujui Oleh:"}
-                  </span>
-                  <div className="font-serif italic text-slate-800 text-xs my-auto">
-                    [Approved by Director]
-                  </div>
-                  <div>
-                    <strong className="block text-slate-900 underline">Ir. H. Sidqi Johari, MT</strong>
-                    <span className="text-[10px] text-slate-500 block">Direktur Utama</span>
-                  </div>
-                </div>
-
-              </div>
+              )}
 
               {/* Footer Keterangan Cetak */}
               <div className="mt-6 flex justify-between items-center text-[10px] text-slate-400 font-mono">

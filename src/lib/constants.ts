@@ -117,7 +117,15 @@ export const INITIAL_REQUESTS: BudgetRequest[] = [
       sourceAccount: "BCA Operasional (No: 731-0982-11)",
       paymentMethod: "TRANSFER_BANK",
       transferReference: "TRF-BCA-9812401",
-      amountPaid: 18500000
+      amountPaid: 18500000,
+      proofAttachment: {
+        id: "att-trf-001",
+        name: "Bukti_Transfer_BCA_Schneider.png",
+        type: "image/png",
+        size: 384000,
+        dataUrl: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=80",
+        uploadedAt: "12/11/2026 14:30"
+      }
     },
     goodsReceipt: {
       id: "gr-001",
@@ -238,6 +246,87 @@ export const INITIAL_REQUESTS: BudgetRequest[] = [
     items: [
       { id: "itm-8", description: "Sewa Scaffolding 4 Set (7 Hari)", quantity: 4, unit: "Set", estimatedPrice: 650000, totalPrice: 2600000 },
       { id: "itm-9", description: "Jasa Kalibrasi Megger & Safety Inspector", quantity: 1, unit: "Paket", estimatedPrice: 1600000, totalPrice: 1600000 }
+    ]
+  },
+  {
+    id: "req-005",
+    requestNumber: "CA-2026-STAR-045",
+    title: "Kasbon Konsumsi & BBM Survey Jalur FO",
+    category: "Operasional",
+    unit: "Bandung",
+    costCenterId: "cc-star-02",
+    requesterName: "Dedi Supardi",
+    requesterRole: "FIELD_TECH",
+    requestType: "CASH_ADVANCE",
+    totalAmount: 2200000,
+    status: "PENDING_PM",
+    purpose: "Biaya survey lapangan perizinan jalur kabel fiber optik area Bandung Timur",
+    createdAt: "2026-11-20",
+    dueDate: "2026-11-27",
+    items: [
+      { id: "itm-10", description: "BBM & Tol Mobil Lapangan", quantity: 1, unit: "Paket", estimatedPrice: 800000, totalPrice: 800000 },
+      { id: "itm-11", description: "Uang Makan & Lembur Tim Survey (4 hari)", quantity: 4, unit: "Hari", estimatedPrice: 350000, totalPrice: 1400000 }
+    ]
+  },
+  {
+    id: "req-006",
+    requestNumber: "PR-2026-ME-022",
+    title: "Pengadaan Tangga Teleskopik & Tools Safety ME",
+    category: "Perlengkapan & Peralatan",
+    unit: "Rajeg & Pasar Kemis",
+    costCenterId: "cc-me-01",
+    requesterName: "Agus Pratama",
+    requesterRole: "SITE_SPV",
+    requestType: "PURCHASE_REQUISITION",
+    totalAmount: 4800000,
+    status: "PENDING_GM",
+    purpose: "Penggantian tangga kerja rusak dan helm safety standar PLN untuk tim teknisi site",
+    createdAt: "2026-11-21",
+    dueDate: "2026-11-29",
+    items: [
+      { id: "itm-12", description: "Tangga Teleskopik 6.2 Meter Heavy Duty", quantity: 2, unit: "Unit", estimatedPrice: 1800000, totalPrice: 3600000 },
+      { id: "itm-13", description: "Helm Safety Proyek V-Gard + Tali Dagu", quantity: 12, unit: "Pcs", estimatedPrice: 100000, totalPrice: 1200000 }
+    ]
+  },
+  {
+    id: "req-007",
+    requestNumber: "PR-2026-STAR-015",
+    title: "Pengadaan Joint Closure FO & Fusion Splicer Spare",
+    category: "Perlengkapan & Peralatan",
+    unit: "Cimahi",
+    costCenterId: "cc-star-01",
+    requesterName: "Eko Prasetyo",
+    requesterRole: "PROCUREMENT",
+    requestType: "PURCHASE_REQUISITION",
+    totalAmount: 9500000,
+    status: "PENDING_DIRECTOR",
+    purpose: "Restock darurat joint closure 48 core dan penggantian electrode fusion splicer utama (nominal > 5 Juta)",
+    createdAt: "2026-11-22",
+    dueDate: "2026-12-02",
+    items: [
+      { id: "itm-14", description: "Dome Joint Closure FO 48 Core", quantity: 10, unit: "Unit", estimatedPrice: 450000, totalPrice: 4500000 },
+      { id: "itm-15", description: "Electrode & Battery Spare Fusion Splicer Inno", quantity: 1, unit: "Set", estimatedPrice: 5000000, totalPrice: 5000000 }
+    ]
+  },
+  {
+    id: "req-008",
+    requestNumber: "CA-2026-ME-029",
+    title: "Kasbon Perbaikan Genset Standby Site Tagogapu",
+    category: "Operasional",
+    unit: "Tagogapu",
+    costCenterId: "cc-me-01",
+    requesterName: "Hendra Gunawan",
+    requesterRole: "SITE_SPV",
+    requestType: "CASH_ADVANCE",
+    totalAmount: 3750000,
+    status: "NEED_REVISION",
+    purpose: "Penggantian filter oli, aki basah N70, dan flushing radiator genset backup",
+    createdAt: "2026-11-21",
+    dueDate: "2026-11-28",
+    revisionNote: "Mohon sertakan estimasi penawaran resmi dari bengkel genset dan foto aki lama yang rusak sebelum disetujui.",
+    items: [
+      { id: "itm-16", description: "Aki Basah GS Yuasa N70 12V 70Ah", quantity: 1, unit: "Unit", estimatedPrice: 1750000, totalPrice: 1750000 },
+      { id: "itm-17", description: "Jasa Servis, Filter & Oli Mesin Genset", quantity: 1, unit: "Paket", estimatedPrice: 2000000, totalPrice: 2000000 }
     ]
   }
 ];

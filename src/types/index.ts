@@ -84,10 +84,13 @@ export type RequestType = 'CASH_ADVANCE' | 'PURCHASE_REQUISITION' | 'REIMBURSEME
 export type ApprovalStatus = 
   | 'DRAFT'
   | 'PENDING_AUDIT'
+  | 'PENDING_PM'
+  | 'PENDING_GM'
   | 'PENDING_FINANCE'
   | 'PENDING_DIRECTOR'
   | 'APPROVED_READY_PAY'
   | 'DISBURSED'
+  | 'NEED_REVISION'
   | 'REALIZED_PENDING_AUDIT'
   | 'REALIZED_PENDING_FINANCE'
   | 'REALIZED_PENDING_DIRECTOR'
@@ -154,6 +157,8 @@ export interface DisbursementRecord {
   transferReference: string;
   amountPaid: number;
   bankReceiptUrl?: string;
+  proofAttachment?: RequestAttachment; // Bukti transfer m-banking / slip setoran
+  notes?: string;
 }
 
 export interface RealizationItem {
@@ -254,6 +259,9 @@ export interface BudgetRequest {
   dueDate?: string; // Tanggal Jatuh Tempo (YYYY-MM-DD)
   disbursedAt?: string;
   settledAt?: string;
+  revisionNote?: string;
+  rejectedNote?: string;
+  revisionHistory?: Array<{ role: string; name: string; note: string; date: string; action: 'REVISION' | 'REJECT' }>;
 }
 
 export interface ExpenseRealization {

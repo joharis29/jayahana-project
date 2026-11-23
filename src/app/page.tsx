@@ -46,7 +46,10 @@ import {
   Eye,
   ArrowUpDown,
   ArrowDownWideNarrow,
-  ArrowUpNarrowWide
+  ArrowUpNarrowWide,
+  Edit3,
+  RotateCcw,
+  ZoomIn
 } from "lucide-react";
 import { PrintableDocumentModal } from "@/components/PrintableDocumentModal";
 import { 
@@ -71,7 +74,7 @@ import {
   type PendingApprovalItem
 } from "@/lib/constants";
 import { formatRupiah, formatDateIndo } from "@/lib/utils";
-import { BusinessUnit, BudgetRequest, RequestType, UserRole, FinancialTransaction, ProcurementItem, SalesInvoice, OfficialReceiptBKM, InvoicePaymentRecord, SITE_DIVISIONS, EXPENSE_CATEGORIES, ExpenseCategory, RequestAttachment } from "@/types";
+import { BusinessUnit, BudgetRequest, RequestType, UserRole, FinancialTransaction, ProcurementItem, SalesInvoice, OfficialReceiptBKM, InvoicePaymentRecord, SITE_DIVISIONS, EXPENSE_CATEGORIES, ExpenseCategory, RequestAttachment, DisbursementRecord, ApprovalStatus } from "@/types";
 
 const MONTH_NAMES = [
   { num: 1, name: "Januari", short: "Jan" },
@@ -148,10 +151,14 @@ export default function DashboardPage() {
       // 3. Status filter
       if (selectedStatusFilter !== "ALL") {
         if (selectedStatusFilter === "PENDING_AUDIT" && r.status !== "PENDING_AUDIT") return false;
+        if (selectedStatusFilter === "PENDING_PM" && r.status !== "PENDING_PM") return false;
+        if (selectedStatusFilter === "PENDING_GM" && r.status !== "PENDING_GM") return false;
         if (selectedStatusFilter === "PENDING_FINANCE" && r.status !== "PENDING_FINANCE") return false;
         if (selectedStatusFilter === "PENDING_DIRECTOR" && r.status !== "PENDING_DIRECTOR") return false;
         if (selectedStatusFilter === "APPROVED_READY_PAY" && r.status !== "APPROVED_READY_PAY") return false;
         if (selectedStatusFilter === "DISBURSED" && !["DISBURSED", "COMPLETED"].includes(r.status)) return false;
+        if (selectedStatusFilter === "NEED_REVISION" && r.status !== "NEED_REVISION") return false;
+        if (selectedStatusFilter === "REJECTED" && r.status !== "REJECTED") return false;
       }
 
       // 4. Search query
@@ -385,6 +392,34 @@ export default function DashboardPage() {
 
   const isFormValid = missingFields.length === 0;
 
+  // Multi-tier Approval & Disbursement Custom State
+  const [isDisburseModalOpen, setIsDisburseModalOpen] = useState(false);
+  const [disburseTargetReq, setDisburseTargetReq] = useState<BudgetRequest | null>(null);
+  const [disburseSourceAccount, setDisburseSourceAccount] = useState("Bank BCA Operasional (A/C: 731-0982-11)");
+  const [disbursePaymentMethod, setDisbursePaymentMethod] = useState<"TRANSFER_BANK" | "CASH_KAS_KECIL">("TRANSFER_BANK");
+  const [disburseDate, setDisburseDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [disburseRefNumber, setDisburseRefNumber] = useState("");
+  const [disburseNotes, setDisburseNotes] = useState("");
+  const [disburseProofAttachment, setDisburseProofAttachment] = useState<RequestAttachment | null>(null);
+  const disburseProofFileInputRef = useRef<HTMLInputElement>(null);
+  const disburseProofCameraInputRef = useRef<HTMLInputElement>(null);
+
+  // Revision & Rejection Modals State
+  const [isRevisionModalOpen, setIsRevisionModalOpen] = useState(false);
+  const [revisionTargetReq, setRevisionTargetReq] = useState<BudgetRequest | null>(null);
+  const [revisionInputNote, setRevisionInputNote] = useState("");
+
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+  const [rejectTargetReq, setRejectTargetReq] = useState<BudgetRequest | null>(null);
+  const [rejectInputReason, setRejectInputReason] = useState("");
+
+  // Edit Returned Revision Request in Main Form
+  const [editingRevisionRequestId, setEditingRevisionRequestId] = useState<string | null>(null);
+  const [revisionBannerNote, setRevisionBannerNote] = useState<string | null>(null);
+
+  // Bukti Transfer Zoom Preview Modal
+  const [selectedProofPreview, setSelectedProofPreview] = useState<RequestAttachment | null>(null);
+
   // New Income form state
   const [incomeTitle, setIncomeTitle] = useState("");
   const [incomeUnit, setIncomeUnit] = useState<BusinessUnit>("ME_CORE");
@@ -553,47 +588,258 @@ export default function DashboardPage() {
     return list;
   }, [selectedYear]);
 
-  // Multi-Level Approval Handlers (Audit -> Finance -> Direktur)
+  // Multi-Level Approval Handlers (Audit -> PM -> GM -> Direktur (>5jt) -> Finance)
   const handleAuditApprove = (reqId: string) => {
-    setRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: "PENDING_FINANCE" } : r));
-    setApprovalNotification("Audit Internal telah memverifikasi kesesuaian SOP & pagu anggaran.");
+    setRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: "PENDING_PM" } : r));
+    setApprovalNotification("Audit Internal telah memverifikasi SOP & pagu. Pengajuan diteruskan ke Project Manager (PM).");
     setTimeout(() => setApprovalNotification(null), 3500);
   };
 
-  const handleFinanceApprove = (reqId: string) => {
-    setRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: "PENDING_DIRECTOR" } : r));
-    setApprovalNotification("Finance Manager memverifikasi ketersediaan dana kas & rekening penerima.");
+  const handlePMApprove = (reqId: string) => {
+    setRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: "PENDING_GM" } : r));
+    setApprovalNotification("Project Manager (PM) telah menyetujui pengajuan. Pengajuan diteruskan ke General Manager (GM).");
     setTimeout(() => setApprovalNotification(null), 3500);
+  };
+
+  const handleGMApprove = (reqId: string) => {
+    const target = requests.find(r => r.id === reqId);
+    if (!target) return;
+    
+    // Aturan threshold Rp 5.000.000:
+    // > 5jt memerlukan otorisasi Direktur Utama
+    // <= 5jt langsung siap dicairkan oleh Finance
+    const needsDirector = target.totalAmount > 5000000;
+
+    setRequests(prev => prev.map(r => {
+      if (r.id !== reqId) return r;
+      return {
+        ...r,
+        status: needsDirector ? "PENDING_DIRECTOR" : "APPROVED_READY_PAY"
+      };
+    }));
+
+    if (needsDirector) {
+      setApprovalNotification(`General Manager (GM) menyetujui. Karena nominal (${formatRupiah(target.totalAmount)}) > Rp 5.000.000, pengajuan diteruskan ke Direktur Utama.`);
+    } else {
+      setApprovalNotification(`General Manager (GM) menyetujui. Nominal (${formatRupiah(target.totalAmount)}) <= Rp 5.000.000, pengajuan langsung Siap Dicairkan oleh Finance.`);
+    }
+    setTimeout(() => setApprovalNotification(null), 4000);
   };
 
   const handleDirectorApprove = (reqId: string) => {
     setRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: "APPROVED_READY_PAY" } : r));
-    setApprovalNotification("Direktur Utama memberikan otorisasi final pengeluaran (Siap Dicairkan).");
+    setApprovalNotification("Direktur Utama memberikan otorisasi final pengeluaran (Siap Dicairkan oleh Finance).");
     setTimeout(() => setApprovalNotification(null), 3500);
   };
 
-  // Pencairan Dana oleh Tim Finance
-  const handleDisbursePayment = (reqId: string) => {
+  // Handlers untuk Permintaan Revisi
+  const handleOpenRevisionModal = (req: BudgetRequest) => {
+    setRevisionTargetReq(req);
+    setRevisionInputNote(req.revisionNote || "");
+    setIsRevisionModalOpen(true);
+  };
+
+  const handleConfirmRevision = () => {
+    if (!revisionTargetReq || !revisionInputNote.trim()) return;
+    const today = new Date().toLocaleDateString("id-ID");
+    
     setRequests(prev => prev.map(r => {
-      if (r.id !== reqId) return r;
-      const vNum = `BKK-2026-11-${Math.floor(100 + Math.random() * 900)}`;
+      if (r.id !== revisionTargetReq.id) return r;
+      const history = r.revisionHistory || [];
+      return {
+        ...r,
+        status: "NEED_REVISION",
+        revisionNote: revisionInputNote.trim(),
+        revisionHistory: [
+          ...history,
+          {
+            role: "Reviewer / Approval",
+            name: "Tim Review",
+            note: revisionInputNote.trim(),
+            date: today,
+            action: "REVISION"
+          }
+        ]
+      };
+    }));
+
+    setIsRevisionModalOpen(false);
+    setApprovalNotification(`Pengajuan ${revisionTargetReq.requestNumber} telah dikembalikan ke pemohon untuk direvisi.`);
+    setRevisionTargetReq(null);
+    setRevisionInputNote("");
+    setTimeout(() => setApprovalNotification(null), 3500);
+  };
+
+  // Handlers untuk Penolakan Pengajuan
+  const handleOpenRejectModal = (req: BudgetRequest) => {
+    setRejectTargetReq(req);
+    setRejectInputReason("");
+    setIsRejectModalOpen(true);
+  };
+
+  const handleConfirmReject = () => {
+    if (!rejectTargetReq || !rejectInputReason.trim()) return;
+    const today = new Date().toLocaleDateString("id-ID");
+
+    setRequests(prev => prev.map(r => {
+      if (r.id !== rejectTargetReq.id) return r;
+      const history = r.revisionHistory || [];
+      return {
+        ...r,
+        status: "REJECTED",
+        rejectedNote: rejectInputReason.trim(),
+        revisionHistory: [
+          ...history,
+          {
+            role: "Reviewer / Approval",
+            name: "Tim Review",
+            note: rejectInputReason.trim(),
+            date: today,
+            action: "REJECT"
+          }
+        ]
+      };
+    }));
+
+    setIsRejectModalOpen(false);
+    setApprovalNotification(`Pengajuan ${rejectTargetReq.requestNumber} resmi Ditolak.`);
+    setRejectTargetReq(null);
+    setRejectInputReason("");
+    setTimeout(() => setApprovalNotification(null), 3500);
+  };
+
+  // Handler untuk Pemohon: Edit & Ajukan Ulang Pengajuan yang Perlu Revisi
+  const handleEditForRevision = (req: BudgetRequest) => {
+    setEditingRevisionRequestId(req.id);
+    setRevisionBannerNote(req.revisionNote || "Mohon perbaiki data pengajuan sesuai instruksi catatan reviewer di bawah.");
+    
+    setNewTitle(req.title);
+    setNewUnit(String(req.unit));
+    setNewCategory(req.category as ExpenseCategory || "Akomodasi");
+    setNewType(req.requestType);
+    setNewAmount(String(req.totalAmount));
+    setNewPurpose(req.purpose);
+    setRequesterName(req.requesterName);
+    setRequestDate(req.createdAt || new Date().toISOString().split("T")[0]);
+    setDueDate(req.dueDate || new Date().toISOString().split("T")[0]);
+    
+    if (req.items && req.items.length > 0) {
+      setRequestItems(req.items.map((it, idx) => ({
+        id: `ri-${idx + 1}`,
+        description: it.description,
+        quantity: it.quantity,
+        unit: it.unit,
+        unitPrice: it.estimatedPrice,
+        discount: 0
+      })));
+    }
+
+    if (req.vendorInfo) {
+      setVendorName(req.vendorInfo.vendorName || "");
+      setPaymentTerms(req.vendorInfo.paymentTerms || "Net 30");
+      setBankName(req.vendorInfo.bankName || "Bank Central Asia (BCA)");
+      setBankAccountNumber(req.vendorInfo.bankAccountNumber || "");
+      setBankAccountName(req.vendorInfo.bankAccountName || "");
+      setShippingAddress(req.vendorInfo.shippingAddress || "Gudang Utama Jayahana, Sentul City");
+    }
+
+    if (req.attachments) {
+      setAttachments(req.attachments);
+    } else {
+      setAttachments([]);
+    }
+
+    setIsModalOpen(true);
+  };
+
+  // Handlers untuk Pencairan Dana & Upload Bukti Transfer (Disbursement Modal)
+  const handleOpenDisbursementModal = (req: BudgetRequest) => {
+    setDisburseTargetReq(req);
+    setDisburseSourceAccount(
+      req.requestType === "CASH_ADVANCE" 
+        ? "Kas Kecil Lapangan (Petty Cash Operasional)" 
+        : "Bank BCA Operasional (A/C: 731-0982-11)"
+    );
+    setDisbursePaymentMethod(req.requestType === "CASH_ADVANCE" ? "CASH_KAS_KECIL" : "TRANSFER_BANK");
+    setDisburseDate(new Date().toISOString().split("T")[0]);
+    setDisburseRefNumber(`TRF-BCA-${Date.now().toString().slice(-6)}`);
+    setDisburseNotes(`Pencairan dana ${req.requestNumber} - ${req.title}`);
+    setDisburseProofAttachment(null);
+    setIsDisburseModalOpen(true);
+  };
+
+  const handleDisburseProofUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      setDisburseProofAttachment({
+        id: `att-trf-${Date.now()}`,
+        name: file.name,
+        type: file.type || "image/png",
+        size: file.size,
+        dataUrl,
+        uploadedAt: new Date().toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" })
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleConfirmDisbursement = () => {
+    if (!disburseTargetReq) return;
+    if (!disburseProofAttachment) {
+      alert("Wajib melampirkan foto / bukti transfer bank sebelum mencairkan dana!");
+      return;
+    }
+
+    const vNum = `BKK-2026-11-${Math.floor(100 + Math.random() * 900)}`;
+    const disburseRecord: DisbursementRecord = {
+      disbursedAt: disburseDate,
+      disbursedBy: "Dewi Anggraeni (Finance Head)",
+      voucherNumber: vNum,
+      sourceAccount: disburseSourceAccount,
+      paymentMethod: disbursePaymentMethod,
+      transferReference: disburseRefNumber || `TRF-${Date.now().toString().slice(-6)}`,
+      amountPaid: disburseTargetReq.totalAmount,
+      proofAttachment: disburseProofAttachment,
+      notes: disburseNotes
+    };
+
+    setRequests(prev => prev.map(r => {
+      if (r.id !== disburseTargetReq.id) return r;
       return {
         ...r,
         status: "DISBURSED",
-        disbursedAt: new Date().toISOString().split("T")[0],
-        disbursement: {
-          disbursedAt: new Date().toISOString().split("T")[0],
-          disbursedBy: "Dewi Anggraeni (Finance Head)",
-          voucherNumber: vNum,
-          sourceAccount: r.requestType === "CASH_ADVANCE" ? "Kas Kecil Lapangan (Petty Cash)" : "Bank BCA Operasional (A/C: 731-0982-11)",
-          paymentMethod: r.requestType === "CASH_ADVANCE" ? "CASH_KAS_KECIL" : "TRANSFER_BANK",
-          transferReference: `TRF-${Date.now().toString().slice(-6)}`,
-          amountPaid: r.totalAmount,
-        }
+        disbursedAt: disburseDate,
+        disbursement: disburseRecord
       };
     }));
-    setApprovalNotification("Dana berhasil dicairkan oleh Finance. Formulir bukti pencairan siap dicetak.");
-    setTimeout(() => setApprovalNotification(null), 3500);
+
+    setIsDisburseModalOpen(false);
+
+    // Auto open print modal for the newly disbursed BKK voucher!
+    const updatedTargetReq = {
+      ...disburseTargetReq,
+      status: "DISBURSED" as ApprovalStatus,
+      disbursedAt: disburseDate,
+      disbursement: disburseRecord
+    };
+
+    setApprovalNotification(`Dana ${disburseTargetReq.requestNumber} berhasil dicairkan! Bukti transfer telah terlampir.`);
+    setTimeout(() => {
+      handleOpenPrintModal(updatedTargetReq, "DISBURSEMENT");
+    }, 400);
+  };
+
+  // Fallback legacy handler
+  const handleDisbursePayment = (reqId: string) => {
+    const target = requests.find(r => r.id === reqId);
+    if (target) {
+      handleOpenDisbursementModal(target);
+    }
   };
 
   // Penerimaan Barang Fisik oleh Tim Audit (BAST Gudang)
@@ -828,23 +1074,51 @@ export default function DashboardPage() {
       attachments: attachments.length > 0 ? attachments : undefined
     };
 
-    // Add to requests
-    setRequests([newReq, ...requests]);
+    // Add to requests or update existing if editing for revision
+    if (editingRevisionRequestId) {
+      setRequests(prev => prev.map(r => {
+        if (r.id !== editingRevisionRequestId) return r;
+        return {
+          ...r,
+          title: autoTitle,
+          unit: newUnit,
+          category: newCategory,
+          totalAmount: parsedAmount,
+          status: "PENDING_AUDIT",
+          purpose: newPurpose || autoTitle,
+          createdAt: requestDate,
+          dueDate: dueDate,
+          items: newReq.items,
+          procurementItems: newReq.procurementItems,
+          vendorInfo: newReq.vendorInfo,
+          attachments: attachments.length > 0 ? attachments : undefined,
+          revisionNote: undefined,
+        };
+      }));
 
-    // Also add to Pending Approvals queue
-    const newApproval: PendingApprovalItem = {
-      id: `appr-${Date.now()}`,
-      type: "BUDGET_REQUEST",
-      docNumber: newDocNum,
-      title: autoTitle,
-      unit: newUnit,
-      requester: requesterName,
-      amount: parsedAmount,
-      submittedAt: new Date().toISOString().split("T")[0],
-      level: "Audit Internal",
-      urgent: parsedAmount > 10000000,
-    };
-    setPendingApprovals([newApproval, ...pendingApprovals]);
+      setApprovalNotification(`Pengajuan ${newReq.title} berhasil diperbaiki dan dikirim ulang ke Tim Audit.`);
+      setEditingRevisionRequestId(null);
+      setRevisionBannerNote(null);
+    } else {
+      setRequests([newReq, ...requests]);
+
+      // Also add to Pending Approvals queue
+      const newApproval: PendingApprovalItem = {
+        id: `appr-${Date.now()}`,
+        type: "BUDGET_REQUEST",
+        docNumber: newDocNum,
+        title: autoTitle,
+        unit: newUnit,
+        requester: requesterName,
+        amount: parsedAmount,
+        submittedAt: new Date().toISOString().split("T")[0],
+        level: "Audit Internal",
+        urgent: parsedAmount > 10000000,
+      };
+      setPendingApprovals([newApproval, ...pendingApprovals]);
+      setApprovalNotification(`Pengajuan baru ${newDocNum} berhasil dibuat dan dikirim ke Tim Audit.`);
+    }
+    setTimeout(() => setApprovalNotification(null), 3500);
 
     setIsModalOpen(false);
     setNewTitle("");
@@ -2366,7 +2640,7 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            {/* KONTEN TAHAP 1: PENGAJUAN & PO (APPROVAL 3 PINTU) */}
+            {/* KONTEN TAHAP 1: PENGAJUAN & PO (APPROVAL BERJENJANG) */}
             {requestWorkflowSubTab === "PROPOSAL" && (
               <div className="space-y-4">
                 {/* Stats Alert Box with Quick Filter Click */}
@@ -2384,16 +2658,18 @@ export default function DashboardPage() {
                     <span className="text-[10px] text-slate-400 block mt-0.5">Uji kepatuhan SOP &amp; pagu</span>
                   </div>
                   <div
-                    onClick={() => setSelectedStatusFilter(prev => prev === "PENDING_FINANCE" ? "ALL" : "PENDING_FINANCE")}
+                    onClick={() => setSelectedStatusFilter(prev => ["PENDING_PM", "PENDING_GM"].includes(prev) ? "ALL" : "PENDING_PM")}
                     className={`p-3 bg-white rounded-xl border transition cursor-pointer hover:shadow-xs ${
-                      selectedStatusFilter === "PENDING_FINANCE" ? "border-blue-400 bg-blue-50/50 ring-1 ring-blue-300" : "border-slate-200"
+                      ["PENDING_PM", "PENDING_GM"].includes(selectedStatusFilter) ? "border-sky-400 bg-sky-50/50 ring-1 ring-sky-300" : "border-slate-200"
                     }`}
                   >
-                    <span className="text-slate-500 block">Menunggu Finance</span>
-                    <strong className="text-base text-blue-700 font-extrabold">
-                      {requests.filter(r => r.status === "PENDING_FINANCE").length} Dokumen
+                    <span className="text-slate-500 block">Menunggu PM &amp; GM</span>
+                    <strong className="text-base text-sky-700 font-extrabold">
+                      {requests.filter(r => ["PENDING_PM", "PENDING_GM"].includes(r.status)).length} Dokumen
                     </strong>
-                    <span className="text-[10px] text-slate-400 block mt-0.5">Cek saldo kas &amp; bank</span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">
+                      PM: {requests.filter(r => r.status === "PENDING_PM").length} &bull; GM: {requests.filter(r => r.status === "PENDING_GM").length}
+                    </span>
                   </div>
                   <div
                     onClick={() => setSelectedStatusFilter(prev => prev === "PENDING_DIRECTOR" ? "ALL" : "PENDING_DIRECTOR")}
@@ -2401,11 +2677,11 @@ export default function DashboardPage() {
                       selectedStatusFilter === "PENDING_DIRECTOR" ? "border-indigo-400 bg-indigo-50/50 ring-1 ring-indigo-300" : "border-slate-200"
                     }`}
                   >
-                    <span className="text-slate-500 block">Menunggu Direktur</span>
+                    <span className="text-slate-500 block">Menunggu Dirut (&gt;5 Jt)</span>
                     <strong className="text-base text-indigo-700 font-extrabold">
                       {requests.filter(r => r.status === "PENDING_DIRECTOR").length} Dokumen
                     </strong>
-                    <span className="text-[10px] text-slate-400 block mt-0.5">Otorisasi final direksi</span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Otorisasi nominal &gt; Rp 5 Juta</span>
                   </div>
                   <div
                     onClick={() => setSelectedStatusFilter(prev => prev === "APPROVED_READY_PAY" ? "ALL" : "APPROVED_READY_PAY")}
@@ -2413,11 +2689,11 @@ export default function DashboardPage() {
                       selectedStatusFilter === "APPROVED_READY_PAY" ? "border-emerald-400 bg-emerald-100/60 ring-1 ring-emerald-300" : "border-slate-200 bg-emerald-50/50"
                     }`}
                   >
-                    <span className="text-emerald-800 block">Siap Dicairkan (Approved)</span>
+                    <span className="text-emerald-800 block">Siap Dicairkan Finance</span>
                     <strong className="text-base text-emerald-800 font-extrabold">
                       {requests.filter(r => r.status === "APPROVED_READY_PAY").length} Dokumen
                     </strong>
-                    <span className="text-[10px] text-emerald-600 block mt-0.5">Siap bayar di Tab 2</span>
+                    <span className="text-[10px] text-emerald-600 block mt-0.5">Siap cair &amp; lampirkan bukti</span>
                   </div>
                 </div>
 
@@ -2426,7 +2702,9 @@ export default function DashboardPage() {
                   <div className="p-3 border-b border-slate-100 flex flex-wrap justify-between items-center gap-2 text-xs">
                     <div>
                       <span className="font-bold text-slate-900 text-sm block">Daftar Pengajuan Anggaran &amp; Pesanan Pembelian (PO)</span>
-                      <span className="text-slate-400 font-mono text-[11px]">Memerlukan Approval 3-Pintu: Audit &rarr; Finance &rarr; Direktur</span>
+                      <span className="text-slate-400 font-mono text-[11px]">
+                        Alur Approval: Pengaju &rarr; Audit &rarr; PM &rarr; GM &rarr; (Dirut jika &gt;5 Jt) &rarr; Finance (Cairkan &amp; Bukti Transfer)
+                      </span>
                     </div>
                   </div>
 
@@ -2505,10 +2783,13 @@ export default function DashboardPage() {
                       >
                         <option value="ALL">Semua Status</option>
                         <option value="PENDING_AUDIT">Menunggu Audit</option>
-                        <option value="PENDING_FINANCE">Menunggu Finance</option>
-                        <option value="PENDING_DIRECTOR">Menunggu Direktur</option>
+                        <option value="PENDING_PM">Menunggu PM</option>
+                        <option value="PENDING_GM">Menunggu GM</option>
+                        <option value="PENDING_DIRECTOR">Menunggu Dirut (&gt;5 Jt)</option>
                         <option value="APPROVED_READY_PAY">Siap Dicairkan</option>
-                        <option value="DISBURSED">Sudah Cair / Selesai</option>
+                        <option value="DISBURSED">Sudah Cair</option>
+                        <option value="NEED_REVISION">Perlu Revisi</option>
+                        <option value="REJECTED">Ditolak</option>
                       </select>
                     </div>
 
@@ -2666,7 +2947,7 @@ export default function DashboardPage() {
                             className="inline-flex items-center justify-center gap-1.5 font-semibold hover:text-blue-600 transition cursor-pointer select-none group w-full"
                             title="Urutkan berdasarkan Status Approval"
                           >
-                            <span>Status Approval 3-Pintu</span>
+                            <span>Status Approval</span>
                             <span className={`p-0.5 rounded transition ${requestSortField === "status" ? "text-blue-600 bg-blue-100" : "text-slate-400 group-hover:text-slate-600"}`}>
                               {requestSortField === "status" ? (
                                 requestSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
@@ -2681,10 +2962,6 @@ export default function DashboardPage() {
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700">
                       {sortedRequests.map((req) => {
-                        const isAuditPassed = !["PENDING_AUDIT", "DRAFT"].includes(req.status);
-                        const isFinancePassed = !["PENDING_AUDIT", "PENDING_FINANCE", "DRAFT"].includes(req.status);
-                        const isDirectorPassed = ["APPROVED_READY_PAY", "DISBURSED", "COMPLETED"].includes(req.status);
-
                         return (
                           <tr key={req.id} className="hover:bg-slate-50/70 transition">
                             <td className="px-4 py-3 font-mono">
@@ -2707,88 +2984,137 @@ export default function DashboardPage() {
                                 {req.purpose || "-"}
                               </div>
                             </td>
-                              <td className="px-4 py-3">
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                  req.unit === "ME_CORE" 
-                                    ? "bg-blue-100 text-blue-700" 
-                                    : req.unit === "STARLITE_FTTH" 
-                                    ? "bg-fuchsia-100 text-fuchsia-700" 
-                                    : String(req.unit).startsWith("HO")
-                                    ? "bg-purple-100 text-purple-700"
-                                    : "bg-emerald-100 text-emerald-800"
-                                }`}>
-                                  {req.unit === "ME_CORE" ? "ME Core" : req.unit === "STARLITE_FTTH" ? "Starlite FTTH" : req.unit}
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                req.unit === "ME_CORE" 
+                                  ? "bg-blue-100 text-blue-700" 
+                                  : req.unit === "STARLITE_FTTH" 
+                                  ? "bg-fuchsia-100 text-fuchsia-700" 
+                                  : String(req.unit).startsWith("HO")
+                                  ? "bg-purple-100 text-purple-700"
+                                  : "bg-emerald-100 text-emerald-800"
+                              }`}>
+                                {req.unit === "ME_CORE" ? "ME Core" : req.unit === "STARLITE_FTTH" ? "Starlite FTTH" : req.unit}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="font-medium text-slate-900">{req.requesterName}</div>
+                              <div className="text-[10px] text-slate-400">{req.requesterRole}</div>
+                            </td>
+                            <td className="px-4 py-3 font-bold text-slate-900 text-xs font-mono">
+                              {formatRupiah(req.totalAmount)}
+                            </td>
+                            <td className="px-4 py-3 text-center whitespace-nowrap">
+                              {req.dueDate ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-xs font-medium border border-slate-200">
+                                  <Calendar className="w-3 h-3 text-slate-400" />
+                                  {req.dueDate}
                                 </span>
-                              </td>
-                              <td className="px-4 py-3">
-                                <div className="font-medium text-slate-900">{req.requesterName}</div>
-                                <div className="text-[10px] text-slate-400">{req.requesterRole}</div>
-                              </td>
-                              <td className="px-4 py-3 font-bold text-slate-900 text-xs font-mono">
-                                {formatRupiah(req.totalAmount)}
-                              </td>
-                              <td className="px-4 py-3 text-center whitespace-nowrap">
-                                {req.dueDate ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-xs font-medium border border-slate-200">
-                                    <Calendar className="w-3 h-3 text-slate-400" />
-                                    {req.dueDate}
-                                  </span>
-                                ) : (
-                                  <span className="text-slate-400 font-mono text-[11px]">-</span>
-                                )}
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                {/* 3 Pintu Stepper Badges */}
-                                <div className="flex items-center justify-center gap-1.5">
-                                  {/* Step 1: Audit */}
-                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                    isAuditPassed 
-                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300" 
-                                      : req.status === "PENDING_AUDIT"
-                                      ? "bg-amber-100 text-amber-800 animate-pulse border border-amber-300"
-                                      : "bg-slate-100 text-slate-400"
-                                  }`}>
-                                    {isAuditPassed ? "✓ Audit" : "Audit"}
-                                  </span>
-                                  <span className="text-slate-300">&rarr;</span>
-                                  {/* Step 2: Finance */}
-                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                    isFinancePassed 
-                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300" 
-                                      : req.status === "PENDING_FINANCE"
-                                      ? "bg-blue-100 text-blue-800 animate-pulse border border-blue-300"
-                                      : "bg-slate-100 text-slate-400"
-                                  }`}>
-                                    {isFinancePassed ? "✓ Finance" : "Finance"}
-                                  </span>
-                                  <span className="text-slate-300">&rarr;</span>
-                                  {/* Step 3: Direktur */}
-                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                    isDirectorPassed 
-                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300" 
-                                      : req.status === "PENDING_DIRECTOR"
-                                      ? "bg-indigo-100 text-indigo-800 animate-pulse border border-indigo-300"
-                                      : "bg-slate-100 text-slate-400"
-                                  }`}>
-                                    {isDirectorPassed ? "✓ Direktur" : "Direktur"}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <div className="flex items-center justify-end gap-1.5">
-                                  {/* Tombol Cetak Form Pengajuan */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenPrintModal(req, "REQUEST")}
-                                    className="flex items-center gap-1 px-2.5 py-1 text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-[11px] font-semibold transition cursor-pointer"
-                                    title="Cetak Formulir Pengajuan Resmi A4"
-                                  >
-                                    <Printer className="w-3.5 h-3.5 text-slate-600" />
-                                    <span>Cetak Form</span>
-                                  </button>
+                              ) : (
+                                <span className="text-slate-400 font-mono text-[11px]">-</span>
+                              )}
+                            </td>
 
-                                  {/* Action Approve Sesuai Tahapan */}
-                                  {req.status === "PENDING_AUDIT" && (
+                            {/* Kolom Status Approval Berjenjang (Single Status Badge) */}
+                            <td className="px-4 py-3 text-center">
+                              {req.status === "PENDING_AUDIT" && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                                  <span>Menunggu Audit</span>
+                                </span>
+                              )}
+                              {req.status === "PENDING_PM" && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-sky-50 text-sky-800 border border-sky-300 shadow-2xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-ping" />
+                                  <span>Menunggu PM</span>
+                                </span>
+                              )}
+                              {req.status === "PENDING_GM" && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 text-purple-800 border border-purple-300 shadow-2xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-ping" />
+                                  <span>Menunggu GM</span>
+                                </span>
+                              )}
+                              {req.status === "PENDING_FINANCE" && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-300 shadow-2xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping" />
+                                  <span>Menunggu Finance</span>
+                                </span>
+                              )}
+                              {req.status === "PENDING_DIRECTOR" && (
+                                <div className="flex flex-col items-center">
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-300 shadow-2xs">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-ping" />
+                                    <span>Menunggu Dirut</span>
+                                  </span>
+                                  <span className="text-[9px] text-indigo-600 font-mono mt-0.5 font-medium">&gt; Rp 5.000.000</span>
+                                </div>
+                              )}
+                              {req.status === "APPROVED_READY_PAY" && (
+                                <div className="flex flex-col items-center">
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-400 shadow-2xs">
+                                    <Wallet className="w-3.5 h-3.5 text-emerald-700" />
+                                    <span>Siap Dicairkan</span>
+                                  </span>
+                                  <span className="text-[9px] text-emerald-700 font-mono mt-0.5">Finance Gate</span>
+                                </div>
+                              )}
+                              {["DISBURSED", "COMPLETED"].includes(req.status) && (
+                                <div className="flex flex-col items-center">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                    <span>Sudah Cair</span>
+                                  </span>
+                                  {req.disbursement?.voucherNumber && (
+                                    <span className="text-[9px] text-slate-500 font-mono mt-0.5">{req.disbursement.voucherNumber}</span>
+                                  )}
+                                </div>
+                              )}
+                              {req.status === "NEED_REVISION" && (
+                                <div className="flex flex-col items-center">
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-orange-50 text-orange-800 border border-orange-300 shadow-2xs">
+                                    <RotateCcw className="w-3 h-3 text-orange-600" />
+                                    <span>Perlu Revisi</span>
+                                  </span>
+                                  {req.revisionNote && (
+                                    <span className="text-[9px] text-orange-700 italic max-w-[140px] truncate mt-0.5" title={req.revisionNote}>
+                                      "{req.revisionNote}"
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              {req.status === "REJECTED" && (
+                                <div className="flex flex-col items-center">
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-800 border border-red-300 shadow-2xs">
+                                    <X className="w-3 h-3 text-red-600" />
+                                    <span>Ditolak</span>
+                                  </span>
+                                  {req.rejectedNote && (
+                                    <span className="text-[9px] text-red-600 italic max-w-[140px] truncate mt-0.5" title={req.rejectedNote}>
+                                      "{req.rejectedNote}"
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Kolom Aksi Dinamis Sesuai Tahapan Alur */}
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                {/* Tombol Cetak Form Pengajuan Resmi (Selalu Tersedia) */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenPrintModal(req, "REQUEST")}
+                                  className="flex items-center gap-1 px-2 py-1 text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                                  title="Cetak Formulir Pengajuan Resmi A4"
+                                >
+                                  <Printer className="w-3.5 h-3.5 text-slate-600" />
+                                  <span>Cetak Form</span>
+                                </button>
+
+                                {/* Action Tahap 1: Verifikasi Audit */}
+                                {req.status === "PENDING_AUDIT" && (
+                                  <>
                                     <button
                                       type="button"
                                       onClick={() => handleAuditApprove(req.id)}
@@ -2796,44 +3122,166 @@ export default function DashboardPage() {
                                     >
                                       ACC Audit
                                     </button>
-                                  )}
-                                  {req.status === "PENDING_FINANCE" && (
                                     <button
                                       type="button"
-                                      onClick={() => handleFinanceApprove(req.id)}
-                                      className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                      onClick={() => handleOpenRevisionModal(req)}
+                                      className="px-2 py-1 bg-white hover:bg-orange-50 text-orange-700 border border-orange-300 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                                      title="Kembalikan ke pemohon untuk revisi"
                                     >
-                                      ACC Finance
+                                      Revisi
                                     </button>
-                                  )}
-                                  {req.status === "PENDING_DIRECTOR" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenRejectModal(req)}
+                                      className="px-2 py-1 bg-white hover:bg-red-50 text-red-700 border border-red-300 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                                      title="Tolak pengajuan ini"
+                                    >
+                                      Tolak
+                                    </button>
+                                  </>
+                                )}
+
+                                {/* Action Tahap 2: Persetujuan Project Manager (PM) */}
+                                {req.status === "PENDING_PM" && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handlePMApprove(req.id)}
+                                      className="px-2.5 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                    >
+                                      ACC PM
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenRevisionModal(req)}
+                                      className="px-2 py-1 bg-white hover:bg-orange-50 text-orange-700 border border-orange-300 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                                      title="Minta pemohon revisi"
+                                    >
+                                      Revisi
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenRejectModal(req)}
+                                      className="px-2 py-1 bg-white hover:bg-red-50 text-red-700 border border-red-300 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                                      title="Tolak pengajuan"
+                                    >
+                                      Tolak
+                                    </button>
+                                  </>
+                                )}
+
+                                {/* Action Tahap 3: Persetujuan General Manager (GM) */}
+                                {req.status === "PENDING_GM" && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleGMApprove(req.id)}
+                                      className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                    >
+                                      ACC GM
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenRevisionModal(req)}
+                                      className="px-2 py-1 bg-white hover:bg-orange-50 text-orange-700 border border-orange-300 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                                      title="Minta revisi"
+                                    >
+                                      Revisi
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenRejectModal(req)}
+                                      className="px-2 py-1 bg-white hover:bg-red-50 text-red-700 border border-red-300 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                                      title="Tolak"
+                                    >
+                                      Tolak
+                                    </button>
+                                  </>
+                                )}
+
+                                {/* Action Tahap 4: Otorisasi Direktur Utama (Jika Nominal > 5 Jt) */}
+                                {req.status === "PENDING_DIRECTOR" && (
+                                  <>
                                     <button
                                       type="button"
                                       onClick={() => handleDirectorApprove(req.id)}
                                       className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
                                     >
-                                      ACC Direktur
+                                      ACC Dirut
                                     </button>
-                                  )}
-                                  {req.status === "APPROVED_READY_PAY" && (
                                     <button
                                       type="button"
-                                      onClick={() => setRequestWorkflowSubTab("DISBURSEMENT")}
-                                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                      onClick={() => handleOpenRevisionModal(req)}
+                                      className="px-2 py-1 bg-white hover:bg-orange-50 text-orange-700 border border-orange-300 rounded-lg text-[11px] font-semibold transition cursor-pointer"
                                     >
-                                      Siap Cair &rarr;
+                                      Revisi
                                     </button>
-                                  )}
-                                  {["DISBURSED", "COMPLETED"].includes(req.status) && (
-                                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                      Sudah Cair
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenRejectModal(req)}
+                                      className="px-2 py-1 bg-white hover:bg-red-50 text-red-700 border border-red-300 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                                    >
+                                      Tolak
+                                    </button>
+                                  </>
+                                )}
+
+                                {/* Action Tahap 5: Eksekusi Pencairan Dana oleh Finance */}
+                                {req.status === "APPROVED_READY_PAY" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenDisbursementModal(req)}
+                                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shadow-xs flex items-center gap-1"
+                                  >
+                                    <Wallet className="w-3.5 h-3.5" />
+                                    <span>Cairkan &amp; Lampirkan Bukti</span>
+                                  </button>
+                                )}
+
+                                {/* Status Sudah Cair: Cetak Voucher BKK & Lihat Bukti Transfer */}
+                                {["DISBURSED", "COMPLETED"].includes(req.status) && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenPrintModal(req, "DISBURSEMENT")}
+                                      className="flex items-center gap-1 px-2 py-1 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                                      title="Cetak Bukti Kas Keluar (BKK) A4"
+                                    >
+                                      <Printer className="w-3.5 h-3.5 text-emerald-700" />
+                                      <span>Voucher BKK</span>
+                                    </button>
+
+                                    {req.disbursement?.proofAttachment && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedProofPreview(req.disbursement?.proofAttachment || null)}
+                                        className="flex items-center gap-1 px-2 py-1 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-300 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                                        title="Lihat Bukti Transfer Bank yang Dilampirkan Finance"
+                                      >
+                                        <Eye className="w-3.5 h-3.5 text-blue-600" />
+                                        <span>Bukti Trf</span>
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+
+                                {/* Action Pengajuan yang Perlu Revisi: Pemohon Klik Edit & Ajukan Ulang */}
+                                {req.status === "NEED_REVISION" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditForRevision(req)}
+                                    className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shadow-xs flex items-center gap-1"
+                                    title="Edit data dan ajukan ulang ke Tim Audit"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                    <span>Edit &amp; Ajukan Ulang</span>
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
 
                       {sortedRequests.length === 0 && (
                         <tr>
@@ -2930,29 +3378,56 @@ export default function DashboardPage() {
                                 <div>
                                   <span className="font-mono font-bold text-slate-900 block">{req.disbursement.voucherNumber}</span>
                                   <span className="text-[10px] text-slate-500 block">{req.disbursement.sourceAccount}</span>
+                                  {req.disbursement.proofAttachment ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedProofPreview(req.disbursement?.proofAttachment || null)}
+                                      className="inline-flex items-center gap-1 text-[10px] text-blue-700 hover:text-blue-900 font-medium underline mt-0.5 cursor-pointer"
+                                    >
+                                      <Paperclip className="w-2.5 h-2.5 text-blue-600" />
+                                      <span>Lihat Bukti Transfer ({req.disbursement.proofAttachment.name.slice(0, 15)}...)</span>
+                                    </button>
+                                  ) : (
+                                    <span className="text-[10px] text-amber-600 italic block mt-0.5">Bukti transfer belum diunggah</span>
+                                  )}
                                 </div>
                               ) : (
-                                <span className="text-slate-400 italic">Menunggu eksekusi kasir</span>
+                                <span className="text-slate-400 italic">Menunggu eksekusi kasir Finance</span>
                               )}
                             </td>
                             <td className="px-4 py-3 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
+                              <div className="flex items-center justify-end gap-1.5 flex-wrap">
                                 {req.disbursement ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenPrintModal(req, "DISBURSEMENT")}
-                                    className="flex items-center gap-1 px-2.5 py-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg text-[11px] font-bold transition cursor-pointer"
-                                  >
-                                    <Printer className="w-3.5 h-3.5 text-emerald-600" />
-                                    <span>Cetak Form Pencairan</span>
-                                  </button>
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenPrintModal(req, "DISBURSEMENT")}
+                                      className="flex items-center gap-1 px-2.5 py-1 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                                      title="Cetak Bukti Kas Keluar (BKK) Resmi"
+                                    >
+                                      <Printer className="w-3.5 h-3.5 text-emerald-700" />
+                                      <span>Cetak Voucher BKK</span>
+                                    </button>
+                                    {req.disbursement.proofAttachment && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedProofPreview(req.disbursement?.proofAttachment || null)}
+                                        className="flex items-center gap-1 px-2 py-1 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-300 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                                        title="Pratinjau Bukti Transfer"
+                                      >
+                                        <Eye className="w-3.5 h-3.5 text-blue-600" />
+                                        <span>Bukti</span>
+                                      </button>
+                                    )}
+                                  </>
                                 ) : (
                                   <button
                                     type="button"
-                                    onClick={() => handleDisbursePayment(req.id)}
-                                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs"
+                                    onClick={() => handleOpenDisbursementModal(req)}
+                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs flex items-center gap-1"
                                   >
-                                    Proses Bayar / Cairkan
+                                    <Wallet className="w-3.5 h-3.5" />
+                                    <span>Cairkan &amp; Lampirkan Bukti</span>
                                   </button>
                                 )}
                               </div>
@@ -3807,17 +4282,47 @@ export default function DashboardPage() {
           <div className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-xl border border-slate-200 animate-in fade-in duration-200 my-8 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-start pb-2 border-b border-slate-100 mb-4">
               <div>
-                <h3 className="font-bold text-slate-900 text-base">
-                  Form Pengajuan
+                <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                  <span>{editingRevisionRequestId ? "Perbaiki & Ajukan Ulang Pengajuan" : "Form Pengajuan"}</span>
+                  {editingRevisionRequestId && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                      Mode Revisi
+                    </span>
+                  )}
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Pengajuan dana kas bon operasional, reimbursement, maupun pengadaan barang untuk Site &amp; Divisi HO.
+                  {editingRevisionRequestId 
+                    ? "Perbaiki data atau lampiran sesuai arahan reviewer, lalu kirim ulang ke Tim Audit." 
+                    : "Pengajuan dana kas bon operasional, reimbursement, maupun pengadaan barang untuk Site & Divisi HO."}
                 </p>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1">
+              <button 
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setEditingRevisionRequestId(null);
+                  setRevisionBannerNote(null);
+                }} 
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Banner Catatan Revisi jika dalam mode revisi */}
+            {revisionBannerNote && (
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-2.5 text-xs text-amber-900 shadow-2xs">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <span className="font-bold text-amber-950 block">Catatan / Alasan Permintaan Revisi:</span>
+                  <p className="mt-0.5 leading-relaxed text-amber-900 italic font-mono bg-white/70 p-2 rounded border border-amber-200 mt-1">
+                    "{revisionBannerNote}"
+                  </p>
+                  <span className="text-[10px] text-amber-700 mt-1 block">
+                    Silakan ubah formulir atau lampiran di bawah, kemudian klik <strong>Kirim Ulang ke Tim Audit</strong>.
+                  </span>
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleCreateRequest} className="space-y-3.5 text-xs">
               {/* Row 1: Unit & Jenis Dokumen */}
@@ -4296,12 +4801,21 @@ export default function DashboardPage() {
                     disabled={!isFormValid}
                     className={`px-4 py-2 rounded-lg font-semibold transition shadow-xs flex items-center gap-1.5 ${
                       isFormValid
-                        ? "bg-blue-600 text-white hover:bg-blue-700 cursor-pointer"
+                        ? editingRevisionRequestId
+                          ? "bg-amber-600 text-white hover:bg-amber-700 cursor-pointer"
+                          : "bg-blue-600 text-white hover:bg-blue-700 cursor-pointer"
                         : "bg-slate-300 text-slate-500 cursor-not-allowed opacity-75"
                     }`}
                     title={!isFormValid ? `Lengkapi semua kolom: ${missingFields.join(", ")}` : "Kirim ke Tim Audit"}
                   >
-                    Kirim ke Tim Audit (Step 1)
+                    {editingRevisionRequestId ? (
+                      <>
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Kirim Ulang ke Tim Audit</span>
+                      </>
+                    ) : (
+                      <span>Kirim ke Tim Audit (Step 1)</span>
+                    )}
                   </button>
                 </div>
               </div>
@@ -4636,6 +5150,462 @@ export default function DashboardPage() {
               >
                 Tutup Preview
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 6: PENCAIRAN KAS & UPLOAD BUKTI TRANSFER (DISBURSEMENT MODAL) */}
+      {isDisburseModalOpen && disburseTargetReq && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in duration-150 my-6 max-h-[92vh] overflow-y-auto">
+            <div className="flex justify-between items-start pb-3 border-b border-slate-100 mb-4">
+              <div>
+                <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                  <Wallet className="w-5 h-5 text-emerald-600" />
+                  <span>Pencairan Dana &amp; Lampirkan Bukti Transfer</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Lengkapi data transaksi kas/bank dan lampirkan bukti pembayaran resmi sebelum dana dilepaskan.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDisburseModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Ringkasan Pengajuan yang Dicairkan */}
+            <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl mb-4 text-xs">
+              <div className="flex justify-between items-center pb-2 border-b border-emerald-200/60 mb-2">
+                <div>
+                  <span className="font-mono font-bold text-emerald-950 text-xs block">{disburseTargetReq.requestNumber}</span>
+                  <span className="text-[11px] text-emerald-800">{disburseTargetReq.title}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-emerald-700 uppercase font-bold block">Nominal Pencairan:</span>
+                  <span className="text-base font-black text-emerald-900 font-mono">
+                    {formatRupiah(disburseTargetReq.totalAmount)}
+                  </span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600">
+                <div>Pemohon: <strong className="text-slate-800">{disburseTargetReq.requesterName}</strong> ({disburseTargetReq.unit})</div>
+                <div>Kategori: <strong className="text-slate-800">{disburseTargetReq.category || "Operasional"}</strong></div>
+              </div>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              {/* Sumber Rekening & Metode */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Sumber Kas / Bank <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={disburseSourceAccount}
+                    onChange={(e) => setDisburseSourceAccount(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg p-2 bg-white text-slate-800"
+                  >
+                    <option value="Bank BCA Operasional (A/C: 731-0982-11)">Bank BCA Operasional (A/C: 731-0982-11)</option>
+                    <option value="Bank Mandiri Operasional (A/C: 133-00-981240-8)">Bank Mandiri Operasional (A/C: 133-00-981240-8)</option>
+                    <option value="Kas Kecil Lapangan (Petty Cash Operasional)">Kas Kecil Lapangan (Petty Cash Operasional)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Metode Pembayaran <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={disbursePaymentMethod}
+                    onChange={(e) => setDisbursePaymentMethod(e.target.value as any)}
+                    className="w-full border border-slate-300 rounded-lg p-2 bg-white text-slate-800"
+                  >
+                    <option value="TRANSFER_BANK">Transfer Bank / Online Banking</option>
+                    <option value="CASH_KAS_KECIL">Tunai / Kas Kecil</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Tanggal & No Referensi Transaksi */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Tanggal Pembayaran <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={disburseDate}
+                    onChange={(e) => setDisburseDate(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg p-2 font-mono text-slate-800"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    No. Referensi / ID Transaksi Bank <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={disburseRefNumber}
+                    onChange={(e) => setDisburseRefNumber(e.target.value)}
+                    placeholder="Contoh: TRF-BCA-981240"
+                    className="w-full border border-slate-300 rounded-lg p-2 font-mono text-slate-800"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Catatan Finance */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Catatan Pencairan (Opsional)
+                </label>
+                <input
+                  type="text"
+                  value={disburseNotes}
+                  onChange={(e) => setDisburseNotes(e.target.value)}
+                  placeholder="Tambahkan keterangan jika diperlukan..."
+                  className="w-full border border-slate-300 rounded-lg p-2 text-slate-800"
+                />
+              </div>
+
+              {/* Upload Bukti Transfer (WAJIB) */}
+              <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/70">
+                <div className="flex justify-between items-center mb-2">
+                  <label className="font-semibold text-slate-800 flex items-center gap-1.5">
+                    <Paperclip className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Bukti Transfer / Struk Pembayaran Kas <span className="text-red-500">* (Wajib)</span></span>
+                  </label>
+                  {disburseProofAttachment ? (
+                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
+                      ✓ Bukti Terunggah
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-red-600 font-semibold bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                      Wajib dilampirkan
+                    </span>
+                  )}
+                </div>
+
+                {/* Hidden File & Camera Inputs */}
+                <input
+                  type="file"
+                  ref={disburseProofFileInputRef}
+                  onChange={handleDisburseProofUpload}
+                  accept="image/*,application/pdf"
+                  className="hidden"
+                />
+                <input
+                  type="file"
+                  ref={disburseProofCameraInputRef}
+                  onChange={handleDisburseProofUpload}
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                />
+
+                {!disburseProofAttachment ? (
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => disburseProofFileInputRef.current?.click()}
+                      className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100 hover:border-slate-400 font-medium transition cursor-pointer text-xs shadow-2xs"
+                    >
+                      <Paperclip className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Pilih Foto Bukti Transfer</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => disburseProofCameraInputRef.current?.click()}
+                      className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 hover:bg-emerald-100 font-semibold transition cursor-pointer text-xs shadow-2xs"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>Foto Kamera Struk</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-2 flex items-center justify-between p-2.5 bg-white border border-emerald-300 rounded-lg shadow-2xs">
+                    <div className="flex items-center gap-2.5 truncate">
+                      {disburseProofAttachment.type.startsWith("image/") ? (
+                        <img
+                          src={disburseProofAttachment.dataUrl}
+                          alt="Bukti Transfer"
+                          className="w-10 h-10 object-cover rounded border border-slate-200 shrink-0"
+                        />
+                      ) : (
+                        <FileText className="w-8 h-8 text-red-500 shrink-0" />
+                      )}
+                      <div className="truncate">
+                        <span className="font-semibold text-slate-800 text-xs block truncate max-w-xs">
+                          {disburseProofAttachment.name}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {(disburseProofAttachment.size / 1024).toFixed(1)} KB &bull; {disburseProofAttachment.uploadedAt}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedProofPreview(disburseProofAttachment)}
+                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition cursor-pointer"
+                        title="Lihat Pratinjau Bukti"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDisburseProofAttachment(null)}
+                        className="p-1.5 text-red-500 hover:bg-red-50 rounded transition cursor-pointer"
+                        title="Hapus / Ganti Bukti"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-3 flex justify-between items-center border-t border-slate-100">
+                <span className="text-[11px] text-slate-500">
+                  Setelah dicairkan, voucher BKK dapat dicetak langsung sebagai bukti resmi.
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsDisburseModalOpen(false)}
+                    className="px-3.5 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmDisbursement}
+                    disabled={!disburseProofAttachment}
+                    className={`px-4 py-2 rounded-lg font-bold transition shadow-xs flex items-center gap-1.5 ${
+                      disburseProofAttachment
+                        ? "bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer"
+                        : "bg-slate-300 text-slate-500 cursor-not-allowed opacity-75"
+                    }`}
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Konfirmasi Pencairan &amp; Cetak BKK</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 7: MINTA REVISI PENGAJUAN (REVISION MODAL) */}
+      {isRevisionModalOpen && revisionTargetReq && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in duration-150">
+            <div className="flex justify-between items-start pb-2 border-b border-slate-100 mb-3">
+              <div>
+                <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                  <RotateCcw className="w-4 h-4 text-amber-600" />
+                  <span>Kembalikan Pengajuan untuk Direvisi</span>
+                </h3>
+                <span className="text-xs text-slate-500">
+                  Pengajuan: <strong>{revisionTargetReq.requestNumber}</strong> &bull; {revisionTargetReq.title}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsRevisionModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <p className="text-slate-600 leading-relaxed">
+                Tuliskan instruksi atau bagian yang perlu diperbaiki/dilengkapi oleh pemohon (misal: perbaikan deskripsi, kelengkapan surat penawaran vendor, revisi kuantitas, dll):
+              </p>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Catatan Revisi <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={revisionInputNote}
+                  onChange={(e) => setRevisionInputNote(e.target.value)}
+                  placeholder="Contoh: Mohon lampirkan rincian merk barang dan surat penawaran harga resmi dari vendor sebelum disetujui."
+                  rows={4}
+                  className="w-full border border-slate-300 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-400"
+                  required
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsRevisionModalOpen(false)}
+                  className="px-3.5 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmRevision}
+                  disabled={!revisionInputNote.trim()}
+                  className={`px-4 py-2 rounded-lg font-semibold transition shadow-xs flex items-center gap-1.5 ${
+                    revisionInputNote.trim()
+                      ? "bg-amber-600 text-white hover:bg-amber-700 cursor-pointer"
+                      : "bg-slate-300 text-slate-500 cursor-not-allowed opacity-75"
+                  }`}
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Kirim Permintaan Revisi</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 8: TOLAK PENGAJUAN (REJECT MODAL) */}
+      {isRejectModalOpen && rejectTargetReq && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in duration-150">
+            <div className="flex justify-between items-start pb-2 border-b border-slate-100 mb-3">
+              <div>
+                <h3 className="font-bold text-red-700 text-base flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-red-600" />
+                  <span>Tolak Pengajuan Anggaran</span>
+                </h3>
+                <span className="text-xs text-slate-500">
+                  Pengajuan: <strong>{rejectTargetReq.requestNumber}</strong> &bull; {rejectTargetReq.title}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsRejectModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <p className="text-slate-600 leading-relaxed">
+                Pengajuan yang ditolak tidak dapat diproses lebih lanjut. Mohon cantumkan alasan penolakan secara jelas:
+              </p>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Alasan Penolakan <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={rejectInputReason}
+                  onChange={(e) => setRejectInputReason(e.target.value)}
+                  placeholder="Contoh: Pagu anggaran divisi telah melebihi batas atau pekerjaan belum disetujui direksi."
+                  rows={4}
+                  className="w-full border border-slate-300 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-400"
+                  required
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsRejectModalOpen(false)}
+                  className="px-3.5 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmReject}
+                  disabled={!rejectInputReason.trim()}
+                  className={`px-4 py-2 rounded-lg font-semibold transition shadow-xs flex items-center gap-1.5 ${
+                    rejectInputReason.trim()
+                      ? "bg-red-600 text-white hover:bg-red-700 cursor-pointer"
+                      : "bg-slate-300 text-slate-500 cursor-not-allowed opacity-75"
+                  }`}
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Tolak Pengajuan Ini</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 9: ZOOM PRATINJAU BUKTI TRANSFER BANK */}
+      {selectedProofPreview && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-4 shadow-2xl border border-slate-200">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100 mb-3">
+              <div>
+                <h4 className="font-bold text-slate-900 text-sm truncate max-w-md flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>Bukti Transfer Resmi: {selectedProofPreview.name}</span>
+                </h4>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {(selectedProofPreview.size / 1024).toFixed(1)} KB &bull; Diunggah: {selectedProofPreview.uploadedAt}
+                </span>
+              </div>
+              <button
+                onClick={() => setSelectedProofPreview(null)}
+                className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="max-h-[68vh] overflow-auto flex items-center justify-center bg-slate-950/5 rounded-xl p-3 border border-slate-200">
+              {selectedProofPreview.type.startsWith("image/") ? (
+                <img
+                  src={selectedProofPreview.dataUrl}
+                  alt={selectedProofPreview.name}
+                  className="max-h-[64vh] max-w-full object-contain rounded-lg shadow-md"
+                />
+              ) : (
+                <div className="text-center py-12">
+                  <FileText className="w-16 h-16 text-red-500 mx-auto mb-2" />
+                  <span className="text-sm font-semibold text-slate-700 block">Dokumen Berformat PDF</span>
+                  <a
+                    href={selectedProofPreview.dataUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 transition"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Buka PDF di Tab Baru</span>
+                  </a>
+                </div>
+              )}
+            </div>
+            <div className="pt-3 flex justify-between items-center">
+              <span className="text-[11px] text-emerald-700 font-medium">
+                ✓ Bukti transfer sah tersimpan dalam voucher pencairan kas (BKK).
+              </span>
+              <div className="flex gap-2">
+                <a
+                  href={selectedProofPreview.dataUrl}
+                  download={selectedProofPreview.name}
+                  className="px-3.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Unduh File</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setSelectedProofPreview(null)}
+                  className="px-4 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-semibold hover:bg-slate-900 transition cursor-pointer"
+                >
+                  Tutup
+                </button>
+              </div>
             </div>
           </div>
         </div>
