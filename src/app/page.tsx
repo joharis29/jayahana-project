@@ -1566,7 +1566,7 @@ export default function DashboardPage() {
             }`}
           >
             <Wallet className="w-4 h-4" />
-            Pengajuan Anggaran & Kas Bon
+            Pengajuan Anggaran
             <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-800 font-bold">
               {requests.filter(r => r.status.startsWith("PENDING")).length}
             </span>
@@ -2850,7 +2850,7 @@ export default function DashboardPage() {
               <div>
                 <h2 className="font-bold text-slate-900 text-base">Alur Pengajuan Anggaran, Pencairan & Pengadaan Barang</h2>
                 <p className="text-xs text-slate-500">
-                  Siklus terintegrasi: Pengajuan (Approval Audit, Finance, Direktur) &bull; Pencairan Kas &bull; Laporan Realisasi LPJ &bull; Penerimaan Barang Fisik (Audit).
+                  Siklus terintegrasi: Pengajuan &bull; Pencairan Kas &bull; Laporan Realisasi LPJ &bull; Penerimaan Barang Fisik.
                 </p>
               </div>
 
@@ -2900,7 +2900,7 @@ export default function DashboardPage() {
                 }`}
               >
                 <FileText className="w-4 h-4" />
-                <span>1. Pengajuan & PO (Approval 3-Pintu)</span>
+                <span>1. Pengajuan & PO</span>
                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
                   requestWorkflowSubTab === "PROPOSAL" ? "bg-blue-700 text-white" : "bg-slate-200 text-slate-700"
                 }`}>
@@ -2918,7 +2918,7 @@ export default function DashboardPage() {
                 }`}
               >
                 <Wallet className="w-4 h-4" />
-                <span>2. Pencairan Kas (Finance Gate)</span>
+                <span>2. Pencairan Kas</span>
                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
                   requestWorkflowSubTab === "DISBURSEMENT" ? "bg-emerald-700 text-white" : "bg-slate-200 text-slate-700"
                 }`}>
@@ -2954,7 +2954,7 @@ export default function DashboardPage() {
                 }`}
               >
                 <Boxes className="w-4 h-4" />
-                <span>4. Penerimaan Barang Fisik (Audit BAST)</span>
+                <span>4. Penerimaan Barang Fisik</span>
                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
                   requestWorkflowSubTab === "GOODS_RECEIPT" ? "bg-amber-700 text-white" : "bg-slate-200 text-slate-700"
                 }`}>
@@ -3025,9 +3025,6 @@ export default function DashboardPage() {
                   <div className="p-3 border-b border-slate-100 flex flex-wrap justify-between items-center gap-2 text-xs">
                     <div>
                       <span className="font-bold text-slate-900 text-sm block">Daftar Pengajuan Anggaran &amp; Pesanan Pembelian (PO)</span>
-                      <span className="text-slate-400 font-mono text-[11px]">
-                        Alur Approval: Pengaju &rarr; Audit &rarr; PM &rarr; GM &rarr; (Dirut jika &gt;5 Jt) &rarr; Finance (Cairkan &amp; Bukti Transfer)
-                      </span>
                     </div>
                   </div>
 
@@ -3391,13 +3388,10 @@ export default function DashboardPage() {
                                 </div>
                               )}
                               {req.status === "APPROVED_READY_PAY" && (
-                                <div className="flex flex-col items-center">
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-400 shadow-2xs">
-                                    <Wallet className="w-3.5 h-3.5 text-emerald-700" />
-                                    <span>Siap Dicairkan</span>
-                                  </span>
-                                  <span className="text-[9px] text-emerald-700 font-mono mt-0.5">Finance Gate</span>
-                                </div>
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-400 shadow-2xs">
+                                  <Wallet className="w-3.5 h-3.5 text-emerald-700" />
+                                  <span>Siap Dicairkan</span>
+                                </span>
                               )}
                               {["DISBURSED", "COMPLETED"].includes(req.status) && (
                                 <div className="flex flex-col items-center">
