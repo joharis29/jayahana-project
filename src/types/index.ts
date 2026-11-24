@@ -351,6 +351,8 @@ export interface InvoicePaymentRecord {
   paymentMethod: 'TRANSFER_BANK' | 'CASH';
   referenceNote: string;
   receivedBy: string;
+  installmentNumber?: number;
+  remainingBalance?: number;
 }
 
 export interface SalesInvoice {
@@ -398,6 +400,10 @@ export interface OfficialReceiptBKM {
   authorizedBy: string;
   proofAttachment?: RequestAttachment;
   referenceNumber?: string;
+  installmentNumber?: number;
+  totalInvoiceAmount?: number;
+  remainingBalance?: number;
+  isInstallment?: boolean;
 }
 
 // Accounting & Financial Reporting Models

@@ -31,6 +31,23 @@ export function PrintableDocumentModal({
     }).format(num);
   };
 
+  const angkaTerbilang = (nilai: number): string => {
+    const bilangan = [
+      "", "Satu", "Dua", "Tiga", "Empat", "Lima", "Enam", "Tujuh", "Delapan", "Sembilan", "Sepuluh", "Sebelas"
+    ];
+    const num = Math.floor(Math.abs(nilai));
+    if (num < 12) return bilangan[num];
+    if (num < 20) return bilangan[num - 10] + " Belas";
+    if (num < 100) return bilangan[Math.floor(num / 10)] + " Puluh " + bilangan[num % 10];
+    if (num < 200) return "Seratus " + angkaTerbilang(num - 100);
+    if (num < 1000) return bilangan[Math.floor(num / 100)] + " Ratus " + angkaTerbilang(num % 100);
+    if (num < 2000) return "Seribu " + angkaTerbilang(num - 1000);
+    if (num < 1000000) return angkaTerbilang(Math.floor(num / 1000)) + " Ribu " + angkaTerbilang(num % 1000);
+    if (num < 1000000000) return angkaTerbilang(Math.floor(num / 1000000)) + " Juta " + angkaTerbilang(num % 1000000);
+    if (num < 1000000000000) return angkaTerbilang(Math.floor(num / 1000000000)) + " Miliar " + angkaTerbilang(num % 1000000000);
+    return angkaTerbilang(Math.floor(num / 1000000000000)) + " Triliun " + angkaTerbilang(num % 1000000000000);
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -684,25 +701,41 @@ export function PrintableDocumentModal({
             {docType === "OFFICIAL_RECEIPT" && (receipt || invoice) && (
               <div>
                 {(() => {
-                  const bkmNumber = receipt?.receiptNumber || invoice?.payments?.[0]?.voucherNumber || "BKM-2026-11-001";
+                  const bkmNumber = receipt?.receiptNumber || invoice?.payments?.[invoice?.payments.length - 1]?.voucherNumber || "BKM-2026-11-001";
                   const payer = receipt?.clientName || invoice?.clientName || "PT. Klien Terhormat";
-                  const nominal = receipt?.amountReceived || invoice?.totalAmount || 0;
+                  const nominal = receipt?.amountReceived || invoice?.payments?.[invoice?.payments.length - 1]?.amountPaid || invoice?.paidAmount || invoice?.totalAmount || 0;
                   const purpose = receipt?.forPaymentOf || invoice?.title || "Pelunasan Tagihan Proyek";
-                  const bankTarget = receipt?.bankTarget || invoice?.payments?.[0]?.bankAccount || "Bank BCA Operasional (A/C: 731-0982-11)";
-                  const date = receipt?.receivedDate || invoice?.payments?.[0]?.paymentDate || "18/11/2026";
+                  const bankTarget = receipt?.bankTarget || invoice?.payments?.[invoice?.payments.length - 1]?.bankAccount || invoice?.targetBankAccount || "Bank Mandiri Operasional (A/C: 133-00-981240-8)";
+                  const date = receipt?.receivedDate || invoice?.payments?.[invoice?.payments.length - 1]?.paymentDate || new Date().toISOString().split("T")[0];
+                  const refNum = receipt?.referenceNumber || invoice?.contractNumber || "TRF-MND-001";
+                  const totalInvAmount = receipt?.totalInvoiceAmount || invoice?.totalAmount || nominal;
+                  const remainingBalance = typeof receipt?.remainingBalance === "number" 
+                    ? receipt.remainingBalance 
+                    : (invoice ? Math.max(0, invoice.totalAmount - (invoice.paidAmount || nominal)) : 0);
+                  const isInstallment = receipt?.isInstallment || (receipt?.remainingBalance !== undefined ? receipt.remainingBalance > 0 : (invoice ? (invoice.paidAmount || 0) < invoice.totalAmount : false));
+                  const installmentNumber = receipt?.installmentNumber || invoice?.payments?.length || 1;
+                  const spelledOut = (angkaTerbilang(nominal).trim() || "Nol") + " Rupiah";
 
                   return (
                     <div>
                       <div className="text-center mb-6">
                         <h2 className="text-base font-extrabold uppercase underline tracking-wider text-slate-900">
-                          Kuitansi Resmi / Bukti Kas Masuk (Official Receipt)
+                          Formulir Bukti Penerimaan Kas &amp; Bank (Bukti Kas Masuk / BKM)
                         </h2>
-                        <span className="text-xs text-slate-500 font-mono">
-                          Nomor Kuitansi: {bkmNumber}
-                        </span>
+                        <div className="flex items-center justify-center gap-2 text-xs text-slate-500 font-mono mt-0.5">
+                          <span>No. Voucher: <strong>{bkmNumber}</strong></span>
+                          <span>&bull;</span>
+                          <span>Tgl: {date}</span>
+                          {invoice?.invoiceNumber && (
+                            <>
+                              <span>&bull;</span>
+                              <span>Ref Inv: <strong>{invoice.invoiceNumber}</strong></span>
+                            </>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="border border-slate-300 rounded-xl p-5 bg-slate-50/60 mb-6 space-y-3 text-xs">
+                      <div className="border border-slate-300 rounded-xl p-5 bg-slate-50/60 mb-5 space-y-2.5 text-xs">
                         <div className="grid grid-cols-4 gap-2 py-1.5 border-b border-slate-200">
                           <span className="text-slate-500 font-medium">Telah Diterima Dari</span>
                           <span className="col-span-3 font-bold text-slate-900 text-sm">: {payer}</span>
@@ -714,33 +747,79 @@ export function PrintableDocumentModal({
                           </div>
                         )}
                         <div className="grid grid-cols-4 gap-2 py-1.5 border-b border-slate-200">
-                          <span className="text-slate-500 font-medium">Sejumlah Uang</span>
-                          <span className="col-span-3 font-bold text-emerald-800 text-sm font-mono">: {formatRupiah(nominal)}</span>
+                          <span className="text-slate-500 font-medium">Jumlah Diterima (Rp)</span>
+                          <span className="col-span-3 font-bold text-emerald-800 text-base font-mono">: {formatRupiah(nominal)}</span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2 py-1.5 border-b border-slate-200 bg-emerald-50/40 p-2 rounded">
+                          <span className="text-emerald-900 font-semibold">Terbilang (Huruf)</span>
+                          <span className="col-span-3 font-bold text-emerald-950 italic">: # {spelledOut} #</span>
                         </div>
                         <div className="grid grid-cols-4 gap-2 py-1.5 border-b border-slate-200">
-                          <span className="text-slate-500 font-medium">Untuk Pembayaran</span>
+                          <span className="text-slate-500 font-medium">Untuk Keperluan</span>
                           <span className="col-span-3 text-slate-800 font-medium">: {purpose}</span>
                         </div>
                         <div className="grid grid-cols-4 gap-2 py-1.5 border-b border-slate-200">
-                          <span className="text-slate-500 font-medium">Rekening Penampung</span>
+                          <span className="text-slate-500 font-medium">Kas / Bank Penampung</span>
                           <span className="col-span-3 text-slate-700 font-mono">: {bankTarget}</span>
                         </div>
-                        {receipt?.referenceNumber && (
-                          <div className="grid grid-cols-4 gap-2 py-1.5 border-b border-slate-200">
-                            <span className="text-slate-500 font-medium">No. Referensi / ID Transaksi</span>
-                            <span className="col-span-3 text-slate-700 font-mono font-semibold">: {receipt.referenceNumber}</span>
-                          </div>
-                        )}
                         <div className="grid grid-cols-4 gap-2 py-1.5">
-                          <span className="text-slate-500 font-medium">Tanggal Diterima</span>
-                          <span className="col-span-3 text-slate-700 font-medium">: {date}</span>
+                          <span className="text-slate-500 font-medium">No. Ref Transaksi / Bank</span>
+                          <span className="col-span-3 text-slate-700 font-mono font-semibold">: {refNum}</span>
                         </div>
                       </div>
 
-                      <div className="p-4 bg-emerald-50 border-2 border-emerald-400 rounded-xl text-center mb-6">
-                        <span className="text-xs text-emerald-800 uppercase font-bold tracking-wider block">Status Pelunasan:</span>
-                        <div className="text-xl font-black text-emerald-950 mt-1">LUNAS / VERIFIED</div>
-                      </div>
+                      {/* Box Rincian Status Pembayaran: Cicilan vs Pelunasan */}
+                      {isInstallment ? (
+                        <div className="p-4 bg-blue-50 border-2 border-blue-400 rounded-xl mb-6">
+                          <div className="flex justify-between items-center mb-2 pb-2 border-b border-blue-200">
+                            <div>
+                              <span className="text-xs text-blue-800 uppercase font-bold tracking-wider block">Status Pembayaran:</span>
+                              <div className="text-base font-black text-blue-950 mt-0.5">
+                                PEMBAYARAN BERTAHAP / CICILAN KE-{installmentNumber}
+                              </div>
+                            </div>
+                            <span className="px-3 py-1 rounded-full bg-blue-200 text-blue-900 font-extrabold text-xs">
+                              Cicilan Aktif
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2.5 text-xs pt-1 text-blue-950">
+                            <div className="bg-white p-2 rounded-lg border border-blue-200">
+                              <span className="text-[10px] text-slate-500 uppercase font-semibold block">Total Tagihan Bruto:</span>
+                              <strong className="font-mono text-sm block mt-0.5">{formatRupiah(totalInvAmount)}</strong>
+                            </div>
+                            <div className="bg-white p-2 rounded-lg border border-emerald-300 bg-emerald-50/30">
+                              <span className="text-[10px] text-emerald-800 uppercase font-semibold block">Dibayar Voucher Ini:</span>
+                              <strong className="font-mono text-sm text-emerald-700 block mt-0.5">{formatRupiah(nominal)}</strong>
+                            </div>
+                            <div className="bg-white p-2 rounded-lg border border-rose-300 bg-rose-50/40">
+                              <span className="text-[10px] text-rose-800 uppercase font-semibold block">Sisa Saldo Piutang:</span>
+                              <strong className="font-mono text-sm text-rose-700 block mt-0.5">{formatRupiah(remainingBalance)}</strong>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-4 bg-emerald-50 border-2 border-emerald-400 rounded-xl mb-6">
+                          <div className="flex justify-between items-center mb-2 pb-2 border-b border-emerald-200">
+                            <div>
+                              <span className="text-xs text-emerald-800 uppercase font-bold tracking-wider block">Status Pelunasan:</span>
+                              <div className="text-base font-black text-emerald-950 mt-0.5">LUNAS / VERIFIED (PELUNASAN PENUH 100%)</div>
+                            </div>
+                            <span className="px-3 py-1 rounded-full bg-emerald-200 text-emerald-900 font-extrabold text-xs">
+                              Tagihan Lunas &amp; Nihil
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3 text-xs pt-1 text-emerald-950">
+                            <div className="bg-white p-2 rounded-lg border border-emerald-200">
+                              <span className="text-[10px] text-slate-500 uppercase font-semibold block">Total Tagihan:</span>
+                              <strong className="font-mono text-sm block mt-0.5">{formatRupiah(totalInvAmount)}</strong>
+                            </div>
+                            <div className="bg-white p-2 rounded-lg border border-emerald-200">
+                              <span className="text-[10px] text-emerald-800 uppercase font-semibold block">Sisa Saldo Piutang:</span>
+                              <strong className="font-mono text-sm text-emerald-800 block mt-0.5">Rp 0 (Lunas 100%)</strong>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
@@ -783,7 +862,72 @@ export function PrintableDocumentModal({
 
             {/* TANDA TANGAN RESMI PERUSAHAAN SESUAI ALUR BERJENJANG */}
             <div className="mt-8 pt-4 border-t-2 border-slate-800">
-              {request ? (
+              {docType === "OFFICIAL_RECEIPT" ? (
+                /* 4 Kolom Tanda Tangan Khusus Formulir Penerimaan Kas/Bank (BKM) */
+                <div className="grid grid-cols-4 gap-4 text-center text-xs">
+                  {/* 1. Kasir / Staf Penerima */}
+                  <div className="flex flex-col justify-between h-32 border border-slate-200 p-2 rounded bg-slate-50/50">
+                    <span className="text-[10px] uppercase font-bold text-slate-500">
+                      Disiapkan / Kasir:
+                    </span>
+                    <div className="font-serif italic text-emerald-700 text-xs my-auto font-semibold">
+                      [Diterima Kasir]
+                    </div>
+                    <div>
+                      <strong className="block text-slate-900 underline">
+                        {receipt?.cashierName || "Siti Rahmawati"}
+                      </strong>
+                      <span className="text-[10px] text-slate-500 block">
+                        Kasir Operasional
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 2. Finance Head */}
+                  <div className="flex flex-col justify-between h-32 border border-slate-200 p-2 rounded bg-slate-50/50">
+                    <span className="text-[10px] uppercase font-bold text-slate-500">
+                      Diverifikasi Finance:
+                    </span>
+                    <div className="font-serif italic text-blue-700 text-xs my-auto font-semibold">
+                      [Verified Treasury]
+                    </div>
+                    <div>
+                      <strong className="block text-slate-900 underline">Dewi Anggraeni, SE</strong>
+                      <span className="text-[10px] text-slate-500 block">Finance &amp; Treasury Head</span>
+                    </div>
+                  </div>
+
+                  {/* 3. Mengetahui (GM) */}
+                  <div className="flex flex-col justify-between h-32 border border-slate-200 p-2 rounded bg-slate-50/50">
+                    <span className="text-[10px] uppercase font-bold text-slate-500">
+                      Mengetahui (GM):
+                    </span>
+                    <div className="font-serif italic text-purple-700 text-xs my-auto font-semibold">
+                      [Acknowledged]
+                    </div>
+                    <div>
+                      <strong className="block text-slate-900 underline">Bambang Wicaksono, SE</strong>
+                      <span className="text-[10px] text-slate-500 block">General Manager</span>
+                    </div>
+                  </div>
+
+                  {/* 4. Penyetor / Klien */}
+                  <div className="flex flex-col justify-between h-32 border border-slate-200 p-2 rounded bg-slate-50/50">
+                    <span className="text-[10px] uppercase font-bold text-slate-500">
+                      Penyetor / Klien:
+                    </span>
+                    <div className="font-serif italic text-slate-400 text-xs my-auto">
+                      (Tanda Tangan &amp; Cap)
+                    </div>
+                    <div>
+                      <strong className="block text-slate-900 underline truncate max-w-[130px] mx-auto">
+                        {receipt?.clientName || invoice?.clientName || "Klien Pembayar"}
+                      </strong>
+                      <span className="text-[10px] text-slate-500 block">Pemberi Kerja / Klien</span>
+                    </div>
+                  </div>
+                </div>
+              ) : request ? (
                 /* Alur Approval Berjenjang untuk Pengajuan Anggaran & Kas Keluar */
                 <div className={`grid ${docType === "DISBURSEMENT" || docType === "REALIZATION" ? "grid-cols-6" : "grid-cols-5"} gap-2 text-center text-xs`}>
                   {/* 1. Pemohon */}
