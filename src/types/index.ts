@@ -333,13 +333,14 @@ export interface StarliteInvoice {
 
 // B2B & B2C Integrated Sales Invoice, Accounts Receivable & Official Receipt Models
 export type InvoiceStatus = 
+  | 'UNPAID'
+  | 'PAID_FULL'
+  | 'PARTIAL_PAID'
+  | 'OVERDUE'
   | 'PENDING_AUDIT_PROGRESS'
   | 'PENDING_FINANCE_TAX'
   | 'PENDING_DIRECTOR'
-  | 'APPROVED_ISSUED'
-  | 'PAID_FULL'
-  | 'PARTIAL_PAID'
-  | 'OVERDUE';
+  | 'APPROVED_ISSUED';
 
 export interface InvoicePaymentRecord {
   paymentId: string;

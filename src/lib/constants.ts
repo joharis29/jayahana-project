@@ -625,7 +625,7 @@ export const INITIAL_SALES_INVOICES: SalesInvoice[] = [
     pph23Amount: 1700000,
     totalAmount: 92650000,
     paidAmount: 0,
-    status: "APPROVED_ISSUED",
+    status: "UNPAID",
     targetBankAccount: "Bank BCA (A/C: 731-0982-11 a.n. PT Jayahana Manaura Mekanika Selaras)",
     auditProgressNote: "Opname fisik chiller pipa dan uji tekanan hidrostatik pipa telah lolos uji.",
     financeTaxNote: "Invoice B2B telah terverifikasi, menunggu pembayaran jatuh tempo 25 Nov 2026.",
@@ -640,18 +640,18 @@ export const INITIAL_SALES_INVOICES: SalesInvoice[] = [
     clientPhone: "082111223344",
     contractNumber: "SUB-2026-STL-003",
     unit: "STARLITE_FTTH",
-    title: "Langganan Internet Dedicated Starlite Business 200 Mbps (Nov 2026)",
+    title: "Langganan Internet Dedicated Starlite Business 200 Mbps (Okt - Nov 2026)",
     description: "Iuran bulanan koneksi internet fiber optik + 1 Static IP Public",
-    invoiceDate: "2026-11-01",
-    dueDate: "2026-11-15",
+    invoiceDate: "2026-10-10",
+    dueDate: "2026-10-25",
     dppAmount: 1250000,
     ppnPercent: 11,
     ppnAmount: 137500,
     totalAmount: 1387500,
     paidAmount: 0,
-    status: "OVERDUE",
+    status: "UNPAID",
     targetBankAccount: "Bank BCA (A/C: 731-0982-11 a.n. PT Jayahana Manaura Mekanika Selaras)",
-    financeTaxNote: "Lewat jatuh tempo 3 hari, reminder penagihan telah dikirim via WhatsApp."
+    financeTaxNote: "Lewat jatuh tempo, reminder penagihan telah dikirim."
   },
   {
     id: "inv-sales-004",
@@ -706,7 +706,7 @@ export const INITIAL_SALES_INVOICES: SalesInvoice[] = [
     pph23Amount: 900000,
     totalAmount: 49050000,
     paidAmount: 0,
-    status: "PENDING_AUDIT_PROGRESS",
+    status: "UNPAID",
     targetBankAccount: "Bank Mandiri (A/C: 133-00-981240-8 a.n. PT Jayahana Manaura Mekanika Selaras)",
     auditProgressNote: "Menunggu Berita Acara Opname Fisik lapangan dari Site Manager & Tim Audit."
   }

@@ -682,6 +682,15 @@ export default function DashboardPage() {
   const [receiptFilterType, setReceiptFilterType] = useState<"ALL" | "SALES_INVOICE" | "OTHER_INCOME">("ALL");
   const [receiptSearchTerm, setReceiptSearchTerm] = useState("");
   
+  // Helper Perhitungan Umur Piutang (Status Aging dalam Hari)
+  const calculateAgingDays = (invoiceDateStr: string) => {
+    const today = new Date("2026-11-24");
+    const invDate = new Date(invoiceDateStr);
+    const diffTime = today.getTime() - invDate.getTime();
+    const diffDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+    return diffDays;
+  };
+
   // ==========================================
   // 5. INVOICE (FAKTUR PENJUALAN) FILTER & SORT STATE
   // ==========================================
@@ -724,12 +733,7 @@ export default function DashboardPage() {
       if (selectedUnit !== "ALL" && inv.unit !== selectedUnit) return false;
 
       if (invoiceStatusFilter !== "ALL") {
-        if (invoiceStatusFilter === "PENDING_AUDIT_PROGRESS" && inv.status !== "PENDING_AUDIT_PROGRESS") return false;
-        if (invoiceStatusFilter === "PENDING_FINANCE_TAX" && inv.status !== "PENDING_FINANCE_TAX") return false;
-        if (invoiceStatusFilter === "PENDING_DIRECTOR" && inv.status !== "PENDING_DIRECTOR") return false;
-        if (invoiceStatusFilter === "APPROVED_ISSUED" && inv.status !== "APPROVED_ISSUED") return false;
-        if (invoiceStatusFilter === "PAID_FULL" && inv.status !== "PAID_FULL") return false;
-        if (invoiceStatusFilter === "OVERDUE" && inv.status !== "OVERDUE") return false;
+        if (invoiceStatusFilter === "PAID" && inv.status !== "PAID_FULL") return false;
         if (invoiceStatusFilter === "UNPAID" && inv.status === "PAID_FULL") return false;
       }
 
@@ -774,9 +778,12 @@ export default function DashboardPage() {
         case "dueDate":
           comp = (a.dueDate || "").localeCompare(b.dueDate || "");
           break;
-        case "status":
-          comp = (a.status || "").localeCompare(b.status || "");
+        case "status": {
+          const statA = a.status === "PAID_FULL" ? "Lunas" : "Belum Lunas";
+          const statB = b.status === "PAID_FULL" ? "Lunas" : "Belum Lunas";
+          comp = statA.localeCompare(statB);
           break;
+        }
       }
       return invoiceSortOrder === "ASC" ? comp : -comp;
     });
@@ -821,8 +828,10 @@ export default function DashboardPage() {
       .filter((inv) => {
         if (selectedUnit !== "ALL" && inv.unit !== selectedUnit) return false;
         if (arAgingFilter !== "ALL") {
-          if (arAgingFilter === "CURRENT" && inv.status !== "APPROVED_ISSUED") return false;
-          if (arAgingFilter === "OVERDUE" && inv.status !== "OVERDUE") return false;
+          const days = calculateAgingDays(inv.invoiceDate);
+          if (arAgingFilter === "CURRENT" && days > 30) return false;
+          if (arAgingFilter === "WARNING" && (days <= 30 || days > 60)) return false;
+          if (arAgingFilter === "OVERDUE" && days <= 60) return false;
         }
         if (arSearchQuery.trim()) {
           const q = arSearchQuery.toLowerCase();
@@ -856,9 +865,12 @@ export default function DashboardPage() {
         case "total":
           comp = a.totalAmount - b.totalAmount;
           break;
-        case "status":
-          comp = (a.status || "").localeCompare(b.status || "");
+        case "status": {
+          const daysA = calculateAgingDays(a.invoiceDate);
+          const daysB = calculateAgingDays(b.invoiceDate);
+          comp = daysA - daysB;
           break;
+        }
       }
       return arSortOrder === "ASC" ? comp : -comp;
     });
@@ -2107,9 +2119,9 @@ export default function DashboardPage() {
       pph23Amount: pph23 || undefined,
       totalAmount: total,
       paidAmount: 0,
-      status: newInvUnit === "ME_CORE" ? "PENDING_AUDIT_PROGRESS" : "PENDING_FINANCE_TAX",
+      status: "UNPAID",
       targetBankAccount: "Bank Mandiri (A/C: 133-00-981240-8 a.n. PT Jayahana Manaura Mekanika Selaras)",
-      auditProgressNote: "Menunggu verifikasi lapangan tim audit.",
+      auditProgressNote: "Faktur penjualan aktif ditagihkan.",
       financeTaxNote: "Perhitungan PPN 11% dan PPh 23 terverifikasi sistem."
     };
 
@@ -2121,7 +2133,7 @@ export default function DashboardPage() {
     setNewInvContract("");
     setNewInvTitle("");
     setNewInvDpp("");
-    setApprovalNotification(`Faktur Penjualan ${invNum} berhasil dibuat dan masuk antrean review.`);
+    setApprovalNotification(`Faktur Penjualan ${invNum} berhasil diterbitkan.`);
     setTimeout(() => setApprovalNotification(null), 3500);
   };
 
@@ -6076,7 +6088,7 @@ export default function DashboardPage() {
                   </div>
 
                   <span className="text-[11px] text-slate-400 font-mono pr-2 hidden sm:inline">
-                    {invoiceViewMode === "LIST" ? "Otorisasi Berjenjang: Audit → Pajak → Direktur" : "Monitoring Umur Jatuh Tempo Piutang"}
+                    {invoiceViewMode === "LIST" ? "Penagihan Resmi & Status Pelunasan" : "Monitoring Umur Jatuh Tempo Piutang"}
                   </span>
                 </div>
 
@@ -6086,7 +6098,7 @@ export default function DashboardPage() {
                   <div className="p-3 border-b border-slate-100 flex justify-between items-center text-xs">
                     <span className="font-bold text-slate-900">Daftar Faktur Penjualan (Sales Invoice B2B &amp; B2C)</span>
                     <span className="text-slate-400 font-mono text-[11px]">
-                      Otorisasi Berjenjang: Audit Progres &rarr; Finance &amp; Tax &rarr; Direktur Utama
+                      Status Faktur: Lunas &amp; Belum Lunas
                     </span>
                   </div>
 
@@ -6127,13 +6139,8 @@ export default function DashboardPage() {
                         className="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 cursor-pointer focus:outline-emerald-500 shadow-2xs"
                       >
                         <option value="ALL">Semua Status</option>
-                        <option value="PENDING_AUDIT_PROGRESS">Menunggu Audit Progres</option>
-                        <option value="PENDING_FINANCE_TAX">Menunggu Pajak &amp; Finance</option>
-                        <option value="PENDING_DIRECTOR">Menunggu Direktur</option>
-                        <option value="APPROVED_ISSUED">Siap Ditagih (Approved)</option>
-                        <option value="PAID_FULL">Sudah Lunas</option>
-                        <option value="OVERDUE">Lewat Tempo (Overdue)</option>
-                        <option value="UNPAID">Belum Lunas (Semua)</option>
+                        <option value="UNPAID">Belum Lunas</option>
+                        <option value="PAID">Lunas</option>
                       </select>
                     </div>
 
@@ -6289,9 +6296,9 @@ export default function DashboardPage() {
                             type="button"
                             onClick={() => handleToggleInvoiceSort("status")}
                             className="inline-flex items-center justify-center gap-1.5 font-semibold hover:text-emerald-700 transition cursor-pointer select-none group w-full"
-                            title="Urutkan berdasarkan Status Approval"
+                            title="Urutkan berdasarkan Status"
                           >
-                            <span>Status Approval</span>
+                            <span>Status</span>
                             <span className={`p-0.5 rounded transition ${invoiceSortField === "status" ? "text-emerald-700 bg-emerald-100" : "text-slate-400 group-hover:text-slate-600"}`}>
                               {invoiceSortField === "status" ? (
                                 invoiceSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
@@ -6354,9 +6361,7 @@ export default function DashboardPage() {
                                 {formatRupiah(inv.totalAmount)}
                               </td>
                               <td className="px-4 py-3 text-center whitespace-nowrap">
-                                <span className={`font-mono font-bold block text-xs ${
-                                  inv.status === "OVERDUE" ? "text-rose-600 font-black" : "text-slate-800"
-                                }`}>
+                                <span className="font-mono font-bold block text-xs text-slate-800">
                                   {inv.dueDate}
                                 </span>
                                 <span className="text-[10px] text-slate-400 block font-mono">
@@ -6364,40 +6369,15 @@ export default function DashboardPage() {
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-center">
-                                {inv.status === "PENDING_AUDIT_PROGRESS" && (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
-                                    <span>Menunggu Audit</span>
-                                  </span>
-                                )}
-                                {inv.status === "PENDING_FINANCE_TAX" && (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-300 shadow-2xs">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping" />
-                                    <span>Menunggu Pajak</span>
-                                  </span>
-                                )}
-                                {inv.status === "PENDING_DIRECTOR" && (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-300 shadow-2xs">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-ping" />
-                                    <span>Menunggu Direktur</span>
-                                  </span>
-                                )}
-                                {inv.status === "APPROVED_ISSUED" && (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs">
-                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                    <span>Siap Ditagih</span>
-                                  </span>
-                                )}
-                                {inv.status === "PAID_FULL" && (
+                                {inv.status === "PAID_FULL" ? (
                                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-400 shadow-2xs">
                                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
-                                    <span>Sudah Lunas</span>
+                                    <span>Lunas</span>
                                   </span>
-                                )}
-                                {inv.status === "OVERDUE" && (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-800 border border-rose-300 shadow-2xs">
-                                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-                                    <span>Lewat Tempo</span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                    <span>Belum Lunas</span>
                                   </span>
                                 )}
                               </td>
@@ -6426,35 +6406,8 @@ export default function DashboardPage() {
                                     </button>
                                   )}
 
-                                  {/* Approval Action Buttons */}
-                                  {inv.status === "PENDING_AUDIT_PROGRESS" && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleAuditProgressApprove(inv.id)}
-                                      className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
-                                    >
-                                      ACC Audit
-                                    </button>
-                                  )}
-                                  {inv.status === "PENDING_FINANCE_TAX" && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleFinanceTaxApprove(inv.id)}
-                                      className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
-                                    >
-                                      ACC Pajak
-                                    </button>
-                                  )}
-                                  {inv.status === "PENDING_DIRECTOR" && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDirectorInvoiceApprove(inv.id)}
-                                      className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
-                                    >
-                                      ACC Direktur
-                                    </button>
-                                  )}
-                                  {inv.status === "APPROVED_ISSUED" && (
+                                  {/* Tombol Terima Bayar jika Belum Lunas */}
+                                  {inv.status !== "PAID_FULL" && (
                                     <button
                                       type="button"
                                       onClick={() => handleOpenCreateReceipt(inv.id)}
@@ -6503,8 +6456,8 @@ export default function DashboardPage() {
                     <div className="text-lg font-extrabold text-slate-900 font-mono">
                       {formatRupiah(
                         salesInvoices
-                          .filter(i => i.status === "APPROVED_ISSUED")
-                          .reduce((acc, i) => acc + i.totalAmount, 0)
+                          .filter(i => i.status !== "PAID_FULL" && calculateAgingDays(i.invoiceDate) <= 30)
+                          .reduce((acc, i) => acc + (i.totalAmount - (i.paidAmount || 0)), 0)
                       )}
                     </div>
                     <span className="text-[11px] text-slate-500 block">Jatuh tempo dalam waktu aman</span>
@@ -6517,9 +6470,13 @@ export default function DashboardPage() {
                       <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-bold text-[10px]">Follow-up</span>
                     </div>
                     <div className="text-lg font-extrabold text-amber-800 font-mono">
-                      {formatRupiah(0)}
+                      {formatRupiah(
+                        salesInvoices
+                          .filter(i => i.status !== "PAID_FULL" && calculateAgingDays(i.invoiceDate) > 30 && calculateAgingDays(i.invoiceDate) <= 60)
+                          .reduce((acc, i) => acc + (i.totalAmount - (i.paidAmount || 0)), 0)
+                      )}
                     </div>
-                    <span className="text-[11px] text-amber-700 block">Belum ada piutang di rentang ini</span>
+                    <span className="text-[11px] text-amber-700 block">Perlu follow-up berkala ke klien</span>
                   </div>
 
                   {/* Overdue (>60 Hari) */}
@@ -6531,11 +6488,11 @@ export default function DashboardPage() {
                     <div className="text-lg font-extrabold text-rose-800 font-mono">
                       {formatRupiah(
                         salesInvoices
-                          .filter(i => i.status === "OVERDUE")
-                          .reduce((acc, i) => acc + i.totalAmount, 0)
+                          .filter(i => i.status !== "PAID_FULL" && calculateAgingDays(i.invoiceDate) > 60)
+                          .reduce((acc, i) => acc + (i.totalAmount - (i.paidAmount || 0)), 0)
                       )}
                     </div>
-                    <span className="text-[11px] text-rose-700 block">Segera kirimkan surat tegangan resmi</span>
+                    <span className="text-[11px] text-rose-700 block">Segera kirimkan surat teguran resmi</span>
                   </div>
                 </div>
 
@@ -6568,6 +6525,7 @@ export default function DashboardPage() {
                       >
                         <option value="ALL">Semua Umur Piutang</option>
                         <option value="CURRENT">Lancar (0 - 30 Hari)</option>
+                        <option value="WARNING">Perhatian (31 - 60 Hari)</option>
                         <option value="OVERDUE">Lewat Tempo (&gt; 60 Hari / Overdue)</option>
                       </select>
                     </div>
@@ -6726,11 +6684,22 @@ export default function DashboardPage() {
                               {formatRupiah(inv.totalAmount)}
                             </td>
                             <td className="px-4 py-3">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                inv.status === "OVERDUE" ? "bg-rose-100 text-rose-800" : "bg-emerald-100 text-emerald-800"
-                              }`}>
-                                {inv.status === "OVERDUE" ? "Lewat Jatuh Tempo" : "Dalam Batas Waktu"}
-                              </span>
+                              {(() => {
+                                const days = calculateAgingDays(inv.invoiceDate);
+                                const isOverdue = days > 60;
+                                const isWarning = days > 30 && days <= 60;
+                                return (
+                                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold font-mono shadow-2xs ${
+                                    isOverdue 
+                                      ? "bg-rose-100 text-rose-800 border border-rose-300"
+                                      : isWarning
+                                      ? "bg-amber-100 text-amber-800 border border-amber-300"
+                                      : "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                  }`}>
+                                    {days} Hari
+                                  </span>
+                                );
+                              })()}
                             </td>
                             <td className="px-4 py-3 text-right">
                               <div className="flex items-center justify-end gap-1.5">
@@ -7985,7 +7954,7 @@ export default function DashboardPage() {
                   type="submit"
                   className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition cursor-pointer shadow-xs"
                 >
-                  Kirim ke Tim Audit Progres (Step 1)
+                  Terbitkan Faktur Penjualan
                 </button>
               </div>
             </form>
@@ -9168,15 +9137,9 @@ export default function DashboardPage() {
                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                     selectedDetailInvoice.status === "PAID_FULL"
                       ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                      : selectedDetailInvoice.status === "OVERDUE"
-                      ? "bg-rose-100 text-rose-800 border border-rose-300"
-                      : selectedDetailInvoice.status === "APPROVED_ISSUED"
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                       : "bg-amber-100 text-amber-800 border border-amber-300"
                   }`}>
-                    {selectedDetailInvoice.status === "PAID_FULL" ? "Sudah Lunas" :
-                     selectedDetailInvoice.status === "OVERDUE" ? "Lewat Tempo" :
-                     selectedDetailInvoice.status === "APPROVED_ISSUED" ? "Siap Ditagih" : "Dalam Proses Approval"}
+                    {selectedDetailInvoice.status === "PAID_FULL" ? "Lunas" : "Belum Lunas"}
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 mt-1">
@@ -9207,13 +9170,11 @@ export default function DashboardPage() {
 
               <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
                 <span className="text-[10px] uppercase font-bold text-slate-600 block">Batas Waktu Pembayaran</span>
-                <span className={`text-xl font-bold font-mono block mt-1 ${
-                  selectedDetailInvoice.status === "OVERDUE" ? "text-rose-600" : "text-slate-900"
-                }`}>
+                <span className="text-xl font-bold font-mono block mt-1 text-slate-900">
                   {selectedDetailInvoice.dueDate}
                 </span>
                 <span className="text-[11px] text-slate-500 block mt-0.5">
-                  {selectedDetailInvoice.status === "OVERDUE" ? "Telah melewati batas tanggal jatuh tempo" : "Termin pembayaran standar 30 hari kalender"}
+                  Umur Piutang: <strong className="text-slate-800">{calculateAgingDays(selectedDetailInvoice.invoiceDate)} Hari</strong> sejak tanggal terbit
                 </span>
               </div>
             </div>
@@ -9324,7 +9285,7 @@ export default function DashboardPage() {
                   </button>
                 )}
 
-                {selectedDetailInvoice.status === "APPROVED_ISSUED" && (
+                {selectedDetailInvoice.status !== "PAID_FULL" && (
                   <button
                     type="button"
                     onClick={() => {
