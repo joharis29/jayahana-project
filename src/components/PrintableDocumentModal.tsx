@@ -281,13 +281,13 @@ export function PrintableDocumentModal({
                       </span>
                     </div>
 
-                    <div className="flex items-start gap-4">
+                    <div className="flex justify-center items-center py-1">
                       {request.disbursement.proofAttachment.type.startsWith("image/") ? (
-                        <div className="border border-slate-300 rounded-lg p-1 bg-white shadow-2xs shrink-0">
+                        <div className="border border-slate-300 rounded-lg p-1.5 bg-white shadow-2xs inline-block">
                           <img
                             src={request.disbursement.proofAttachment.dataUrl}
                             alt="Bukti Transfer"
-                            className="max-h-48 max-w-[260px] object-contain rounded"
+                            className="max-h-60 max-w-full object-contain rounded"
                           />
                         </div>
                       ) : (
@@ -299,17 +299,6 @@ export function PrintableDocumentModal({
                           </div>
                         </div>
                       )}
-
-                      <div className="space-y-1.5 text-[11px] text-slate-600">
-                        <div>Nama Berkas: <strong className="text-slate-900">{request.disbursement.proofAttachment.name}</strong></div>
-                        <div>Ukuran: <strong className="font-mono text-slate-800">{(request.disbursement.proofAttachment.size / 1024).toFixed(1)} KB</strong></div>
-                        <div>Waktu Unggah: <strong className="font-mono text-slate-800">{request.disbursement.proofAttachment.uploadedAt}</strong></div>
-                        <div>No. Ref Transaksi: <strong className="font-mono text-blue-800">{request.disbursement.transferReference}</strong></div>
-                        <div>Sumber Kas/Bank: <strong className="text-slate-800">{request.disbursement.sourceAccount}</strong></div>
-                        <p className="text-[10px] text-slate-400 italic mt-2">
-                          Bukti transfer di atas telah divalidasi oleh Finance Staff dan menjadi lampiran fisik/digital yang mengikat pada voucher pengeluaran ini.
-                        </p>
-                      </div>
                     </div>
                   </div>
                 )}
