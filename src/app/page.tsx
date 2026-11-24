@@ -1109,6 +1109,9 @@ export default function DashboardPage() {
   // Modal Detail Nota & Dokumen LPJ
   const [selectedDetailLPJ, setSelectedDetailLPJ] = useState<BudgetRequest | null>(null);
 
+  // Modal Detail Faktur Penjualan (Ketika No. Invoice / Klien diklik)
+  const [selectedDetailInvoice, setSelectedDetailInvoice] = useState<SalesInvoice | null>(null);
+
   // New Income form state
   const [incomeTitle, setIncomeTitle] = useState("");
   const [incomeUnit, setIncomeUnit] = useState<BusinessUnit>("ME_CORE");
@@ -6267,11 +6270,28 @@ export default function DashboardPage() {
                         <th className="px-4 py-3 text-center">
                           <button
                             type="button"
+                            onClick={() => handleToggleInvoiceSort("dueDate")}
+                            className="inline-flex items-center justify-center gap-1.5 font-semibold hover:text-emerald-700 transition cursor-pointer select-none group w-full"
+                            title="Urutkan berdasarkan Tanggal Jatuh Tempo"
+                          >
+                            <span>Tanggal Jatuh Tempo</span>
+                            <span className={`p-0.5 rounded transition ${invoiceSortField === "dueDate" ? "text-emerald-700 bg-emerald-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {invoiceSortField === "dueDate" ? (
+                                invoiceSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3 text-center">
+                          <button
+                            type="button"
                             onClick={() => handleToggleInvoiceSort("status")}
                             className="inline-flex items-center justify-center gap-1.5 font-semibold hover:text-emerald-700 transition cursor-pointer select-none group w-full"
                             title="Urutkan berdasarkan Status Approval"
                           >
-                            <span>Status Approval 3-Pintu</span>
+                            <span>Status Approval</span>
                             <span className={`p-0.5 rounded transition ${invoiceSortField === "status" ? "text-emerald-700 bg-emerald-100" : "text-slate-400 group-hover:text-slate-600"}`}>
                               {invoiceSortField === "status" ? (
                                 invoiceSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
@@ -6287,20 +6307,29 @@ export default function DashboardPage() {
                     <tbody className="divide-y divide-slate-100 text-slate-700">
                       {sortedSalesInvoices
                         .map((inv) => {
-                          const isProgressAuditPassed = !["PENDING_AUDIT_PROGRESS"].includes(inv.status);
-                          const isTaxPassed = !["PENDING_AUDIT_PROGRESS", "PENDING_FINANCE_TAX"].includes(inv.status);
-                          const isDirectorSigned = ["APPROVED_ISSUED", "PAID_FULL", "OVERDUE"].includes(inv.status);
-
                           return (
                             <tr key={inv.id} className="hover:bg-slate-50/70 transition">
                               <td className="px-4 py-3 font-mono">
-                                <span className="font-bold text-slate-900 block">{inv.invoiceNumber}</span>
-                                <span className="text-[10px] text-slate-400 block">{inv.contractNumber}</span>
-                                <span className="text-[10px] text-rose-600 block font-semibold">Tempo: {inv.dueDate}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedDetailInvoice(inv)}
+                                  className="font-bold text-blue-600 hover:text-blue-800 hover:underline text-left block cursor-pointer transition font-mono"
+                                  title="Klik untuk melihat detail lengkap invoice"
+                                >
+                                  {inv.invoiceNumber}
+                                </button>
+                                <span className="text-[10px] text-slate-400 block font-mono">{inv.contractNumber}</span>
                               </td>
                               <td className="px-4 py-3 max-w-[260px]">
-                                <div className="font-bold text-slate-900 truncate">{inv.clientName}</div>
-                                <div className="text-[11px] text-slate-500 line-clamp-1">{inv.title}</div>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedDetailInvoice(inv)}
+                                  className="text-left w-full group cursor-pointer"
+                                  title="Klik untuk melihat detail lengkap invoice"
+                                >
+                                  <div className="font-bold text-slate-900 group-hover:text-blue-600 group-hover:underline truncate transition">{inv.clientName}</div>
+                                  <div className="text-[11px] text-slate-500 line-clamp-1">{inv.title}</div>
+                                </button>
                                 {inv.progressPercent && (
                                   <span className="inline-block mt-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-100 text-blue-800">
                                     Opname Fisik: {inv.progressPercent}%
@@ -6324,42 +6353,53 @@ export default function DashboardPage() {
                               <td className="px-4 py-3 font-bold text-slate-900 font-mono text-xs">
                                 {formatRupiah(inv.totalAmount)}
                               </td>
+                              <td className="px-4 py-3 text-center whitespace-nowrap">
+                                <span className={`font-mono font-bold block text-xs ${
+                                  inv.status === "OVERDUE" ? "text-rose-600 font-black" : "text-slate-800"
+                                }`}>
+                                  {inv.dueDate}
+                                </span>
+                                <span className="text-[10px] text-slate-400 block font-mono">
+                                  Terbit: {inv.invoiceDate}
+                                </span>
+                              </td>
                               <td className="px-4 py-3 text-center">
-                                {/* Stepper 3 Pintu */}
-                                <div className="flex items-center justify-center gap-1.5">
-                                  {/* Pintu 1: Audit */}
-                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                    isProgressAuditPassed 
-                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300" 
-                                      : inv.status === "PENDING_AUDIT_PROGRESS"
-                                      ? "bg-amber-100 text-amber-800 animate-pulse border border-amber-300"
-                                      : "bg-slate-100 text-slate-400"
-                                  }`}>
-                                    {isProgressAuditPassed ? "✓ Audit" : "Audit"}
+                                {inv.status === "PENDING_AUDIT_PROGRESS" && (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                                    <span>Menunggu Audit</span>
                                   </span>
-                                  <span className="text-slate-300">&rarr;</span>
-                                  {/* Pintu 2: Finance Tax */}
-                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                    isTaxPassed 
-                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300" 
-                                      : inv.status === "PENDING_FINANCE_TAX"
-                                      ? "bg-blue-100 text-blue-800 animate-pulse border border-blue-300"
-                                      : "bg-slate-100 text-slate-400"
-                                  }`}>
-                                    {isTaxPassed ? "✓ Pajak" : "Pajak"}
+                                )}
+                                {inv.status === "PENDING_FINANCE_TAX" && (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-300 shadow-2xs">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping" />
+                                    <span>Menunggu Pajak</span>
                                   </span>
-                                  <span className="text-slate-300">&rarr;</span>
-                                  {/* Pintu 3: Direktur */}
-                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                    isDirectorSigned 
-                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300" 
-                                      : inv.status === "PENDING_DIRECTOR"
-                                      ? "bg-indigo-100 text-indigo-800 animate-pulse border border-indigo-300"
-                                      : "bg-slate-100 text-slate-400"
-                                  }`}>
-                                    {isDirectorSigned ? "✓ Direktur" : "Direktur"}
+                                )}
+                                {inv.status === "PENDING_DIRECTOR" && (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-300 shadow-2xs">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-ping" />
+                                    <span>Menunggu Direktur</span>
                                   </span>
-                                </div>
+                                )}
+                                {inv.status === "APPROVED_ISSUED" && (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>Siap Ditagih</span>
+                                  </span>
+                                )}
+                                {inv.status === "PAID_FULL" && (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-400 shadow-2xs">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                                    <span>Sudah Lunas</span>
+                                  </span>
+                                )}
+                                {inv.status === "OVERDUE" && (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-800 border border-rose-300 shadow-2xs">
+                                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                                    <span>Lewat Tempo</span>
+                                  </span>
+                                )}
                               </td>
                               <td className="px-4 py-3 text-right">
                                 <div className="flex items-center justify-end gap-1.5">
@@ -6667,8 +6707,15 @@ export default function DashboardPage() {
                         .map((inv) => (
                           <tr key={inv.id} className="hover:bg-slate-50/70 transition">
                             <td className="px-4 py-3">
-                              <span className="font-mono font-bold text-slate-900 block">{inv.invoiceNumber}</span>
-                              <strong className="text-slate-800 block text-[11px]">{inv.clientName}</strong>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedDetailInvoice(inv)}
+                                className="text-left group cursor-pointer"
+                                title="Klik untuk melihat detail lengkap invoice"
+                              >
+                                <span className="font-mono font-bold text-blue-600 group-hover:text-blue-800 group-hover:underline block">{inv.invoiceNumber}</span>
+                                <strong className="text-slate-800 group-hover:text-blue-700 block text-[11px]">{inv.clientName}</strong>
+                              </button>
                             </td>
                             <td className="px-4 py-3 font-mono text-[11px]">{inv.contractNumber}</td>
                             <td className="px-4 py-3">
@@ -9097,6 +9144,209 @@ export default function DashboardPage() {
                   Tutup
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DETAIL LENGKAP FAKTUR PENJUALAN */}
+      {selectedDetailInvoice && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 my-6 max-h-[92vh] overflow-y-auto">
+            {/* Header Modal Detail */}
+            <div className="flex justify-between items-start pb-3 border-b border-slate-100 mb-4">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-bold text-slate-900 text-base font-mono">
+                    {selectedDetailInvoice.invoiceNumber}
+                  </h3>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    selectedDetailInvoice.unit === "ME_CORE" ? "bg-blue-100 text-blue-800 border border-blue-200" : "bg-fuchsia-100 text-fuchsia-800 border border-fuchsia-200"
+                  }`}>
+                    {selectedDetailInvoice.unit === "ME_CORE" ? "Jasa ME Core" : "Starlite FTTH"}
+                  </span>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    selectedDetailInvoice.status === "PAID_FULL"
+                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                      : selectedDetailInvoice.status === "OVERDUE"
+                      ? "bg-rose-100 text-rose-800 border border-rose-300"
+                      : selectedDetailInvoice.status === "APPROVED_ISSUED"
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      : "bg-amber-100 text-amber-800 border border-amber-300"
+                  }`}>
+                    {selectedDetailInvoice.status === "PAID_FULL" ? "Sudah Lunas" :
+                     selectedDetailInvoice.status === "OVERDUE" ? "Lewat Tempo" :
+                     selectedDetailInvoice.status === "APPROVED_ISSUED" ? "Siap Ditagih" : "Dalam Proses Approval"}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Kontrak / SPK: <span className="font-mono font-semibold text-slate-700">{selectedDetailInvoice.contractNumber}</span> &bull; Terbit: {selectedDetailInvoice.invoiceDate}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedDetailInvoice(null)}
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Ringkasan Total & Jatuh Tempo */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+              <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50">
+                <span className="text-[10px] uppercase font-bold text-emerald-800 block">Total Tagihan Bersih (Net)</span>
+                <span className="text-xl font-black text-emerald-950 font-mono block mt-1">
+                  {formatRupiah(selectedDetailInvoice.totalAmount)}
+                </span>
+                <span className="text-[11px] text-emerald-700 block mt-0.5">
+                  DPP: {formatRupiah(selectedDetailInvoice.dppAmount)} + PPN 11% {selectedDetailInvoice.pph23Amount ? "- PPh 23 (2%)" : ""}
+                </span>
+              </div>
+
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
+                <span className="text-[10px] uppercase font-bold text-slate-600 block">Batas Waktu Pembayaran</span>
+                <span className={`text-xl font-bold font-mono block mt-1 ${
+                  selectedDetailInvoice.status === "OVERDUE" ? "text-rose-600" : "text-slate-900"
+                }`}>
+                  {selectedDetailInvoice.dueDate}
+                </span>
+                <span className="text-[11px] text-slate-500 block mt-0.5">
+                  {selectedDetailInvoice.status === "OVERDUE" ? "Telah melewati batas tanggal jatuh tempo" : "Termin pembayaran standar 30 hari kalender"}
+                </span>
+              </div>
+            </div>
+
+            {/* Informasi Klien / Pelanggan */}
+            <div className="mb-4 p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-2">
+              <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block border-b border-slate-200 pb-1">
+                Data Klien / Pemberi Kerja:
+              </span>
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div>
+                  <span className="text-slate-400 block">Nama Klien:</span>
+                  <strong className="text-slate-900 text-xs block">{selectedDetailInvoice.clientName}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-400 block">NPWP Klien:</span>
+                  <span className="font-mono text-slate-700 block">{selectedDetailInvoice.clientNPWP || "-"}</span>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-slate-400 block">Alamat / Lokasi Proyek:</span>
+                  <span className="text-slate-700 block">{selectedDetailInvoice.clientAddress || "-"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Rincian Pekerjaan & Opname */}
+            <div className="mb-4 p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-2">
+              <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block border-b border-slate-200 pb-1">
+                Uraian Pekerjaan &amp; Kemajuan Fisik:
+              </span>
+              <div className="text-[11px] space-y-1.5">
+                <div>
+                  <span className="text-slate-400 block">Judul Tagihan / Proyek:</span>
+                  <strong className="text-slate-900 text-xs block">{selectedDetailInvoice.title}</strong>
+                </div>
+                {selectedDetailInvoice.progressPercent && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <span className="text-slate-500">Pencapaian Opname Fisik:</span>
+                    <span className="px-2 py-0.5 rounded font-bold text-xs bg-blue-100 text-blue-800">
+                      {selectedDetailInvoice.progressPercent}% Selesai
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Rincian Kalkulasi Pajak */}
+            <div className="mb-4 border border-slate-200 rounded-xl overflow-hidden text-xs">
+              <div className="bg-slate-100 px-3 py-2 font-bold text-slate-800 border-b border-slate-200">
+                Rincian Kalkulasi Perpajakan &amp; Nilai Tagihan
+              </div>
+              <div className="p-3 bg-white space-y-2">
+                <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                  <span className="text-slate-600">Dasar Pengenaan Pajak (DPP):</span>
+                  <span className="font-mono font-bold text-slate-900">{formatRupiah(selectedDetailInvoice.dppAmount)}</span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                  <span className="text-slate-600">Pajak Pertambahan Nilai (PPN 11%):</span>
+                  <span className="font-mono font-bold text-emerald-700">+{formatRupiah(selectedDetailInvoice.ppnAmount)}</span>
+                </div>
+                {selectedDetailInvoice.pph23Amount ? (
+                  <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                    <span className="text-slate-600">Pajak Penghasilan Pasal 23 (PPh 23 - 2% Jasa):</span>
+                    <span className="font-mono font-bold text-rose-600">-{formatRupiah(selectedDetailInvoice.pph23Amount)}</span>
+                  </div>
+                ) : null}
+                <div className="flex justify-between items-center pt-2 font-bold text-sm bg-slate-50 p-2 rounded-lg">
+                  <span className="text-slate-900">Total Tagihan Bersih:</span>
+                  <span className="font-mono font-black text-emerald-800 text-base">{formatRupiah(selectedDetailInvoice.totalAmount)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Rekening Tujuan Transfer Pembayaran */}
+            <div className="mb-4 p-3 bg-blue-50/60 border border-blue-200 rounded-xl text-xs">
+              <span className="text-[10px] text-blue-800 uppercase font-bold block mb-1">Rekening Kas / Bank Penampung Pembayaran:</span>
+              <span className="font-mono font-bold text-slate-800 text-xs block">
+                {selectedDetailInvoice.targetBankAccount || "Bank Mandiri Operasional (A/C: 133-00-981240-8)"}
+              </span>
+            </div>
+
+            {/* Tombol Aksi di Bawah Modal */}
+            <div className="pt-3 flex justify-between items-center border-t border-slate-100 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const inv = selectedDetailInvoice;
+                    handleOpenPrintInvoice(inv, "SALES_INVOICE");
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg text-xs font-bold transition cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Cetak Faktur (A4)</span>
+                </button>
+
+                {selectedDetailInvoice.unit === "ME_CORE" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const inv = selectedDetailInvoice;
+                      handleOpenPrintInvoice(inv, "PROGRESS_REPORT");
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-xs font-semibold transition cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Cetak BAKP Opname</span>
+                  </button>
+                )}
+
+                {selectedDetailInvoice.status === "APPROVED_ISSUED" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const invId = selectedDetailInvoice.id;
+                      setSelectedDetailInvoice(null);
+                      handleOpenCreateReceipt(invId);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs"
+                  >
+                    <Receipt className="w-3.5 h-3.5" />
+                    <span>Terima Bayar (Catat BKM)</span>
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedDetailInvoice(null)}
+                className="px-4 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-semibold hover:bg-slate-900 transition cursor-pointer"
+              >
+                Tutup
+              </button>
             </div>
           </div>
         </div>
