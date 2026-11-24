@@ -386,15 +386,18 @@ export interface SalesInvoice {
 
 export interface OfficialReceiptBKM {
   id: string;
-  receiptNumber: string; // "BKM-2026-11-001"
-  receiptType?: 'SALES_INVOICE' | 'OTHER_INCOME';
-  category?: string; // e.g. "Pelunasan Faktur Penjualan", "Pendapatan Jasa Giro/Bunga Bank", "Penjualan Sisa Material/Scrap", "Pendapatan Sewa Alat", dll.
+  receiptNumber: string; // "BKM-2026-11-001" or "BTI-2026-11-001"
+  receiptType?: 'SALES_INVOICE' | 'OTHER_INCOME' | 'INTERNAL_TRANSFER';
+  category?: string; // e.g. "Pelunasan Faktur Penjualan", "Pendapatan Jasa Giro/Bunga Bank", "Penjualan Sisa Material/Scrap", "Pemindahbukuan Antar Kas & Bank", dll.
   invoiceNumber?: string;
   clientName: string;
   amountReceived: number;
   receivedDate: string;
   paymentMethod: string;
   bankTarget: string;
+  sourceAccount?: string; // Akun pengirim (e.g. "Petty Cash Operasional", "Bank BCA 800-xxx")
+  targetAccount?: string; // Akun penerima (e.g. "Bank Mandiri 130-xxx")
+  adminFee?: number; // Biaya administrasi transfer bank (misal Rp 2.500)
   forPaymentOf: string;
   cashierName: string;
   authorizedBy: string;
@@ -404,6 +407,7 @@ export interface OfficialReceiptBKM {
   totalInvoiceAmount?: number;
   remainingBalance?: number;
   isInstallment?: boolean;
+  isNonRevenue?: boolean; // Menandai mutasi internal aset lancar neraca (tidak dihitung omset)
 }
 
 // Accounting & Financial Reporting Models

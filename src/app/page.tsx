@@ -53,7 +53,8 @@ import {
   Plus,
   Upload,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  ArrowLeftRight
 } from "lucide-react";
 import { PrintableDocumentModal } from "@/components/PrintableDocumentModal";
 import { 
@@ -669,7 +670,7 @@ export default function DashboardPage() {
 
   // New Receipt Modal Form State (Modul Penerimaan Penjualan dan Lainnya)
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
-  const [receiptType, setReceiptType] = useState<"SALES_INVOICE" | "OTHER_INCOME">("SALES_INVOICE");
+  const [receiptType, setReceiptType] = useState<"SALES_INVOICE" | "OTHER_INCOME" | "INTERNAL_TRANSFER">("SALES_INVOICE");
   const [receiptSelectedInvoiceId, setReceiptSelectedInvoiceId] = useState("");
   const [receiptClientName, setReceiptClientName] = useState("");
   const [receiptCategory, setReceiptCategory] = useState("Pelunasan Faktur Penjualan");
@@ -677,10 +678,13 @@ export default function DashboardPage() {
   const [receiptAmount, setReceiptAmount] = useState("");
   const [receiptPaymentMethod, setReceiptPaymentMethod] = useState("Transfer Bank Mandiri");
   const [receiptBankTarget, setReceiptBankTarget] = useState("Bank Mandiri Operasional (A/C: 133-00-981240-8)");
+  const [receiptSourceAccount, setReceiptSourceAccount] = useState("Kas Kecil Lapangan (Petty Cash Operasional)");
+  const [receiptTargetAccount, setReceiptTargetAccount] = useState("Bank BCA Operasional (A/C: 731-0982-11)");
+  const [receiptAdminFee, setReceiptAdminFee] = useState("");
   const [receiptRefNumber, setReceiptRefNumber] = useState("");
   const [receiptDate, setReceiptDate] = useState("2026-11-24");
   const [receiptPaymentMode, setReceiptPaymentMode] = useState<"FULL" | "PARTIAL">("FULL");
-  const [receiptFilterType, setReceiptFilterType] = useState<"ALL" | "SALES_INVOICE" | "OTHER_INCOME">("ALL");
+  const [receiptFilterType, setReceiptFilterType] = useState<"ALL" | "SALES_INVOICE" | "OTHER_INCOME" | "INTERNAL_TRANSFER">("ALL");
   const [receiptSearchTerm, setReceiptSearchTerm] = useState("");
   
   // Helper Perhitungan Umur Piutang (Status Aging dalam Hari)
@@ -917,14 +921,17 @@ export default function DashboardPage() {
   const filteredOfficialReceipts = useMemo(() => {
     return officialReceipts.filter((rec) => {
       if (receiptFilterType !== "ALL") {
-        if (receiptFilterType === "SALES_INVOICE" && rec.receiptType === "OTHER_INCOME") return false;
+        if (receiptFilterType === "SALES_INVOICE" && rec.receiptType !== "SALES_INVOICE") return false;
         if (receiptFilterType === "OTHER_INCOME" && rec.receiptType !== "OTHER_INCOME") return false;
+        if (receiptFilterType === "INTERNAL_TRANSFER" && rec.receiptType !== "INTERNAL_TRANSFER") return false;
       }
       if (receiptCategoryFilter !== "ALL") {
         if (rec.category !== receiptCategoryFilter) return false;
       }
       if (receiptBankFilter !== "ALL") {
-        if (!rec.bankTarget.toLowerCase().includes(receiptBankFilter.toLowerCase())) return false;
+        const matchesTarget = (rec.bankTarget || "").toLowerCase().includes(receiptBankFilter.toLowerCase());
+        const matchesSource = (rec.sourceAccount || "").toLowerCase().includes(receiptBankFilter.toLowerCase());
+        if (!matchesTarget && !matchesSource) return false;
       }
       if (receiptSearchTerm.trim()) {
         const q = receiptSearchTerm.toLowerCase();
@@ -934,7 +941,9 @@ export default function DashboardPage() {
         const matchPurpose = (rec.forPaymentOf || "").toLowerCase().includes(q);
         const matchCat = (rec.category || "").toLowerCase().includes(q);
         const matchBank = (rec.bankTarget || "").toLowerCase().includes(q);
-        if (!matchNum && !matchRef && !matchClient && !matchPurpose && !matchCat && !matchBank) {
+        const matchSource = (rec.sourceAccount || "").toLowerCase().includes(q);
+        const matchTarget = (rec.targetAccount || "").toLowerCase().includes(q);
+        if (!matchNum && !matchRef && !matchClient && !matchPurpose && !matchCat && !matchBank && !matchSource && !matchTarget) {
           return false;
         }
       }
@@ -2044,9 +2053,13 @@ export default function DashboardPage() {
   // Submit Formulir Penerimaan Kas & Bank Baru
   const handleSaveReceipt = (e: React.FormEvent) => {
     e.preventDefault();
-    const bkmNum = `BKM-2026-11-${Math.floor(100 + Math.random() * 900)}`;
+    const isInternalTx = receiptType === "INTERNAL_TRANSFER";
+    const voucherCode = isInternalTx
+      ? `BTI-2026-11-${Math.floor(100 + Math.random() * 900)}`
+      : `BKM-2026-11-${Math.floor(100 + Math.random() * 900)}`;
     const parsedAmount = parseFloat(receiptAmount) || 0;
     if (parsedAmount <= 0) return;
+    const parsedAdminFee = parseFloat(receiptAdminFee) || 0;
 
     let installmentNo = 1;
     let totalInv = parsedAmount;
@@ -2068,7 +2081,7 @@ export default function DashboardPage() {
           paymentId: `pay-${Date.now()}`,
           paymentDate: receiptDate,
           amountPaid: parsedAmount,
-          voucherNumber: bkmNum,
+          voucherNumber: voucherCode,
           bankAccount: receiptBankTarget,
           paymentMethod: receiptPaymentMethod.toLowerCase().includes("tunai") ? "CASH" : "TRANSFER_BANK",
           referenceNote: isFull
@@ -2090,15 +2103,18 @@ export default function DashboardPage() {
 
     const newReceipt: OfficialReceiptBKM = {
       id: `rcpt-${Date.now()}`,
-      receiptNumber: bkmNum,
+      receiptNumber: voucherCode,
       receiptType: receiptType,
-      category: receiptCategory,
+      category: isInternalTx ? "Pemindahbukuan Antar Kas & Bank" : receiptCategory,
       invoiceNumber: receiptType === "SALES_INVOICE" ? (salesInvoices.find(i => i.id === receiptSelectedInvoiceId)?.invoiceNumber || "") : undefined,
-      clientName: receiptClientName,
+      clientName: isInternalTx ? `${receiptSourceAccount} ➔ ${receiptTargetAccount}` : receiptClientName,
       amountReceived: parsedAmount,
       receivedDate: receiptDate,
-      paymentMethod: receiptPaymentMethod,
-      bankTarget: receiptBankTarget,
+      paymentMethod: isInternalTx ? receiptPaymentMethod : receiptPaymentMethod,
+      bankTarget: isInternalTx ? receiptTargetAccount : receiptBankTarget,
+      sourceAccount: isInternalTx ? receiptSourceAccount : undefined,
+      targetAccount: isInternalTx ? receiptTargetAccount : undefined,
+      adminFee: isInternalTx ? parsedAdminFee : undefined,
       forPaymentOf: receiptForPaymentOf,
       cashierName: "Siti Rahmawati (Kasir)",
       authorizedBy: "Dewi Anggraeni, SE (Finance Head)",
@@ -2106,40 +2122,62 @@ export default function DashboardPage() {
       installmentNumber: receiptType === "SALES_INVOICE" ? installmentNo : undefined,
       totalInvoiceAmount: receiptType === "SALES_INVOICE" ? totalInv : undefined,
       remainingBalance: receiptType === "SALES_INVOICE" ? remainingBal : undefined,
-      isInstallment: receiptType === "SALES_INVOICE" ? isInstallmentTx : false
+      isInstallment: receiptType === "SALES_INVOICE" ? isInstallmentTx : false,
+      isNonRevenue: isInternalTx
     };
 
     setOfficialReceipts(prev => [newReceipt, ...prev]);
 
-    // Catat ke transaksi keuangan umum
-    const newTx: FinancialTransaction = {
-      id: `tx-in-${Date.now()}`,
-      transactionNumber: `TX-IN-${Date.now().toString().slice(-6)}`,
-      date: receiptDate,
-      description: receiptForPaymentOf,
-      unit: receiptType === "SALES_INVOICE" ? (salesInvoices.find(i => i.id === receiptSelectedInvoiceId)?.unit || "ME_CORE") : "OVERHEAD_OPERASIONAL",
-      type: "INCOME",
-      category: receiptCategory,
-      amount: parsedAmount,
-      status: "COMPLETED",
-      paymentMethod: receiptPaymentMethod,
-      recipientOrPayer: receiptClientName
-    };
-    setTransactions(prev => [newTx, ...prev]);
+    // Transaksi keuangan: Beban admin bank jika ada pada pemindahbukuan, atau pendapatan kas jika transaksi riil
+    if (isInternalTx && parsedAdminFee > 0) {
+      const adminFeeTx: FinancialTransaction = {
+        id: `tx-exp-${Date.now()}`,
+        transactionNumber: `TX-ADM-${Date.now().toString().slice(-6)}`,
+        date: receiptDate,
+        description: `Biaya Admin Bank Pemindahbukuan (${voucherCode})`,
+        unit: "OVERHEAD_OPERASIONAL",
+        type: "EXPENSE",
+        category: "Operasional",
+        amount: parsedAdminFee,
+        status: "COMPLETED",
+        paymentMethod: receiptPaymentMethod,
+        recipientOrPayer: "Bank Administrasi"
+      };
+      setTransactions(prev => [adminFeeTx, ...prev]);
+    } else if (!isInternalTx) {
+      const newTx: FinancialTransaction = {
+        id: `tx-in-${Date.now()}`,
+        transactionNumber: `TX-IN-${Date.now().toString().slice(-6)}`,
+        date: receiptDate,
+        description: receiptForPaymentOf,
+        unit: receiptType === "SALES_INVOICE" ? (salesInvoices.find(i => i.id === receiptSelectedInvoiceId)?.unit || "ME_CORE") : "OVERHEAD_OPERASIONAL",
+        type: "INCOME",
+        category: receiptCategory,
+        amount: parsedAmount,
+        status: "COMPLETED",
+        paymentMethod: receiptPaymentMethod,
+        recipientOrPayer: receiptClientName
+      };
+      setTransactions(prev => [newTx, ...prev]);
+    }
 
     setIsReceiptModalOpen(false);
 
-    // Langsung buka pratinjau cetak Voucher BKM Resmi A4
+    // Langsung buka pratinjau cetak Voucher BTI (jika transfer internal) atau BKM Resmi A4
     handleOpenPrintReceipt(newReceipt);
 
-    if (receiptType === "SALES_INVOICE") {
+    if (isInternalTx) {
+      setApprovalNotification(
+        `Pemindahbukuan dana sebesar ${formatRupiah(parsedAmount)} berhasil dibukukan & Voucher BTI terbit.`
+      );
+    } else if (receiptType === "SALES_INVOICE") {
       setApprovalNotification(
         !isInstallmentTx
           ? `Pelunasan faktur sebesar ${formatRupiah(parsedAmount)} berhasil diterima & Voucher BKM terbit.`
           : `Pembayaran cicilan ke-${installmentNo} sebesar ${formatRupiah(parsedAmount)} berhasil dicatat (Sisa Piutang: ${formatRupiah(remainingBal)}).`
       );
     } else {
-      setApprovalNotification(`Penerimaan kas/bank sebesar ${formatRupiah(parsedAmount)} berhasil dicatat. Kuitansi ${bkmNum} diterbitkan.`);
+      setApprovalNotification(`Penerimaan kas/bank sebesar ${formatRupiah(parsedAmount)} berhasil dicatat. Kuitansi ${voucherCode} diterbitkan.`);
     }
     setTimeout(() => setApprovalNotification(null), 4000);
   };
@@ -6043,15 +6081,22 @@ export default function DashboardPage() {
               </div>
 
               <div className="p-3 bg-white rounded-xl border border-emerald-200 bg-emerald-50/30 shadow-2xs">
-                <span className="text-emerald-800 block">Total Penerimaan Kas &amp; Bank</span>
+                <span className="text-emerald-800 block">Total Penerimaan Kas &amp; Bank (Omset)</span>
                 <strong className="text-base text-emerald-900 font-extrabold font-mono block">
                   {formatRupiah(
-                    officialReceipts.reduce((acc, r) => acc + r.amountReceived, 0)
+                    officialReceipts.filter(r => !r.isNonRevenue && r.receiptType !== "INTERNAL_TRANSFER").reduce((acc, r) => acc + r.amountReceived, 0)
                   )}
                 </strong>
-                <span className="text-[10px] text-emerald-700 mt-0.5 block">
-                  {officialReceipts.length} Kuitansi BKM Terbit
-                </span>
+                <div className="flex items-center justify-between mt-0.5 text-[10px]">
+                  <span className="text-emerald-700">
+                    {officialReceipts.filter(r => !r.isNonRevenue && r.receiptType !== "INTERNAL_TRANSFER").length} Kuitansi BKM Terbit
+                  </span>
+                  {officialReceipts.some(r => r.isNonRevenue || r.receiptType === "INTERNAL_TRANSFER") && (
+                    <span className="text-indigo-600 font-semibold" title="Mutasi internal kas & bank (bersifat netral, tidak dihitung omset)">
+                      Mutasi: {formatRupiah(officialReceipts.filter(r => r.isNonRevenue || r.receiptType === "INTERNAL_TRANSFER").reduce((acc, r) => acc + r.amountReceived, 0))}
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="p-3 bg-white rounded-xl border border-rose-200 bg-rose-50/30 shadow-2xs">
@@ -6873,6 +6918,7 @@ export default function DashboardPage() {
                       <option value="ALL">Semua Jenis</option>
                       <option value="SALES_INVOICE">Pelunasan Faktur Penjualan</option>
                       <option value="OTHER_INCOME">Penerimaan Pendapatan Lainnya</option>
+                      <option value="INTERNAL_TRANSFER">Pemindahbukuan Kas &amp; Bank</option>
                     </select>
                   </div>
 
@@ -6888,6 +6934,7 @@ export default function DashboardPage() {
                       <option value="Pelunasan Faktur Penjualan">Pelunasan Faktur Penjualan</option>
                       <option value="Pendapatan Jasa Giro & Bunga Bank">Pendapatan Jasa Giro &amp; Bunga Bank</option>
                       <option value="Penjualan Sisa Material / Scrap">Penjualan Sisa Material / Scrap</option>
+                      <option value="Pemindahbukuan Antar Kas & Bank">Pemindahbukuan Antar Kas &amp; Bank</option>
                       <option value="Pendapatan Sewa Alat / Peralatan">Pendapatan Sewa Alat / Peralatan</option>
                       <option value="Klaim Pengembalian Asuransi / Restitusi">Klaim Pengembalian Asuransi</option>
                       <option value="Setoran Sisa Kasbon & Realisasi LPJ">Setoran Sisa Kasbon &amp; LPJ</option>
@@ -6906,6 +6953,7 @@ export default function DashboardPage() {
                       <option value="ALL">Semua Rekening</option>
                       <option value="Mandiri">Bank Mandiri</option>
                       <option value="BCA">Bank BCA</option>
+                      <option value="BRI">Bank BRI</option>
                       <option value="Petty Cash">Kas Kecil Lapangan</option>
                     </select>
                   </div>
@@ -7083,10 +7131,11 @@ export default function DashboardPage() {
                       {sortedOfficialReceipts
                         .map((rec) => {
                           const isOther = rec.receiptType === "OTHER_INCOME";
+                          const isInternal = rec.receiptType === "INTERNAL_TRANSFER" || rec.isNonRevenue;
                           return (
                             <tr key={rec.id} className="hover:bg-slate-50/70 transition">
                               <td className="px-4 py-3 font-mono">
-                                <span className="font-bold text-slate-900 block">{rec.receiptNumber}</span>
+                                <span className={`font-bold block ${isInternal ? "text-indigo-950 font-black" : "text-slate-900"}`}>{rec.receiptNumber}</span>
                                 {rec.referenceNumber && (
                                   <span className="text-[10px] text-slate-400 block font-mono">Ref: {rec.referenceNumber}</span>
                                 )}
@@ -7094,11 +7143,13 @@ export default function DashboardPage() {
                               <td className="px-4 py-3 text-slate-600">{rec.receivedDate}</td>
                               <td className="px-4 py-3">
                                 <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                                  isOther 
+                                  isInternal
+                                    ? "bg-indigo-100 text-indigo-800 border border-indigo-200"
+                                    : isOther 
                                     ? "bg-purple-100 text-purple-800 border border-purple-200" 
                                     : "bg-blue-100 text-blue-800 border border-blue-200"
                                 }`}>
-                                  {isOther ? "Penerimaan Lainnya" : "Pelunasan Penjualan"}
+                                  {isInternal ? "Mutasi Kas (Non-Omset)" : isOther ? "Penerimaan Lainnya" : "Pelunasan Penjualan"}
                                 </span>
                                 {rec.category && (
                                   <span className="block text-[10px] text-slate-500 font-medium mt-0.5 truncate max-w-[150px]">
@@ -7106,13 +7157,28 @@ export default function DashboardPage() {
                                   </span>
                                 )}
                               </td>
-                              <td className="px-4 py-3 font-bold text-slate-900">{rec.clientName}</td>
+                              <td className="px-4 py-3">
+                                {isInternal ? (
+                                  <div className="font-semibold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">{rec.sourceAccount || "Petty Cash"}</span>
+                                    <span className="text-indigo-600 font-black">&rarr;</span>
+                                    <span className="text-indigo-900 bg-indigo-50 px-1.5 py-0.5 rounded text-[10px] font-bold">{rec.targetAccount || rec.bankTarget}</span>
+                                  </div>
+                                ) : (
+                                  <span className="font-bold text-slate-900">{rec.clientName}</span>
+                                )}
+                              </td>
                               <td className="px-4 py-3 max-w-[220px]">
                                 <span className="text-slate-700 line-clamp-2" title={rec.forPaymentOf}>
                                   {rec.forPaymentOf}
                                 </span>
+                                {isInternal && (rec.adminFee || 0) > 0 && (
+                                  <span className="text-[10px] text-rose-600 block mt-0.5 font-mono">
+                                    + Admin Bank: {formatRupiah(rec.adminFee || 0)}
+                                  </span>
+                                )}
                               </td>
-                              <td className="px-4 py-3 font-mono font-bold text-emerald-700 text-xs">
+                              <td className={`px-4 py-3 font-mono font-bold text-xs ${isInternal ? "text-indigo-700" : "text-emerald-700"}`}>
                                 {formatRupiah(rec.amountReceived)}
                               </td>
                               <td className="px-4 py-3 text-[11px] text-slate-500 font-mono max-w-[160px] truncate" title={rec.bankTarget}>
@@ -7122,10 +7188,14 @@ export default function DashboardPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleOpenPrintReceipt(rec)}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg font-bold text-xs transition cursor-pointer"
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold text-xs transition cursor-pointer border ${
+                                    isInternal 
+                                      ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200" 
+                                      : "bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200"
+                                  }`}
                                 >
                                   <Printer className="w-3.5 h-3.5" />
-                                  <span>Cetak Kuitansi</span>
+                                  <span>{isInternal ? "Voucher BTI" : "Cetak Kuitansi"}</span>
                                 </button>
                               </td>
                             </tr>
@@ -8087,7 +8157,7 @@ export default function DashboardPage() {
                 <label className="block font-semibold text-slate-700 mb-1.5">
                   Jenis Penerimaan Kas/Bank <span className="text-red-500">*</span>
                 </label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   <button
                     type="button"
                     onClick={() => {
@@ -8105,8 +8175,8 @@ export default function DashboardPage() {
                   >
                     <FileText className="w-4 h-4 text-blue-600 shrink-0" />
                     <div>
-                      <span className="block text-xs">Pelunasan Faktur Penjualan</span>
-                      <span className="block text-[10px] text-slate-500 font-normal">Pembayaran invoice dari klien/customer</span>
+                      <span className="block text-xs">Pelunasan Faktur</span>
+                      <span className="block text-[10px] text-slate-500 font-normal">Tagihan invoice klien</span>
                     </div>
                   </button>
 
@@ -8129,8 +8199,34 @@ export default function DashboardPage() {
                   >
                     <TrendingUp className="w-4 h-4 text-purple-600 shrink-0" />
                     <div>
-                      <span className="block text-xs">Penerimaan Pendapatan Lainnya</span>
-                      <span className="block text-[10px] text-slate-500 font-normal">Bunga bank, scrap, sewa alat, dll</span>
+                      <span className="block text-xs">Pendapatan Lainnya</span>
+                      <span className="block text-[10px] text-slate-500 font-normal">Bunga bank, scrap, dll</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReceiptType("INTERNAL_TRANSFER");
+                      setReceiptSelectedInvoiceId("");
+                      setReceiptCategory("Pemindahbukuan Antar Kas & Bank");
+                      setReceiptClientName("Petty Cash ➔ Bank BCA");
+                      setReceiptForPaymentOf("Penyetoran sisa kasbon operasional ke rekening giro BCA");
+                      setReceiptAmount("");
+                      setReceiptAdminFee("");
+                      setReceiptPaymentMethod("Transfer Antar Rekening/Kas");
+                      setReceiptRefNumber(`BTI-TRF-${Date.now().toString().slice(-6)}`);
+                    }}
+                    className={`flex items-center gap-2 p-3 rounded-xl border font-bold text-left cursor-pointer transition ${
+                      receiptType === "INTERNAL_TRANSFER"
+                        ? "border-indigo-500 bg-indigo-50/70 text-indigo-900 shadow-xs ring-1 ring-indigo-400"
+                        : "border-slate-200 hover:bg-slate-50 text-slate-700"
+                    }`}
+                  >
+                    <ArrowLeftRight className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <div>
+                      <span className="block text-xs">Pemindahbukuan</span>
+                      <span className="block text-[10px] text-slate-500 font-normal">Mutasi Kas &amp; Bank (Non-Omset)</span>
                     </div>
                   </button>
                 </div>
@@ -8375,11 +8471,120 @@ export default function DashboardPage() {
                 </div>
               )}
 
+              {/* Opsi 3: Jika Pemindahbukuan Antar Kas & Bank */}
+              {receiptType === "INTERNAL_TRANSFER" && (
+                <div className="space-y-3.5 p-3.5 bg-indigo-50/50 border border-indigo-200 rounded-xl">
+                  {/* Banner Informasi Akuntansi */}
+                  <div className="flex items-start gap-2 p-2.5 bg-white border border-indigo-200 rounded-lg text-indigo-950">
+                    <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                    <div className="text-[11px] leading-relaxed">
+                      <strong>Standar Akuntansi (Non-Revenue):</strong> Pemindahbukuan dana antar-kas dan rekening bank adalah mutasi aset lancar (Neraca). Transaksi ini <strong>TIDAK menambah omset/pendapatan</strong> pada Laba Rugi, sehingga mencegah double counting omset.
+                    </div>
+                  </div>
+
+                  {/* Dropdown Akun Asal & Akun Tujuan */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Akun Kas/Bank Asal (Sumber Dana) <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={receiptSourceAccount}
+                        onChange={(e) => setReceiptSourceAccount(e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg p-2 bg-white text-slate-800 font-medium"
+                        required
+                      >
+                        <option value="Kas Kecil Lapangan (Petty Cash Operasional)">Kas Kecil Lapangan (Petty Cash Operasional)</option>
+                        <option value="Kas Besar Kantor Pusat">Kas Besar Kantor Pusat</option>
+                        <option value="Bank BCA Operasional (A/C: 731-0982-11)">Bank BCA Operasional (A/C: 731-0982-11)</option>
+                        <option value="Bank Mandiri Operasional (A/C: 133-00-981240-8)">Bank Mandiri Operasional (A/C: 133-00-981240-8)</option>
+                        <option value="Bank BRI Operasional (A/C: 0341-01-000892-30-1)">Bank BRI Operasional (A/C: 0341-01-000892-30-1)</option>
+                      </select>
+                      <span className="text-[10px] text-slate-500 mt-0.5 block">Saldo akun ini akan berkurang (Kredit)</span>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Akun Kas/Bank Tujuan (Penerima Dana) <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={receiptTargetAccount}
+                        onChange={(e) => {
+                          setReceiptTargetAccount(e.target.value);
+                          setReceiptBankTarget(e.target.value);
+                        }}
+                        className="w-full border border-slate-300 rounded-lg p-2 bg-white text-slate-800 font-medium"
+                        required
+                      >
+                        <option value="Bank BCA Operasional (A/C: 731-0982-11)">Bank BCA Operasional (A/C: 731-0982-11)</option>
+                        <option value="Bank Mandiri Operasional (A/C: 133-00-981240-8)">Bank Mandiri Operasional (A/C: 133-00-981240-8)</option>
+                        <option value="Bank BRI Operasional (A/C: 0341-01-000892-30-1)">Bank BRI Operasional (A/C: 0341-01-000892-30-1)</option>
+                        <option value="Kas Kecil Lapangan (Petty Cash Operasional)">Kas Kecil Lapangan (Petty Cash Operasional)</option>
+                        <option value="Kas Besar Kantor Pusat">Kas Besar Kantor Pusat</option>
+                      </select>
+                      <span className="text-[10px] text-emerald-600 mt-0.5 block">Saldo akun ini akan bertambah (Debit)</span>
+                    </div>
+                  </div>
+
+                  {receiptSourceAccount === receiptTargetAccount && (
+                    <div className="p-2 bg-rose-50 border border-rose-300 text-rose-700 rounded-lg text-xs font-semibold flex items-center gap-1.5">
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+                      <span>Akun sumber dan akun tujuan tidak boleh sama! Silakan pilih rekening/kas yang berbeda.</span>
+                    </div>
+                  )}
+
+                  {/* Nominal Transfer & Biaya Admin Bank */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Nominal Pemindahan Dana (Rp) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        value={receiptAmount}
+                        onChange={(e) => setReceiptAmount(e.target.value)}
+                        placeholder="Contoh: 5000000"
+                        className="w-full border border-slate-300 rounded-lg p-2 font-mono font-bold text-indigo-900 bg-white"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Biaya Admin Bank (Opsional, Rp)
+                      </label>
+                      <input
+                        type="number"
+                        value={receiptAdminFee}
+                        onChange={(e) => setReceiptAdminFee(e.target.value)}
+                        placeholder="Contoh: 2500 (BI-Fast) atau 0"
+                        className="w-full border border-slate-300 rounded-lg p-2 font-mono text-slate-700 bg-white"
+                      />
+                      <span className="text-[10px] text-slate-500 mt-0.5 block">Dialokasikan ke Beban Admin Bank (Laba Rugi)</span>
+                    </div>
+                  </div>
+
+                  {/* Keterangan / Uraian Keperluan */}
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Keterangan / Keperluan Pemindahbukuan <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={receiptForPaymentOf}
+                      onChange={(e) => setReceiptForPaymentOf(e.target.value)}
+                      placeholder="Contoh: Setoran sisa kasbon proyek Sentul ke rekening BCA operasional..."
+                      className="w-full border border-slate-300 rounded-lg p-2 bg-white text-slate-800"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Detail Transaksi Keuangan (Shared) */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Tanggal Diterima <span className="text-red-500">*</span>
+                    Tanggal Transaksi <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="date"
@@ -8391,17 +8596,28 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Metode Pembayaran <span className="text-red-500">*</span>
+                    Metode Transaksi <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={receiptPaymentMethod}
                     onChange={(e) => setReceiptPaymentMethod(e.target.value)}
                     className="w-full border border-slate-300 rounded-lg p-2 bg-white text-slate-800"
                   >
-                    <option value="Transfer Bank Mandiri">Transfer Bank Mandiri</option>
-                    <option value="Transfer Bank BCA">Transfer Bank BCA</option>
-                    <option value="Kredit Otomatis Bank">Kredit Otomatis Bank / Giro</option>
-                    <option value="Tunai / Kasir">Tunai / Setor Kasir</option>
+                    {receiptType === "INTERNAL_TRANSFER" ? (
+                      <>
+                        <option value="Transfer Antar Rekening/Kas">Transfer Antar Rekening/Kas</option>
+                        <option value="Setor Tunai Antar Kas/Bank">Setor Tunai Antar Kas/Bank</option>
+                        <option value="Transfer Online / BI-Fast">Transfer Online / BI-Fast</option>
+                        <option value="Kliring / RTGS">Kliring / RTGS</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="Transfer Bank Mandiri">Transfer Bank Mandiri</option>
+                        <option value="Transfer Bank BCA">Transfer Bank BCA</option>
+                        <option value="Kredit Otomatis Bank">Kredit Otomatis Bank / Giro</option>
+                        <option value="Tunai / Kasir">Tunai / Setor Kasir</option>
+                      </>
+                    )}
                   </select>
                 </div>
               </div>
@@ -8409,17 +8625,27 @@ export default function DashboardPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Rekening Kas / Bank Penampung <span className="text-red-500">*</span>
+                    {receiptType === "INTERNAL_TRANSFER" ? "Rekening Kas/Bank Tujuan" : "Rekening Kas / Bank Penampung"} <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    value={receiptBankTarget}
-                    onChange={(e) => setReceiptBankTarget(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg p-2 bg-white text-slate-800"
-                  >
-                    <option value="Bank Mandiri Operasional (A/C: 133-00-981240-8)">Bank Mandiri Operasional (A/C: 133-00-981240-8)</option>
-                    <option value="Bank BCA Operasional (A/C: 731-0982-11)">Bank BCA Operasional (A/C: 731-0982-11)</option>
-                    <option value="Kas Kecil Lapangan (Petty Cash Operasional)">Kas Kecil Lapangan (Petty Cash Operasional)</option>
-                  </select>
+                  {receiptType === "INTERNAL_TRANSFER" ? (
+                    <input
+                      type="text"
+                      value={receiptTargetAccount}
+                      readOnly
+                      className="w-full border border-slate-200 bg-slate-100 rounded-lg p-2 text-slate-700 font-semibold cursor-not-allowed select-none"
+                    />
+                  ) : (
+                    <select
+                      value={receiptBankTarget}
+                      onChange={(e) => setReceiptBankTarget(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg p-2 bg-white text-slate-800"
+                    >
+                      <option value="Bank Mandiri Operasional (A/C: 133-00-981240-8)">Bank Mandiri Operasional (A/C: 133-00-981240-8)</option>
+                      <option value="Bank BCA Operasional (A/C: 731-0982-11)">Bank BCA Operasional (A/C: 731-0982-11)</option>
+                      <option value="Bank BRI Operasional (A/C: 0341-01-000892-30-1)">Bank BRI Operasional (A/C: 0341-01-000892-30-1)</option>
+                      <option value="Kas Kecil Lapangan (Petty Cash Operasional)">Kas Kecil Lapangan (Petty Cash Operasional)</option>
+                    </select>
+                  )}
                 </div>
 
                 <div>
@@ -8451,10 +8677,19 @@ export default function DashboardPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold transition cursor-pointer shadow-xs flex items-center gap-1.5"
+                  disabled={receiptType === "INTERNAL_TRANSFER" && receiptSourceAccount === receiptTargetAccount}
+                  className={`px-4 py-2 text-white rounded-lg font-semibold transition cursor-pointer shadow-xs flex items-center gap-1.5 ${
+                    receiptType === "INTERNAL_TRANSFER"
+                      ? "bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      : "bg-emerald-600 hover:bg-emerald-700"
+                  }`}
                 >
                   <Printer className="w-4 h-4" />
-                  <span>Simpan Penerimaan &amp; Cetak Voucher BKM</span>
+                  <span>
+                    {receiptType === "INTERNAL_TRANSFER"
+                      ? "Simpan Pemindahbukuan & Cetak Voucher BTI"
+                      : "Simpan Penerimaan & Cetak Voucher BKM"}
+                  </span>
                 </button>
               </div>
             </form>

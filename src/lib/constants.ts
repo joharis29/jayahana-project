@@ -774,6 +774,25 @@ export const INITIAL_RECEIPTS_BKM: OfficialReceiptBKM[] = [
     cashierName: "Siti Rahmawati (Kasir)",
     authorizedBy: "Dewi Anggraeni, SE (Finance Head)",
     referenceNumber: "KSR-SETOR-091"
+  },
+  {
+    id: "bti-001",
+    receiptNumber: "BTI-2026-11-001",
+    receiptType: "INTERNAL_TRANSFER",
+    category: "Pemindahbukuan Antar Kas & Bank",
+    clientName: "Kas Kecil Lapangan ➔ Bank BCA Operasional",
+    amountReceived: 5000000,
+    receivedDate: "2026-11-20",
+    paymentMethod: "Setor Tunai Antar Kas/Bank",
+    bankTarget: "Bank BCA Operasional (A/C: 731-0982-11)",
+    sourceAccount: "Kas Kecil Lapangan (Petty Cash Operasional)",
+    targetAccount: "Bank BCA Operasional (A/C: 731-0982-11)",
+    adminFee: 0,
+    forPaymentOf: "Penyetoran sisa fisik dana kas kecil operasional lapangan ke rekening giro utama BCA",
+    cashierName: "Siti Rahmawati (Kasir)",
+    authorizedBy: "Dewi Anggraeni, SE (Finance Head)",
+    referenceNumber: "SLIP-BCA-89210",
+    isNonRevenue: true
   }
 ];
 

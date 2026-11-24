@@ -10,7 +10,7 @@ interface PrintableDocumentModalProps {
   request?: BudgetRequest;
   invoice?: SalesInvoice;
   receipt?: OfficialReceiptBKM;
-  docType: "REQUEST" | "DISBURSEMENT" | "REALIZATION" | "GOODS_RECEIPT" | "SALES_INVOICE" | "OFFICIAL_RECEIPT" | "PROGRESS_REPORT";
+  docType: "REQUEST" | "DISBURSEMENT" | "REALIZATION" | "GOODS_RECEIPT" | "SALES_INVOICE" | "OFFICIAL_RECEIPT" | "PROGRESS_REPORT" | "INTERNAL_TRANSFER";
 }
 
 export function PrintableDocumentModal({
@@ -697,15 +697,18 @@ export function PrintableDocumentModal({
               </div>
             )}
 
-            {/* DOKUMEN 6: FORMULIR KUITANSI / BUKTI KAS MASUK RESMI (OFFICIAL RECEIPT / BKM) */}
-            {docType === "OFFICIAL_RECEIPT" && (receipt || invoice) && (
+            {/* DOKUMEN 6: FORMULIR KUITANSI BKM (OFFICIAL RECEIPT) & VOUCHER PEMINDAHBUKUAN (BTI) */}
+            {(docType === "OFFICIAL_RECEIPT" || docType === "INTERNAL_TRANSFER") && (receipt || invoice) && (
               <div>
                 {(() => {
-                  const bkmNumber = receipt?.receiptNumber || invoice?.payments?.[invoice?.payments.length - 1]?.voucherNumber || "BKM-2026-11-001";
+                  const isInternalTransfer = docType === "INTERNAL_TRANSFER" || receipt?.receiptType === "INTERNAL_TRANSFER";
+                  const bkmNumber = receipt?.receiptNumber || invoice?.payments?.[invoice?.payments.length - 1]?.voucherNumber || (isInternalTransfer ? "BTI-2026-11-001" : "BKM-2026-11-001");
                   const payer = receipt?.clientName || invoice?.clientName || "PT. Klien Terhormat";
                   const nominal = receipt?.amountReceived || invoice?.payments?.[invoice?.payments.length - 1]?.amountPaid || invoice?.paidAmount || invoice?.totalAmount || 0;
                   const purpose = receipt?.forPaymentOf || invoice?.title || "Pelunasan Tagihan Proyek";
-                  const bankTarget = receipt?.bankTarget || invoice?.payments?.[invoice?.payments.length - 1]?.bankAccount || invoice?.targetBankAccount || "Bank Mandiri Operasional (A/C: 133-00-981240-8)";
+                  const bankTarget = receipt?.targetAccount || receipt?.bankTarget || invoice?.payments?.[invoice?.payments.length - 1]?.bankAccount || invoice?.targetBankAccount || "Bank Mandiri Operasional (A/C: 133-00-981240-8)";
+                  const sourceAccount = receipt?.sourceAccount || "Petty Cash Operasional Lapangan";
+                  const adminFee = receipt?.adminFee || 0;
                   const date = receipt?.receivedDate || invoice?.payments?.[invoice?.payments.length - 1]?.paymentDate || new Date().toISOString().split("T")[0];
                   const refNum = receipt?.referenceNumber || invoice?.contractNumber || "TRF-MND-001";
                   const totalInvAmount = receipt?.totalInvoiceAmount || invoice?.totalAmount || nominal;
@@ -715,6 +718,80 @@ export function PrintableDocumentModal({
                   const isInstallment = receipt?.isInstallment || (receipt?.remainingBalance !== undefined ? receipt.remainingBalance > 0 : (invoice ? (invoice.paidAmount || 0) < invoice.totalAmount : false));
                   const installmentNumber = receipt?.installmentNumber || invoice?.payments?.length || 1;
                   const spelledOut = (angkaTerbilang(nominal).trim() || "Nol") + " Rupiah";
+
+                  if (isInternalTransfer) {
+                    return (
+                      <div>
+                        <div className="text-center mb-6">
+                          <h2 className="text-base font-extrabold uppercase underline tracking-wider text-slate-900">
+                            Bukti Transfer Internal &amp; Pemindahbukuan Kas/Bank
+                          </h2>
+                          <div className="flex items-center justify-center gap-2 text-xs text-slate-500 font-mono mt-0.5">
+                            <span>No. Voucher: <strong>{bkmNumber}</strong></span>
+                            <span>&bull;</span>
+                            <span>Tgl: {date}</span>
+                            <span>&bull;</span>
+                            <span className="text-indigo-700 font-semibold">Klasifikasi: Mutasi Aset Lancar (Non-Omset)</span>
+                          </div>
+                        </div>
+
+                        {/* Visual Rute Perpindahan Dana */}
+                        <div className="grid grid-cols-5 gap-2 items-center bg-indigo-50/70 border border-indigo-200 rounded-xl p-4 mb-5 text-xs">
+                          <div className="col-span-2 bg-white p-3 rounded-lg border border-indigo-100 shadow-xs">
+                            <span className="text-[10px] uppercase font-bold text-slate-500 block">Akun Sumber (Kredit / Berkurang):</span>
+                            <div className="font-bold text-slate-900 text-sm mt-0.5">{sourceAccount}</div>
+                            <span className="text-[10px] text-slate-500 mt-0.5 block">Pengirim Saldo Kas/Bank</span>
+                          </div>
+                          <div className="text-center flex flex-col items-center justify-center text-indigo-600 font-bold">
+                            <span className="text-xs font-mono uppercase tracking-wider text-[9px] text-indigo-700">Transfer</span>
+                            <span className="text-2xl leading-none">&rarr;</span>
+                          </div>
+                          <div className="col-span-2 bg-white p-3 rounded-lg border border-indigo-100 shadow-xs">
+                            <span className="text-[10px] uppercase font-bold text-slate-500 block">Akun Tujuan (Debit / Bertambah):</span>
+                            <div className="font-bold text-indigo-950 text-sm mt-0.5">{bankTarget}</div>
+                            <span className="text-[10px] text-emerald-600 font-medium mt-0.5 block">Penerima Penyetoran Saldo</span>
+                          </div>
+                        </div>
+
+                        {/* Rincian Finansial Pemindahbukuan */}
+                        <div className="border border-slate-300 rounded-xl p-5 bg-slate-50/60 mb-5 space-y-2.5 text-xs">
+                          <div className="grid grid-cols-4 gap-2 py-1.5 border-b border-slate-200">
+                            <span className="text-slate-500 font-medium">Nominal Mutasi Bersih</span>
+                            <span className="col-span-3 font-bold text-slate-900 text-base font-mono">: {formatRupiah(nominal)}</span>
+                          </div>
+                          <div className="grid grid-cols-4 gap-2 py-1.5 border-b border-slate-200 bg-indigo-50/40 p-2 rounded">
+                            <span className="text-indigo-900 font-semibold">Terbilang (Huruf)</span>
+                            <span className="col-span-3 font-bold text-indigo-950 italic">: # {spelledOut} #</span>
+                          </div>
+                          <div className="grid grid-cols-4 gap-2 py-1.5 border-b border-slate-200">
+                            <span className="text-slate-500 font-medium">Biaya Admin Bank (Jika Ada)</span>
+                            <span className="col-span-3 font-mono text-slate-700 font-semibold">
+                              : {adminFee > 0 ? `${formatRupiah(adminFee)} (Dialokasikan ke Beban Admin Bank)` : "Rp 0 (Bebas Biaya / Antar Rekening Internal)"}
+                            </span>
+                          </div>
+                          {adminFee > 0 && (
+                            <div className="grid grid-cols-4 gap-2 py-1.5 border-b border-slate-200">
+                              <span className="text-slate-500 font-medium">Total Pengurangan Sumber</span>
+                              <span className="col-span-3 font-bold text-rose-700 font-mono">: {formatRupiah(nominal + adminFee)}</span>
+                            </div>
+                          )}
+                          <div className="grid grid-cols-4 gap-2 py-1.5 border-b border-slate-200">
+                            <span className="text-slate-500 font-medium">Tujuan / Keperluan Mutasi</span>
+                            <span className="col-span-3 text-slate-800 font-medium">: {purpose}</span>
+                          </div>
+                          <div className="grid grid-cols-4 gap-2 py-1.5">
+                            <span className="text-slate-500 font-medium">No. Ref Mutasi / Slip Bank</span>
+                            <span className="col-span-3 text-slate-700 font-mono font-semibold">: {refNum}</span>
+                          </div>
+                        </div>
+
+                        {/* Catatan Kepatuhan Akuntansi */}
+                        <div className="p-3 bg-slate-100 border border-slate-300 rounded-lg text-[11px] text-slate-700 mb-6">
+                          <strong>Catatan Akuntansi Internal:</strong> Transaksi pemindahbukuan ini murni pergeseran likuiditas antar-kas dan rekening bank PT. Jayahana Manaura Mekanika Selaras. Transaksi ini bernilai netral (0 dampak terhadap Laba Rugi) dan tidak menambah Omset Penjualan.
+                        </div>
+                      </div>
+                    );
+                  }
 
                   return (
                     <div>
@@ -862,7 +939,70 @@ export function PrintableDocumentModal({
 
             {/* TANDA TANGAN RESMI PERUSAHAAN SESUAI ALUR BERJENJANG */}
             <div className="mt-8 pt-4 border-t-2 border-slate-800">
-              {docType === "OFFICIAL_RECEIPT" ? (
+              {docType === "INTERNAL_TRANSFER" || (docType === "OFFICIAL_RECEIPT" && receipt?.receiptType === "INTERNAL_TRANSFER") ? (
+                /* 4 Kolom Tanda Tangan Khusus Bukti Transfer Internal / Pemindahbukuan (BTI) */
+                <div className="grid grid-cols-4 gap-4 text-center text-xs">
+                  {/* 1. Kasir Pengirim / Asal */}
+                  <div className="flex flex-col justify-between h-32 border border-slate-200 p-2 rounded bg-slate-50/50">
+                    <span className="text-[10px] uppercase font-bold text-slate-500">
+                      Disiapkan (Kasir Asal):
+                    </span>
+                    <div className="font-serif italic text-indigo-700 text-xs my-auto font-semibold">
+                      [Disiapkan &amp; Dibukukan]
+                    </div>
+                    <div>
+                      <strong className="block text-slate-900 underline">
+                        {receipt?.cashierName || "Siti Rahmawati"}
+                      </strong>
+                      <span className="text-[10px] text-slate-500 block">
+                        Kasir Sumber Saldo
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 2. Finance Penerima / Kasir Tujuan */}
+                  <div className="flex flex-col justify-between h-32 border border-slate-200 p-2 rounded bg-slate-50/50">
+                    <span className="text-[10px] uppercase font-bold text-slate-500">
+                      Diterima (Akun Tujuan):
+                    </span>
+                    <div className="font-serif italic text-emerald-700 text-xs my-auto font-semibold">
+                      [Diterima Rekening/Kas]
+                    </div>
+                    <div>
+                      <strong className="block text-slate-900 underline">Dewi Anggraeni, SE</strong>
+                      <span className="text-[10px] text-slate-500 block">Kasir / Treasury Tujuan</span>
+                    </div>
+                  </div>
+
+                  {/* 3. Diverifikasi Finance & Tax */}
+                  <div className="flex flex-col justify-between h-32 border border-slate-200 p-2 rounded bg-slate-50/50">
+                    <span className="text-[10px] uppercase font-bold text-slate-500">
+                      Diverifikasi Finance:
+                    </span>
+                    <div className="font-serif italic text-blue-700 text-xs my-auto font-semibold">
+                      [Verified Treasury]
+                    </div>
+                    <div>
+                      <strong className="block text-slate-900 underline">Dewi Anggraeni, SE</strong>
+                      <span className="text-[10px] text-slate-500 block">Finance &amp; Treasury Head</span>
+                    </div>
+                  </div>
+
+                  {/* 4. Mengetahui / Disetujui GM */}
+                  <div className="flex flex-col justify-between h-32 border border-slate-200 p-2 rounded bg-slate-50/50">
+                    <span className="text-[10px] uppercase font-bold text-slate-500">
+                      Disetujui Pimpinan:
+                    </span>
+                    <div className="font-serif italic text-purple-700 text-xs my-auto font-semibold">
+                      [Approved Overbooking]
+                    </div>
+                    <div>
+                      <strong className="block text-slate-900 underline">Bambang Wicaksono, SE</strong>
+                      <span className="text-[10px] text-slate-500 block">General Manager</span>
+                    </div>
+                  </div>
+                </div>
+              ) : docType === "OFFICIAL_RECEIPT" ? (
                 /* 4 Kolom Tanda Tangan Khusus Formulir Penerimaan Kas/Bank (BKM) */
                 <div className="grid grid-cols-4 gap-4 text-center text-xs">
                   {/* 1. Kasir / Staf Penerima */}
