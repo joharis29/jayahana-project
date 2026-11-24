@@ -7102,15 +7102,20 @@ export default function DashboardPage() {
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    No. Referensi / ID Transaksi Bank <span className="text-red-500">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-semibold text-slate-700">
+                      No. Referensi / ID Transaksi Bank <span className="text-red-500">*</span>
+                    </label>
+                    <span className="text-[10px] text-slate-500 font-medium bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                      Terkunci Otomatis
+                    </span>
+                  </div>
                   <input
                     type="text"
                     value={disburseRefNumber}
-                    onChange={(e) => setDisburseRefNumber(e.target.value)}
+                    readOnly
                     placeholder="Contoh: TRF-BCA-981240"
-                    className="w-full border border-slate-300 rounded-lg p-2 font-mono text-slate-800"
+                    className="w-full border border-slate-200 bg-slate-100 rounded-lg p-2 font-mono text-slate-700 font-semibold cursor-not-allowed select-none"
                     required
                   />
                 </div>
