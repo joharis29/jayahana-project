@@ -96,7 +96,7 @@ const MONTH_NAMES = [
 ];
 
 export default function DashboardPage() {
-  const [activeTab, setActiveTab] = useState<"overview" | "requests" | "lpj" | "starlite" | "reports">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "requests" | "starlite" | "reports">("overview");
   const [selectedUnit, setSelectedUnit] = useState<BusinessUnit | "ALL">("ALL");
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>("ALL");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>("ALL");
@@ -2084,18 +2084,6 @@ export default function DashboardPage() {
           </button>
 
           <button
-            onClick={() => setActiveTab("lpj")}
-            className={`py-3 px-3.5 border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
-              activeTab === "lpj"
-                ? "border-blue-600 text-blue-700 font-bold"
-                : "border-transparent text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <Receipt className="w-4 h-4" />
-            Realisasi & LPJ Nota
-          </button>
-
-          <button
             onClick={() => setActiveTab("starlite")}
             className={`py-3 px-3.5 border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
               activeTab === "starlite"
@@ -3213,8 +3201,12 @@ export default function DashboardPage() {
                           <div className="flex items-center gap-1.5">
                             <button
                               onClick={() => {
-                                if (item.type === "BUDGET_REQUEST") setActiveTab("requests");
-                                else setActiveTab("lpj");
+                                setActiveTab("requests");
+                                if (item.type === "BUDGET_REQUEST") {
+                                  setRequestWorkflowSubTab("PROPOSAL");
+                                } else {
+                                  setRequestWorkflowSubTab("REALIZATION");
+                                }
                               }}
                               className="px-2.5 py-1 text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg text-xs font-medium transition"
                             >
@@ -5628,67 +5620,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* TAB 3: LPJ REALISASI (TERINTEGRASI DENGAN TAHAP 3 ALUR) */}
-        {activeTab === "lpj" && (
-          <div className="space-y-4">
-            <div className="bg-white p-4 rounded-xl border border-slate-200 flex justify-between items-center">
-              <div>
-                <h2 className="font-bold text-slate-900 text-base">Realisasi & Pertanggungjawaban (LPJ Kas Bon)</h2>
-                <p className="text-xs text-slate-500">
-                  Pencocokan nota fisik/struk transaksi lapangan terhadap dana kas bon yang telah dicairkan oleh kasir.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab("requests");
-                  setRequestWorkflowSubTab("REALIZATION");
-                }}
-                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition cursor-pointer"
-              >
-                Buka Tab Realisasi &rarr;
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {requests
-                .filter(r => r.requestType === "CASH_ADVANCE" && r.disbursement)
-                .map((req) => (
-                  <div key={req.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-sm text-slate-900">{req.requestNumber} ({req.title})</span>
-                      <span className="px-2 py-0.5 bg-purple-100 text-purple-800 font-bold text-[10px] rounded-full">
-                        {req.realization ? req.realization.status : "Belum LPJ"}
-                      </span>
-                    </div>
-
-                    <div className="p-3 rounded-lg border border-slate-200 bg-slate-50 space-y-2">
-                      <div className="flex justify-between items-start text-xs">
-                        <div>
-                          <div className="font-semibold text-slate-800">Pemohon: {req.requesterName}</div>
-                          <div className="text-[11px] text-slate-500">{req.purpose}</div>
-                        </div>
-                        <div className="font-bold text-blue-600 font-mono">{formatRupiah(req.totalAmount)}</div>
-                      </div>
-
-                      <div className="pt-2 border-t border-slate-200 flex justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenPrintModal(req, "REALIZATION")}
-                          className="flex items-center gap-1 px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-medium cursor-pointer"
-                        >
-                          <Printer className="w-3.5 h-3.5" />
-                          <span>Cetak Form Realisasi</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </div>
-        )}
-
-        {/* TAB 4: PENDAPATAN, BILLING & PIUTANG USAHA (REVENUE & AR CYCLE LENGKAP) */}
+        {/* TAB 3: PENDAPATAN, BILLING & PIUTANG USAHA (REVENUE & AR CYCLE LENGKAP) */}
         {activeTab === "starlite" && (
           <div className="space-y-4">
             
