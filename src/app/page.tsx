@@ -7411,7 +7411,7 @@ export default function DashboardPage() {
               <div>
                 <h4 className="font-bold text-slate-900 text-sm truncate max-w-md flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span>Bukti Transfer Resmi: {selectedProofPreview.name}</span>
+                  <span>Lampiran Bukti Resmi: {selectedProofPreview.name}</span>
                 </h4>
                 <span className="text-[10px] text-slate-400 font-mono">
                   {(selectedProofPreview.size / 1024).toFixed(1)} KB &bull; Diunggah: {selectedProofPreview.uploadedAt}
@@ -7449,7 +7449,7 @@ export default function DashboardPage() {
             </div>
             <div className="pt-3 flex justify-between items-center">
               <span className="text-[11px] text-emerald-700 font-medium">
-                ✓ Bukti transfer sah tersimpan dalam voucher pencairan kas (BKK).
+                ✓ Lampiran dokumen &amp; bukti transaksi sah tersimpan dalam sistem.
               </span>
               <div className="flex gap-2">
                 <a
@@ -8340,68 +8340,157 @@ export default function DashboardPage() {
             </div>
 
             {/* Rincian Nota & Pengeluaran */}
-            <div className="mb-4">
-              <h4 className="font-bold text-slate-800 text-xs uppercase mb-2">Rincian Nota &amp; Struk Belanja</h4>
-              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-                <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
-                  <thead className="bg-slate-50 font-semibold text-slate-600">
-                    <tr>
-                      <th className="px-3 py-2 text-center w-8">No</th>
-                      <th className="px-3 py-2 w-24">Tgl Nota</th>
-                      <th className="px-3 py-2">Uraian Barang / Jasa</th>
-                      <th className="px-3 py-2 w-32">Toko / Vendor</th>
-                      <th className="px-3 py-2 w-24">No. Struk</th>
-                      <th className="px-3 py-2 text-right w-28">Nominal</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-slate-700">
-                    {(selectedDetailLPJ.realization.items || []).map((it, idx) => (
-                      <tr key={it.id || idx} className="hover:bg-slate-50/70">
-                        <td className="px-3 py-2 text-center text-slate-400 font-mono">{idx + 1}</td>
-                        <td className="px-3 py-2 text-slate-500">{it.receiptDate}</td>
-                        <td className="px-3 py-2 font-medium text-slate-800">{it.description}</td>
-                        <td className="px-3 py-2 text-slate-600">{it.vendor || "-"}</td>
-                        <td className="px-3 py-2 font-mono text-slate-500">{it.receiptNumber || "-"}</td>
-                        <td className="px-3 py-2 text-right font-bold font-mono text-slate-900">{formatRupiah(it.amount)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
-                    <tr>
-                      <td colSpan={5} className="px-3 py-2 text-right text-slate-700">Total Realisasi Nota:</td>
-                      <td className="px-3 py-2 text-right font-mono text-purple-950 text-sm">
-                        {formatRupiah(selectedDetailLPJ.realization.totalRealizedAmount)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
+            {(() => {
+              const lpjReceiptAtts = (selectedDetailLPJ.realization.receiptAttachments && selectedDetailLPJ.realization.receiptAttachments.length > 0)
+                ? selectedDetailLPJ.realization.receiptAttachments
+                : (selectedDetailLPJ.attachments && selectedDetailLPJ.attachments.length > 0)
+                ? selectedDetailLPJ.attachments
+                : [];
 
-            {/* Lampiran Foto Nota / Struk Fisik */}
-            {selectedDetailLPJ.realization.receiptAttachments && selectedDetailLPJ.realization.receiptAttachments.length > 0 && (
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs mb-4">
-                <span className="text-[10px] text-slate-500 uppercase font-bold block mb-2">Lampiran Bukti Foto Nota Fisik:</span>
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                  {selectedDetailLPJ.realization.receiptAttachments.map((att, idx) => (
-                    <div
-                      key={att.id || idx}
-                      onClick={() => setSelectedProofPreview(att)}
-                      className="border border-slate-200 rounded-lg p-1 bg-white hover:border-purple-300 transition cursor-pointer text-center"
-                    >
-                      {att.type.startsWith("image/") ? (
-                        <img src={att.dataUrl} alt={att.name} className="w-full h-16 object-cover rounded" />
-                      ) : (
-                        <div className="w-full h-16 flex items-center justify-center bg-slate-100 rounded">
-                          <FileText className="w-8 h-8 text-red-500" />
-                        </div>
-                      )}
-                      <span className="block text-[10px] text-slate-700 truncate mt-1 font-medium">{att.name}</span>
+              return (
+                <>
+                  <div className="mb-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="font-bold text-slate-800 text-xs uppercase">Rincian Nota &amp; Struk Belanja</h4>
+                      <span className="text-[11px] text-slate-500">
+                        Total {selectedDetailLPJ.realization.items?.length || 0} Pengeluaran Riil
+                      </span>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                    <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+                      <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
+                        <thead className="bg-slate-50 font-semibold text-slate-600">
+                          <tr>
+                            <th className="px-3 py-2 text-center w-8">No</th>
+                            <th className="px-3 py-2 w-24">Tgl Nota</th>
+                            <th className="px-3 py-2">Uraian Barang / Jasa</th>
+                            <th className="px-3 py-2 w-32">Toko / Vendor</th>
+                            <th className="px-3 py-2 w-24">No. Struk</th>
+                            <th className="px-3 py-2 text-right w-28">Nominal</th>
+                            <th className="px-3 py-2 text-center w-20">Bukti Struk</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-slate-700">
+                          {(selectedDetailLPJ.realization.items || []).map((it, idx) => {
+                            const matchedAtt = lpjReceiptAtts[idx] || lpjReceiptAtts[0];
+                            return (
+                              <tr key={it.id || idx} className="hover:bg-slate-50/70">
+                                <td className="px-3 py-2 text-center text-slate-400 font-mono">{idx + 1}</td>
+                                <td className="px-3 py-2 text-slate-500">{it.receiptDate}</td>
+                                <td className="px-3 py-2 font-medium text-slate-800">{it.description}</td>
+                                <td className="px-3 py-2 text-slate-600">{it.vendor || "-"}</td>
+                                <td className="px-3 py-2 font-mono text-slate-500">{it.receiptNumber || "-"}</td>
+                                <td className="px-3 py-2 text-right font-bold font-mono text-slate-900">{formatRupiah(it.amount)}</td>
+                                <td className="px-3 py-2 text-center">
+                                  {matchedAtt ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedProofPreview(matchedAtt)}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded cursor-pointer transition shadow-2xs"
+                                      title={`Lihat nota ${matchedAtt.name}`}
+                                    >
+                                      <Eye className="w-3 h-3 text-purple-600" />
+                                      <span>Lihat</span>
+                                    </button>
+                                  ) : (
+                                    <span className="text-slate-400 text-[11px]">-</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
+                          <tr>
+                            <td colSpan={5} className="px-3 py-2 text-right text-slate-700">Total Realisasi Nota:</td>
+                            <td className="px-3 py-2 text-right font-mono text-purple-950 text-sm">
+                              {formatRupiah(selectedDetailLPJ.realization.totalRealizedAmount)}
+                            </td>
+                            <td></td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Lampiran Bukti Foto Nota & Transaksi Fisik */}
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs mb-4">
+                    <div className="flex justify-between items-center mb-2.5 pb-1.5 border-b border-slate-200">
+                      <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                        <Paperclip className="w-3.5 h-3.5 text-purple-600" />
+                        <span>Lampiran Bukti Transaksi, Nota &amp; Struk Fisik ({lpjReceiptAtts.length} Berkas):</span>
+                      </span>
+                      <span className="text-[10px] text-purple-800 font-bold bg-purple-100 px-2 py-0.5 rounded border border-purple-200">
+                        ✓ Terverifikasi Audit
+                      </span>
+                    </div>
+
+                    {lpjReceiptAtts.length > 0 ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {lpjReceiptAtts.map((att, idx) => (
+                          <div
+                            key={att.id || idx}
+                            onClick={() => setSelectedProofPreview(att)}
+                            className="group border border-slate-200 rounded-xl p-2 bg-white hover:border-purple-400 hover:shadow-md transition cursor-pointer flex flex-col justify-between"
+                          >
+                            <div className="relative overflow-hidden rounded-lg bg-slate-100 mb-1.5 h-24 flex items-center justify-center">
+                              {att.type.startsWith("image/") ? (
+                                <img
+                                  src={att.dataUrl}
+                                  alt={att.name}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
+                                />
+                              ) : (
+                                <FileText className="w-10 h-10 text-red-500" />
+                              )}
+                              <div className="absolute inset-0 bg-purple-900/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-1 text-white text-[11px] font-bold">
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Perbesar</span>
+                              </div>
+                            </div>
+                            <div>
+                              <span className="block text-[11px] text-slate-800 truncate font-semibold" title={att.name}>
+                                {att.name}
+                              </span>
+                              <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono mt-0.5">
+                                <span>{(att.size / 1024).toFixed(0)} KB</span>
+                                <span>{att.uploadedAt}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4 text-slate-500 italic">
+                        Belum ada berkas nota digital yang terunggah. Verifikasi fisik dilakukan langsung oleh Tim Audit.
+                      </div>
+                    )}
+
+                    {/* Bukti Pencairan Awal Kasbon (BKK) jika ada */}
+                    {selectedDetailLPJ.disbursement?.proofAttachment && (
+                      <div className="mt-3 pt-2.5 border-t border-slate-200 flex items-center justify-between bg-emerald-50/60 p-2 rounded-lg border border-emerald-200">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <div className="text-[11px]">
+                            <span className="font-bold text-emerald-950 block">Bukti Pencairan Kasbon Awal ({selectedDetailLPJ.disbursement.voucherNumber || "BKK"})</span>
+                            <span className="text-emerald-700 text-[10px]">
+                              {selectedDetailLPJ.disbursement.proofAttachment.name} &bull; Ref: {selectedDetailLPJ.disbursement.transferReference}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProofPreview(selectedDetailLPJ.disbursement?.proofAttachment || null)}
+                          className="px-2.5 py-1 text-[11px] font-bold text-emerald-800 bg-white hover:bg-emerald-100 border border-emerald-300 rounded-lg transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                        >
+                          <Eye className="w-3 h-3 text-emerald-700" />
+                          <span>Lihat Bukti Kas Keluar</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
 
             {/* Tombol Aksi di Bawah Modal */}
             <div className="pt-3 flex justify-between items-center border-t border-slate-100 flex-wrap gap-2">

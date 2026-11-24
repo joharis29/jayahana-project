@@ -173,7 +173,15 @@ export const INITIAL_REQUESTS: BudgetRequest[] = [
       sourceAccount: "Kas Kecil (Petty Cash Operasional)",
       paymentMethod: "CASH_KAS_KECIL",
       transferReference: "KAS-KECIL-042",
-      amountPaid: 3500000
+      amountPaid: 3500000,
+      proofAttachment: {
+        id: "att-trf-042",
+        name: "Bukti_Pencairan_Kas_Kecil_CA042.png",
+        type: "image/png",
+        size: 315000,
+        dataUrl: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=80",
+        uploadedAt: "16/11/2026 09:30"
+      }
     },
     realization: {
       id: "lpj-002",
@@ -190,6 +198,32 @@ export const INITIAL_REQUESTS: BudgetRequest[] = [
         { id: "r-1", receiptDate: "16/11/2026", description: "BBM Pertamax Mobil Tangga Lapangan", vendor: "SPBU Pertamina Sentul", receiptNumber: "STR-0912", amount: 950000 },
         { id: "r-2", receiptDate: "16/11/2026", description: "Baut Klem Tiang Tambahan", vendor: "Toko Baut Sentul", receiptNumber: "NTA-881", amount: 1420000 },
         { id: "r-3", receiptDate: "17/11/2026", description: "Konsumsi Lembur Teknisi (4 Orang)", vendor: "RM Sederhana Sentul", receiptNumber: "RM-442", amount: 980000 }
+      ],
+      receiptAttachments: [
+        {
+          id: "att-lpj-042-1",
+          name: "Struk_Pertamina_BBM_STR0912.jpg",
+          type: "image/jpeg",
+          size: 245000,
+          dataUrl: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=80",
+          uploadedAt: "17/11/2026 09:15"
+        },
+        {
+          id: "att-lpj-042-2",
+          name: "Nota_Toko_Baut_Sentul_NTA881.jpg",
+          type: "image/jpeg",
+          size: 328000,
+          dataUrl: "https://images.unsplash.com/photo-1586281380349-632531db7ed4?w=600&auto=format&fit=crop&q=80",
+          uploadedAt: "17/11/2026 09:16"
+        },
+        {
+          id: "att-lpj-042-3",
+          name: "Struk_RM_Sederhana_RM442.jpg",
+          type: "image/jpeg",
+          size: 195000,
+          dataUrl: "https://images.unsplash.com/photo-1554224154-26032ffc0d07?w=600&auto=format&fit=crop&q=80",
+          uploadedAt: "17/11/2026 09:18"
+        }
       ],
       auditNotes: "Fisik nota BBM, klem tiang, dan konsumsi lengkap. Saldo sisa Rp 150.000 wajib disetor ke kasir."
     }
@@ -357,7 +391,15 @@ export const INITIAL_REQUESTS: BudgetRequest[] = [
       sourceAccount: "Kas Kecil Lapangan (Petty Cash)",
       paymentMethod: "CASH_KAS_KECIL",
       transferReference: "KAS-KECIL-050",
-      amountPaid: 2500000
+      amountPaid: 2500000,
+      proofAttachment: {
+        id: "att-trf-050",
+        name: "Bukti_Pencairan_Kas_Kecil_CA050.png",
+        type: "image/png",
+        size: 295000,
+        dataUrl: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=80",
+        uploadedAt: "19/11/2026 11:20"
+      }
     },
     realization: {
       id: "lpj-009",
@@ -374,6 +416,32 @@ export const INITIAL_REQUESTS: BudgetRequest[] = [
         { id: "r-91", receiptDate: "19/11/2026", description: "BBM Pertamax & Tol Operasional Tagogapu", vendor: "SPBU Pertamina Tagogapu", receiptNumber: "STR-4412", amount: 750000 },
         { id: "r-92", receiptDate: "20/11/2026", description: "Baut Klem Tiang Tambahan & Hook Suspension", vendor: "Toko Baut Cahaya Teknik", receiptNumber: "NTA-903", amount: 1180000 },
         { id: "r-93", receiptDate: "21/11/2026", description: "Konsumsi & Kopi Lembur Malam Tim Teknisi (4 Orang)", vendor: "Warung Makan Barokah", receiptNumber: "STR-002", amount: 945000 }
+      ],
+      receiptAttachments: [
+        {
+          id: "att-lpj-050-1",
+          name: "Struk_SPBU_Tagogapu_STR4412.jpg",
+          type: "image/jpeg",
+          size: 260000,
+          dataUrl: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=80",
+          uploadedAt: "21/11/2026 16:30"
+        },
+        {
+          id: "att-lpj-050-2",
+          name: "Nota_Cahaya_Teknik_NTA903.jpg",
+          type: "image/jpeg",
+          size: 340000,
+          dataUrl: "https://images.unsplash.com/photo-1586281380349-632531db7ed4?w=600&auto=format&fit=crop&q=80",
+          uploadedAt: "21/11/2026 16:32"
+        },
+        {
+          id: "att-lpj-050-3",
+          name: "Struk_Warung_Barokah_STR002.jpg",
+          type: "image/jpeg",
+          size: 185000,
+          dataUrl: "https://images.unsplash.com/photo-1554224154-26032ffc0d07?w=600&auto=format&fit=crop&q=80",
+          uploadedAt: "21/11/2026 16:35"
+        }
       ],
       auditNotes: "Fisik nota lengkap & sah. Terdapat kelebihan pengeluaran riil Rp 375.000 yang ditanggung teknisi.",
       pmNotes: "Disetujui. Pekerjaan selesai sesuai target cluster baru.",

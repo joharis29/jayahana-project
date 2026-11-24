@@ -367,26 +367,30 @@ export function PrintableDocumentModal({
                 </div>
 
                 {/* Lampiran Dokumen jika ada */}
-                {request?.attachments && request.attachments.length > 0 && (
-                  <div className="mb-6 p-3 bg-slate-50 border border-slate-300 rounded text-xs">
-                    <span className="font-bold text-slate-800 block mb-2">
-                      Lampiran Dokumen &amp; Foto ({request.attachments.length} Berkas):
-                    </span>
-                    <div className="flex flex-wrap gap-2">
-                      {request.attachments.map((att) => (
-                        <div key={att.id} className="flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-300 rounded text-[10px]">
-                          {att.type.startsWith("image/") ? (
-                            <img src={att.dataUrl} alt={att.name} className="w-5 h-5 object-cover rounded" />
-                          ) : (
-                            <FileText className="w-4 h-4 text-red-500" />
-                          )}
-                          <span className="font-medium text-slate-800 truncate max-w-[220px]">{att.name}</span>
-                          <span className="text-slate-400 font-mono">({(att.size / 1024).toFixed(0)}KB)</span>
-                        </div>
-                      ))}
+                {(() => {
+                  const attachmentsList = request.realization?.receiptAttachments || request.attachments || [];
+                  if (attachmentsList.length === 0) return null;
+                  return (
+                    <div className="mb-6 p-3 bg-slate-50 border border-slate-300 rounded text-xs">
+                      <span className="font-bold text-slate-800 block mb-2">
+                        Lampiran Dokumen &amp; Foto Struk Belanja ({attachmentsList.length} Berkas):
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {attachmentsList.map((att) => (
+                          <div key={att.id} className="flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-300 rounded text-[10px]">
+                            {att.type.startsWith("image/") ? (
+                              <img src={att.dataUrl} alt={att.name} className="w-5 h-5 object-cover rounded" />
+                            ) : (
+                              <FileText className="w-4 h-4 text-red-500" />
+                            )}
+                            <span className="font-medium text-slate-800 truncate max-w-[220px]">{att.name}</span>
+                            <span className="text-slate-400 font-mono">({(att.size / 1024).toFixed(0)}KB)</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* Komparasi Rekonsiliasi Saldo */}
                 {(() => {
@@ -513,7 +517,7 @@ export function PrintableDocumentModal({
                 {request?.attachments && request.attachments.length > 0 && (
                   <div className="mb-6 p-3 bg-slate-50 border border-slate-300 rounded text-xs">
                     <span className="font-bold text-slate-800 block mb-2">
-                      Lampiran Dokumen &amp; Foto ({request.attachments.length} Berkas):
+                      Lampiran Dokumen &amp; Foto Fisik ({request.attachments.length} Berkas):
                     </span>
                     <div className="flex flex-wrap gap-2">
                       {request.attachments.map((att) => (
