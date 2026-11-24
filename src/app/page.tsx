@@ -682,6 +682,286 @@ export default function DashboardPage() {
   const [receiptFilterType, setReceiptFilterType] = useState<"ALL" | "SALES_INVOICE" | "OTHER_INCOME">("ALL");
   const [receiptSearchTerm, setReceiptSearchTerm] = useState("");
   
+  // ==========================================
+  // 5. INVOICE (FAKTUR PENJUALAN) FILTER & SORT STATE
+  // ==========================================
+  type InvoiceSortField = "invoiceNumber" | "client" | "unit" | "dpp" | "total" | "dueDate" | "status";
+  const [invoiceSearchQuery, setInvoiceSearchQuery] = useState<string>("");
+  const [invoiceUnitFilter, setInvoiceUnitFilter] = useState<string>("ALL");
+  const [invoiceStatusFilter, setInvoiceStatusFilter] = useState<string>("ALL");
+  const [invoiceSortField, setInvoiceSortField] = useState<InvoiceSortField | null>(null);
+  const [invoiceSortOrder, setInvoiceSortOrder] = useState<SortOrder>(null);
+
+  const handleToggleInvoiceSort = (field: InvoiceSortField) => {
+    if (invoiceSortField !== field) {
+      setInvoiceSortField(field);
+      setInvoiceSortOrder("ASC");
+    } else if (invoiceSortOrder === "ASC") {
+      setInvoiceSortOrder("DESC");
+    } else {
+      setInvoiceSortField(null);
+      setInvoiceSortOrder(null);
+    }
+  };
+
+  const isInvoiceFilterActive =
+    invoiceSearchQuery.trim() !== "" ||
+    invoiceUnitFilter !== "ALL" ||
+    invoiceStatusFilter !== "ALL" ||
+    invoiceSortField !== null;
+
+  const handleResetInvoiceFilters = () => {
+    setInvoiceSearchQuery("");
+    setInvoiceUnitFilter("ALL");
+    setInvoiceStatusFilter("ALL");
+    setInvoiceSortField(null);
+    setInvoiceSortOrder(null);
+  };
+
+  const filteredSalesInvoices = useMemo(() => {
+    return salesInvoices.filter((inv) => {
+      if (invoiceUnitFilter !== "ALL" && inv.unit !== invoiceUnitFilter) return false;
+      if (selectedUnit !== "ALL" && inv.unit !== selectedUnit) return false;
+
+      if (invoiceStatusFilter !== "ALL") {
+        if (invoiceStatusFilter === "PENDING_AUDIT_PROGRESS" && inv.status !== "PENDING_AUDIT_PROGRESS") return false;
+        if (invoiceStatusFilter === "PENDING_FINANCE_TAX" && inv.status !== "PENDING_FINANCE_TAX") return false;
+        if (invoiceStatusFilter === "PENDING_DIRECTOR" && inv.status !== "PENDING_DIRECTOR") return false;
+        if (invoiceStatusFilter === "APPROVED_ISSUED" && inv.status !== "APPROVED_ISSUED") return false;
+        if (invoiceStatusFilter === "PAID_FULL" && inv.status !== "PAID_FULL") return false;
+        if (invoiceStatusFilter === "OVERDUE" && inv.status !== "OVERDUE") return false;
+        if (invoiceStatusFilter === "UNPAID" && inv.status === "PAID_FULL") return false;
+      }
+
+      if (invoiceSearchQuery.trim()) {
+        const q = invoiceSearchQuery.toLowerCase();
+        const matchNumber = (inv.invoiceNumber || "").toLowerCase().includes(q);
+        const matchContract = (inv.contractNumber || "").toLowerCase().includes(q);
+        const matchClient = (inv.clientName || "").toLowerCase().includes(q);
+        const matchTitle = (inv.title || "").toLowerCase().includes(q);
+        const matchUnit = (inv.unit || "").toLowerCase().includes(q);
+        if (!matchNumber && !matchContract && !matchClient && !matchTitle && !matchUnit) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [salesInvoices, invoiceUnitFilter, selectedUnit, invoiceStatusFilter, invoiceSearchQuery]);
+
+  const sortedSalesInvoices = useMemo(() => {
+    const list = [...filteredSalesInvoices];
+    if (!invoiceSortField || !invoiceSortOrder) return list;
+
+    return list.sort((a, b) => {
+      let comp = 0;
+      switch (invoiceSortField) {
+        case "invoiceNumber":
+          comp = (a.invoiceNumber || "").localeCompare(b.invoiceNumber || "");
+          break;
+        case "client":
+          comp = (a.clientName || "").localeCompare(b.clientName || "");
+          break;
+        case "unit":
+          comp = (a.unit || "").localeCompare(b.unit || "");
+          break;
+        case "dpp":
+          comp = a.dppAmount - b.dppAmount;
+          break;
+        case "total":
+          comp = a.totalAmount - b.totalAmount;
+          break;
+        case "dueDate":
+          comp = (a.dueDate || "").localeCompare(b.dueDate || "");
+          break;
+        case "status":
+          comp = (a.status || "").localeCompare(b.status || "");
+          break;
+      }
+      return invoiceSortOrder === "ASC" ? comp : -comp;
+    });
+  }, [filteredSalesInvoices, invoiceSortField, invoiceSortOrder]);
+
+  // ==========================================
+  // 6. AR AGING & KARTU PIUTANG FILTER & SORT STATE
+  // ==========================================
+  type ArSortField = "invoiceNumber" | "client" | "contractNumber" | "dueDate" | "total" | "status";
+  const [arSearchQuery, setArSearchQuery] = useState<string>("");
+  const [arAgingFilter, setArAgingFilter] = useState<string>("ALL");
+  const [arSortField, setArSortField] = useState<ArSortField | null>(null);
+  const [arSortOrder, setArSortOrder] = useState<SortOrder>(null);
+
+  const handleToggleArSort = (field: ArSortField) => {
+    if (arSortField !== field) {
+      setArSortField(field);
+      setArSortOrder("ASC");
+    } else if (arSortOrder === "ASC") {
+      setArSortOrder("DESC");
+    } else {
+      setArSortField(null);
+      setArSortOrder(null);
+    }
+  };
+
+  const isArFilterActive =
+    arSearchQuery.trim() !== "" ||
+    arAgingFilter !== "ALL" ||
+    arSortField !== null;
+
+  const handleResetArFilters = () => {
+    setArSearchQuery("");
+    setArAgingFilter("ALL");
+    setArSortField(null);
+    setArSortOrder(null);
+  };
+
+  const filteredArInvoices = useMemo(() => {
+    return salesInvoices
+      .filter((i) => i.status !== "PAID_FULL")
+      .filter((inv) => {
+        if (selectedUnit !== "ALL" && inv.unit !== selectedUnit) return false;
+        if (arAgingFilter !== "ALL") {
+          if (arAgingFilter === "CURRENT" && inv.status !== "APPROVED_ISSUED") return false;
+          if (arAgingFilter === "OVERDUE" && inv.status !== "OVERDUE") return false;
+        }
+        if (arSearchQuery.trim()) {
+          const q = arSearchQuery.toLowerCase();
+          const matchNum = (inv.invoiceNumber || "").toLowerCase().includes(q);
+          const matchClient = (inv.clientName || "").toLowerCase().includes(q);
+          const matchContract = (inv.contractNumber || "").toLowerCase().includes(q);
+          if (!matchNum && !matchClient && !matchContract) return false;
+        }
+        return true;
+      });
+  }, [salesInvoices, selectedUnit, arAgingFilter, arSearchQuery]);
+
+  const sortedArInvoices = useMemo(() => {
+    const list = [...filteredArInvoices];
+    if (!arSortField || !arSortOrder) return list;
+    return list.sort((a, b) => {
+      let comp = 0;
+      switch (arSortField) {
+        case "invoiceNumber":
+          comp = (a.invoiceNumber || "").localeCompare(b.invoiceNumber || "");
+          break;
+        case "client":
+          comp = (a.clientName || "").localeCompare(b.clientName || "");
+          break;
+        case "contractNumber":
+          comp = (a.contractNumber || "").localeCompare(b.contractNumber || "");
+          break;
+        case "dueDate":
+          comp = (a.dueDate || "").localeCompare(b.dueDate || "");
+          break;
+        case "total":
+          comp = a.totalAmount - b.totalAmount;
+          break;
+        case "status":
+          comp = (a.status || "").localeCompare(b.status || "");
+          break;
+      }
+      return arSortOrder === "ASC" ? comp : -comp;
+    });
+  }, [filteredArInvoices, arSortField, arSortOrder]);
+
+  // ==========================================
+  // 7. PENERIMAAN KAS/BANK & BKM FILTER & SORT STATE
+  // ==========================================
+  type ReceiptSortField = "receiptNumber" | "date" | "type" | "client" | "forPaymentOf" | "amount" | "bank";
+  const [receiptBankFilter, setReceiptBankFilter] = useState<string>("ALL");
+  const [receiptCategoryFilter, setReceiptCategoryFilter] = useState<string>("ALL");
+  const [receiptSortField, setReceiptSortField] = useState<ReceiptSortField | null>(null);
+  const [receiptSortOrder, setReceiptSortOrder] = useState<SortOrder>(null);
+
+  const handleToggleReceiptSort = (field: ReceiptSortField) => {
+    if (receiptSortField !== field) {
+      setReceiptSortField(field);
+      setReceiptSortOrder("ASC");
+    } else if (receiptSortOrder === "ASC") {
+      setReceiptSortOrder("DESC");
+    } else {
+      setReceiptSortField(null);
+      setReceiptSortOrder(null);
+    }
+  };
+
+  const isReceiptFilterActive =
+    receiptSearchTerm.trim() !== "" ||
+    receiptFilterType !== "ALL" ||
+    receiptCategoryFilter !== "ALL" ||
+    receiptBankFilter !== "ALL" ||
+    receiptSortField !== null;
+
+  const handleResetReceiptFilters = () => {
+    setReceiptSearchTerm("");
+    setReceiptFilterType("ALL");
+    setReceiptCategoryFilter("ALL");
+    setReceiptBankFilter("ALL");
+    setReceiptSortField(null);
+    setReceiptSortOrder(null);
+  };
+
+  const filteredOfficialReceipts = useMemo(() => {
+    return officialReceipts.filter((rec) => {
+      if (receiptFilterType !== "ALL") {
+        if (receiptFilterType === "SALES_INVOICE" && rec.receiptType === "OTHER_INCOME") return false;
+        if (receiptFilterType === "OTHER_INCOME" && rec.receiptType !== "OTHER_INCOME") return false;
+      }
+      if (receiptCategoryFilter !== "ALL") {
+        if (rec.category !== receiptCategoryFilter) return false;
+      }
+      if (receiptBankFilter !== "ALL") {
+        if (!rec.bankTarget.toLowerCase().includes(receiptBankFilter.toLowerCase())) return false;
+      }
+      if (receiptSearchTerm.trim()) {
+        const q = receiptSearchTerm.toLowerCase();
+        const matchNum = (rec.receiptNumber || "").toLowerCase().includes(q);
+        const matchRef = (rec.referenceNumber || "").toLowerCase().includes(q);
+        const matchClient = (rec.clientName || "").toLowerCase().includes(q);
+        const matchPurpose = (rec.forPaymentOf || "").toLowerCase().includes(q);
+        const matchCat = (rec.category || "").toLowerCase().includes(q);
+        const matchBank = (rec.bankTarget || "").toLowerCase().includes(q);
+        if (!matchNum && !matchRef && !matchClient && !matchPurpose && !matchCat && !matchBank) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [officialReceipts, receiptFilterType, receiptCategoryFilter, receiptBankFilter, receiptSearchTerm]);
+
+  const sortedOfficialReceipts = useMemo(() => {
+    const list = [...filteredOfficialReceipts];
+    if (!receiptSortField || !receiptSortOrder) return list;
+
+    return list.sort((a, b) => {
+      let comp = 0;
+      switch (receiptSortField) {
+        case "receiptNumber":
+          comp = (a.receiptNumber || "").localeCompare(b.receiptNumber || "");
+          break;
+        case "date":
+          comp = (a.receivedDate || "").localeCompare(b.receivedDate || "");
+          break;
+        case "type":
+          comp = (a.receiptType || "SALES_INVOICE").localeCompare(b.receiptType || "SALES_INVOICE");
+          break;
+        case "client":
+          comp = (a.clientName || "").localeCompare(b.clientName || "");
+          break;
+        case "forPaymentOf":
+          comp = (a.forPaymentOf || "").localeCompare(b.forPaymentOf || "");
+          break;
+        case "amount":
+          comp = a.amountReceived - b.amountReceived;
+          break;
+        case "bank":
+          comp = (a.bankTarget || "").localeCompare(b.bankTarget || "");
+          break;
+      }
+      return receiptSortOrder === "ASC" ? comp : -comp;
+    });
+  }, [filteredOfficialReceipts, receiptSortField, receiptSortOrder]);
+  
   // New request form state
   const [newTitle, setNewTitle] = useState("");
   const [newUnit, setNewUnit] = useState<string>("Rajeg & Pasar Kemis");
@@ -5801,27 +6081,211 @@ export default function DashboardPage() {
                 {invoiceViewMode === "LIST" && (
                 <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
                   <div className="p-3 border-b border-slate-100 flex justify-between items-center text-xs">
-                    <span className="font-bold text-slate-900">Daftar Faktur Penjualan (Sales Invoice B2B & B2C)</span>
+                    <span className="font-bold text-slate-900">Daftar Faktur Penjualan (Sales Invoice B2B &amp; B2C)</span>
                     <span className="text-slate-400 font-mono text-[11px]">
-                      Otorisasi Berjenjang: Audit Progres &rarr; Finance & Tax &rarr; Direktur Utama
+                      Otorisasi Berjenjang: Audit Progres &rarr; Finance &amp; Tax &rarr; Direktur Utama
+                    </span>
+                  </div>
+
+                  {/* Toolbar Filter & Pencarian Faktur Penjualan */}
+                  <div className="p-3 border-b border-slate-200 bg-slate-50/60 flex flex-wrap items-center gap-2.5 text-xs">
+                    {/* Search Input */}
+                    <div className="relative min-w-[240px] max-w-sm flex-1">
+                      <input
+                        type="text"
+                        value={invoiceSearchQuery}
+                        onChange={(e) => setInvoiceSearchQuery(e.target.value)}
+                        placeholder="Cari no. invoice, SPK, klien, uraian..."
+                        className="w-full border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs bg-white text-slate-800 focus:outline-emerald-500 shadow-2xs"
+                      />
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                    </div>
+
+                    {/* Filter Unit Bisnis */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-500 font-medium shrink-0">Unit:</span>
+                      <select
+                        value={invoiceUnitFilter}
+                        onChange={(e) => setInvoiceUnitFilter(e.target.value)}
+                        className="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 cursor-pointer focus:outline-emerald-500 shadow-2xs"
+                      >
+                        <option value="ALL">Semua Unit</option>
+                        <option value="ME_CORE">Jasa ME Core</option>
+                        <option value="STARLITE_FTTH">Starlite FTTH</option>
+                      </select>
+                    </div>
+
+                    {/* Filter Status Approval / Penagihan */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-500 font-medium shrink-0">Status:</span>
+                      <select
+                        value={invoiceStatusFilter}
+                        onChange={(e) => setInvoiceStatusFilter(e.target.value)}
+                        className="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 cursor-pointer focus:outline-emerald-500 shadow-2xs"
+                      >
+                        <option value="ALL">Semua Status</option>
+                        <option value="PENDING_AUDIT_PROGRESS">Menunggu Audit Progres</option>
+                        <option value="PENDING_FINANCE_TAX">Menunggu Pajak &amp; Finance</option>
+                        <option value="PENDING_DIRECTOR">Menunggu Direktur</option>
+                        <option value="APPROVED_ISSUED">Siap Ditagih (Approved)</option>
+                        <option value="PAID_FULL">Sudah Lunas</option>
+                        <option value="OVERDUE">Lewat Tempo (Overdue)</option>
+                        <option value="UNPAID">Belum Lunas (Semua)</option>
+                      </select>
+                    </div>
+
+                    {/* Tombol Reset Filter */}
+                    {isInvoiceFilterActive && (
+                      <button
+                        type="button"
+                        onClick={handleResetInvoiceFilters}
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-medium text-xs transition cursor-pointer"
+                        title="Reset semua filter"
+                      >
+                        <RotateCw className="w-3 h-3" />
+                        <span>Reset</span>
+                      </button>
+                    )}
+
+                    {/* Sort Indicator Active */}
+                    {invoiceSortField && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-medium">
+                        <span>
+                          Sort: <strong>{
+                            invoiceSortField === "invoiceNumber" ? "No. Invoice" :
+                            invoiceSortField === "client" ? "Klien" :
+                            invoiceSortField === "unit" ? "Unit" :
+                            invoiceSortField === "dpp" ? "DPP" :
+                            invoiceSortField === "total" ? "Total Tagihan" :
+                            invoiceSortField === "dueDate" ? "Jatuh Tempo" : "Status"
+                          }</strong> ({invoiceSortOrder === "ASC" ? "A-Z / Naik" : "Z-A / Turun"})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => { setInvoiceSortField(null); setInvoiceSortOrder(null); }}
+                          className="ml-0.5 text-emerald-600 hover:text-emerald-900 cursor-pointer font-bold"
+                          title="Hapus urutan"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    )}
+
+                    <span className="text-[11px] text-slate-400 ml-auto shrink-0 font-mono">
+                      Menampilkan <strong className="text-slate-700">{sortedSalesInvoices.length}</strong> dari {salesInvoices.length} data
                     </span>
                   </div>
 
                   <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
                     <thead className="bg-slate-50 font-semibold text-slate-600">
                       <tr>
-                        <th className="px-4 py-3">No. Invoice & SPK</th>
-                        <th className="px-4 py-3">Klien & Uraian Pekerjaan</th>
-                        <th className="px-4 py-3">Unit</th>
-                        <th className="px-4 py-3">DPP & Pajak</th>
-                        <th className="px-4 py-3">Total Tagihan</th>
-                        <th className="px-4 py-3 text-center">Status Approval 3-Pintu</th>
-                        <th className="px-4 py-3 text-right">Aksi & Dokumen</th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleInvoiceSort("invoiceNumber")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-emerald-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan No. Invoice"
+                          >
+                            <span>No. Invoice &amp; SPK</span>
+                            <span className={`p-0.5 rounded transition ${invoiceSortField === "invoiceNumber" ? "text-emerald-700 bg-emerald-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {invoiceSortField === "invoiceNumber" ? (
+                                invoiceSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleInvoiceSort("client")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-emerald-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Klien"
+                          >
+                            <span>Klien &amp; Uraian Pekerjaan</span>
+                            <span className={`p-0.5 rounded transition ${invoiceSortField === "client" ? "text-emerald-700 bg-emerald-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {invoiceSortField === "client" ? (
+                                invoiceSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleInvoiceSort("unit")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-emerald-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Unit Bisnis"
+                          >
+                            <span>Unit</span>
+                            <span className={`p-0.5 rounded transition ${invoiceSortField === "unit" ? "text-emerald-700 bg-emerald-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {invoiceSortField === "unit" ? (
+                                invoiceSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleInvoiceSort("dpp")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-emerald-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan DPP"
+                          >
+                            <span>DPP &amp; Pajak</span>
+                            <span className={`p-0.5 rounded transition ${invoiceSortField === "dpp" ? "text-emerald-700 bg-emerald-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {invoiceSortField === "dpp" ? (
+                                invoiceSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleInvoiceSort("total")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-emerald-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Total Tagihan"
+                          >
+                            <span>Total Tagihan</span>
+                            <span className={`p-0.5 rounded transition ${invoiceSortField === "total" ? "text-emerald-700 bg-emerald-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {invoiceSortField === "total" ? (
+                                invoiceSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleInvoiceSort("status")}
+                            className="inline-flex items-center justify-center gap-1.5 font-semibold hover:text-emerald-700 transition cursor-pointer select-none group w-full"
+                            title="Urutkan berdasarkan Status Approval"
+                          >
+                            <span>Status Approval 3-Pintu</span>
+                            <span className={`p-0.5 rounded transition ${invoiceSortField === "status" ? "text-emerald-700 bg-emerald-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {invoiceSortField === "status" ? (
+                                invoiceSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3 text-right">Aksi &amp; Dokumen</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700">
-                      {salesInvoices
-                        .filter(i => selectedUnit === "ALL" || i.unit === selectedUnit)
+                      {sortedSalesInvoices
                         .map((inv) => {
                           const isProgressAuditPassed = !["PENDING_AUDIT_PROGRESS"].includes(inv.status);
                           const isTaxPassed = !["PENDING_AUDIT_PROGRESS", "PENDING_FINANCE_TAX"].includes(inv.status);
@@ -6037,24 +6501,169 @@ export default function DashboardPage() {
 
                 {/* Tabel Piutang Belum Lunas */}
                 <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
-                  <div className="p-3 border-b border-slate-100 text-xs font-bold text-slate-900">
-                    Kartu Rincian Piutang Klien yang Belum Terbayar
+                  <div className="p-3 border-b border-slate-100 flex justify-between items-center text-xs">
+                    <span className="font-bold text-slate-900">Kartu Rincian Piutang Klien yang Belum Terbayar</span>
+                    <span className="text-slate-400 font-mono text-[11px]">Monitoring Jatuh Tempo &amp; Tindakan Penagihan</span>
+                  </div>
+
+                  {/* Toolbar Filter & Pencarian Kartu Piutang */}
+                  <div className="p-3 border-b border-slate-200 bg-slate-50/60 flex flex-wrap items-center gap-2.5 text-xs">
+                    <div className="relative min-w-[240px] max-w-sm flex-1">
+                      <input
+                        type="text"
+                        value={arSearchQuery}
+                        onChange={(e) => setArSearchQuery(e.target.value)}
+                        placeholder="Cari no. invoice, SPK, nama klien..."
+                        className="w-full border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs bg-white text-slate-800 focus:outline-amber-500 shadow-2xs"
+                      />
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-500 font-medium shrink-0">Umur Piutang:</span>
+                      <select
+                        value={arAgingFilter}
+                        onChange={(e) => setArAgingFilter(e.target.value)}
+                        className="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 cursor-pointer focus:outline-amber-500 shadow-2xs"
+                      >
+                        <option value="ALL">Semua Umur Piutang</option>
+                        <option value="CURRENT">Lancar (0 - 30 Hari)</option>
+                        <option value="OVERDUE">Lewat Tempo (&gt; 60 Hari / Overdue)</option>
+                      </select>
+                    </div>
+
+                    {isArFilterActive && (
+                      <button
+                        type="button"
+                        onClick={handleResetArFilters}
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-medium text-xs transition cursor-pointer"
+                        title="Reset semua filter"
+                      >
+                        <RotateCw className="w-3 h-3" />
+                        <span>Reset</span>
+                      </button>
+                    )}
+
+                    {arSortField && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium">
+                        <span>
+                          Sort: <strong>{
+                            arSortField === "invoiceNumber" ? "No. Invoice" :
+                            arSortField === "client" ? "Klien" :
+                            arSortField === "contractNumber" ? "No. Kontrak" :
+                            arSortField === "dueDate" ? "Jatuh Tempo" :
+                            arSortField === "total" ? "Nominal" : "Status"
+                          }</strong> ({arSortOrder === "ASC" ? "A-Z / Naik" : "Z-A / Turun"})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => { setArSortField(null); setArSortOrder(null); }}
+                          className="ml-0.5 text-amber-600 hover:text-amber-900 cursor-pointer font-bold"
+                          title="Hapus urutan"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    )}
+
+                    <span className="text-[11px] text-slate-400 ml-auto shrink-0 font-mono">
+                      Menampilkan <strong className="text-slate-700">{sortedArInvoices.length}</strong> dari {salesInvoices.filter(i => i.status !== "PAID_FULL").length} piutang
+                    </span>
                   </div>
 
                   <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
                     <thead className="bg-slate-50 font-semibold text-slate-600">
                       <tr>
-                        <th className="px-4 py-3">No. Invoice & Klien</th>
-                        <th className="px-4 py-3">No. Kontrak / SPK</th>
-                        <th className="px-4 py-3">Tgl Jatuh Tempo</th>
-                        <th className="px-4 py-3">Nominal Piutang</th>
-                        <th className="px-4 py-3">Status Aging</th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleArSort("invoiceNumber")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-amber-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan No. Invoice"
+                          >
+                            <span>No. Invoice &amp; Klien</span>
+                            <span className={`p-0.5 rounded transition ${arSortField === "invoiceNumber" ? "text-amber-700 bg-amber-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {arSortField === "invoiceNumber" ? (
+                                arSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleArSort("contractNumber")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-amber-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan No. Kontrak"
+                          >
+                            <span>No. Kontrak / SPK</span>
+                            <span className={`p-0.5 rounded transition ${arSortField === "contractNumber" ? "text-amber-700 bg-amber-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {arSortField === "contractNumber" ? (
+                                arSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleArSort("dueDate")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-amber-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Tanggal Jatuh Tempo"
+                          >
+                            <span>Tgl Jatuh Tempo</span>
+                            <span className={`p-0.5 rounded transition ${arSortField === "dueDate" ? "text-amber-700 bg-amber-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {arSortField === "dueDate" ? (
+                                arSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleArSort("total")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-amber-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Nominal Piutang"
+                          >
+                            <span>Nominal Piutang</span>
+                            <span className={`p-0.5 rounded transition ${arSortField === "total" ? "text-amber-700 bg-amber-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {arSortField === "total" ? (
+                                arSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleArSort("status")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-amber-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Status Aging"
+                          >
+                            <span>Status Aging</span>
+                            <span className={`p-0.5 rounded transition ${arSortField === "status" ? "text-amber-700 bg-amber-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {arSortField === "status" ? (
+                                arSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
                         <th className="px-4 py-3 text-right">Tindakan Penagihan</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700">
-                      {salesInvoices
-                        .filter(i => i.status !== "PAID_FULL")
+                      {sortedArInvoices
                         .map((inv) => (
                           <tr key={inv.id} className="hover:bg-slate-50/70 transition">
                             <td className="px-4 py-3">
@@ -6128,45 +6737,106 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Filter & Search Bar Penerimaan */}
-                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
-                  <div className="flex flex-wrap items-center gap-2 flex-1">
-                    <div className="relative min-w-[220px] max-w-sm flex-1">
-                      <input
-                        type="text"
-                        value={receiptSearchTerm}
-                        onChange={(e) => setReceiptSearchTerm(e.target.value)}
-                        placeholder="Cari no. kuitansi, klien/pembayar, keterangan..."
-                        className="w-full border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs focus:outline-blue-500"
-                      />
-                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
-                    </div>
+                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex flex-wrap items-center gap-2.5 text-xs">
+                  {/* Search Input */}
+                  <div className="relative min-w-[240px] max-w-sm flex-1">
+                    <input
+                      type="text"
+                      value={receiptSearchTerm}
+                      onChange={(e) => setReceiptSearchTerm(e.target.value)}
+                      placeholder="Cari no. kuitansi, ref, klien, uraian..."
+                      className="w-full border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs bg-white text-slate-800 focus:outline-blue-500 shadow-2xs"
+                    />
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                  </div>
 
+                  {/* Filter Jenis */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-500 font-medium shrink-0">Jenis:</span>
                     <select
                       value={receiptFilterType}
                       onChange={(e) => setReceiptFilterType(e.target.value as any)}
-                      className="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 cursor-pointer"
+                      className="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 cursor-pointer focus:outline-blue-500 shadow-2xs"
                     >
-                      <option value="ALL">Semua Jenis Penerimaan</option>
+                      <option value="ALL">Semua Jenis</option>
                       <option value="SALES_INVOICE">Pelunasan Faktur Penjualan</option>
                       <option value="OTHER_INCOME">Penerimaan Pendapatan Lainnya</option>
                     </select>
-
-                    {(receiptSearchTerm || receiptFilterType !== "ALL") && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setReceiptSearchTerm("");
-                          setReceiptFilterType("ALL");
-                        }}
-                        className="px-2 py-1 text-slate-500 hover:text-slate-800 border border-slate-300 rounded-lg text-[11px] cursor-pointer"
-                      >
-                        Reset Filter
-                      </button>
-                    )}
                   </div>
 
-                  <span className="text-[11px] text-slate-400 font-mono">
-                    Total {officialReceipts.length} Bukti Kas Masuk
+                  {/* Filter Kategori */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-500 font-medium shrink-0">Kategori:</span>
+                    <select
+                      value={receiptCategoryFilter}
+                      onChange={(e) => setReceiptCategoryFilter(e.target.value)}
+                      className="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 cursor-pointer focus:outline-blue-500 shadow-2xs max-w-[190px]"
+                    >
+                      <option value="ALL">Semua Kategori</option>
+                      <option value="Pelunasan Faktur Penjualan">Pelunasan Faktur Penjualan</option>
+                      <option value="Pendapatan Jasa Giro & Bunga Bank">Pendapatan Jasa Giro &amp; Bunga Bank</option>
+                      <option value="Penjualan Sisa Material / Scrap">Penjualan Sisa Material / Scrap</option>
+                      <option value="Pendapatan Sewa Alat / Peralatan">Pendapatan Sewa Alat / Peralatan</option>
+                      <option value="Klaim Pengembalian Asuransi / Restitusi">Klaim Pengembalian Asuransi</option>
+                      <option value="Setoran Sisa Kasbon & Realisasi LPJ">Setoran Sisa Kasbon &amp; LPJ</option>
+                      <option value="Penerimaan Lain-lain Non-Operasional">Penerimaan Non-Operasional</option>
+                    </select>
+                  </div>
+
+                  {/* Filter Bank Penampung */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-500 font-medium shrink-0">Bank:</span>
+                    <select
+                      value={receiptBankFilter}
+                      onChange={(e) => setReceiptBankFilter(e.target.value)}
+                      className="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 cursor-pointer focus:outline-blue-500 shadow-2xs"
+                    >
+                      <option value="ALL">Semua Rekening</option>
+                      <option value="Mandiri">Bank Mandiri</option>
+                      <option value="BCA">Bank BCA</option>
+                      <option value="Petty Cash">Kas Kecil Lapangan</option>
+                    </select>
+                  </div>
+
+                  {/* Tombol Reset Filter */}
+                  {isReceiptFilterActive && (
+                    <button
+                      type="button"
+                      onClick={handleResetReceiptFilters}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-medium text-xs transition cursor-pointer"
+                      title="Reset semua filter"
+                    >
+                      <RotateCw className="w-3 h-3" />
+                      <span>Reset</span>
+                    </button>
+                  )}
+
+                  {/* Sort Indicator Active */}
+                  {receiptSortField && (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 border border-blue-200 text-blue-800 text-[11px] font-medium">
+                      <span>
+                        Sort: <strong>{
+                          receiptSortField === "receiptNumber" ? "No. Kuitansi" :
+                          receiptSortField === "date" ? "Tgl Diterima" :
+                          receiptSortField === "type" ? "Jenis" :
+                          receiptSortField === "client" ? "Diterima Dari" :
+                          receiptSortField === "forPaymentOf" ? "Uraian" :
+                          receiptSortField === "amount" ? "Jumlah Uang" : "Rekening"
+                        }</strong> ({receiptSortOrder === "ASC" ? "A-Z / Naik" : "Z-A / Turun"})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => { setReceiptSortField(null); setReceiptSortOrder(null); }}
+                        className="ml-0.5 text-blue-600 hover:text-blue-900 cursor-pointer font-bold"
+                        title="Hapus urutan"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  )}
+
+                  <span className="text-[11px] text-slate-400 ml-auto shrink-0 font-mono">
+                    Menampilkan <strong className="text-slate-700">{sortedOfficialReceipts.length}</strong> dari {officialReceipts.length} data
                   </span>
                 </div>
 
@@ -6175,33 +6845,130 @@ export default function DashboardPage() {
                   <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
                     <thead className="bg-slate-50 font-semibold text-slate-600">
                       <tr>
-                        <th className="px-4 py-3">No. Kuitansi BKM</th>
-                        <th className="px-4 py-3">Tgl Diterima</th>
-                        <th className="px-4 py-3">Jenis &amp; Kategori</th>
-                        <th className="px-4 py-3">Diterima Dari (Klien / Pembayar)</th>
-                        <th className="px-4 py-3">Untuk Pembayaran / Uraian</th>
-                        <th className="px-4 py-3">Jumlah Uang</th>
-                        <th className="px-4 py-3">Rekening Penampung</th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleReceiptSort("receiptNumber")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan No. Kuitansi"
+                          >
+                            <span>No. Kuitansi BKM</span>
+                            <span className={`p-0.5 rounded transition ${receiptSortField === "receiptNumber" ? "text-blue-700 bg-blue-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {receiptSortField === "receiptNumber" ? (
+                                receiptSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleReceiptSort("date")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Tanggal Diterima"
+                          >
+                            <span>Tgl Diterima</span>
+                            <span className={`p-0.5 rounded transition ${receiptSortField === "date" ? "text-blue-700 bg-blue-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {receiptSortField === "date" ? (
+                                receiptSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleReceiptSort("type")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Jenis & Kategori"
+                          >
+                            <span>Jenis &amp; Kategori</span>
+                            <span className={`p-0.5 rounded transition ${receiptSortField === "type" ? "text-blue-700 bg-blue-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {receiptSortField === "type" ? (
+                                receiptSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleReceiptSort("client")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Diterima Dari"
+                          >
+                            <span>Diterima Dari (Klien / Pembayar)</span>
+                            <span className={`p-0.5 rounded transition ${receiptSortField === "client" ? "text-blue-700 bg-blue-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {receiptSortField === "client" ? (
+                                receiptSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleReceiptSort("forPaymentOf")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Untuk Pembayaran"
+                          >
+                            <span>Untuk Pembayaran / Uraian</span>
+                            <span className={`p-0.5 rounded transition ${receiptSortField === "forPaymentOf" ? "text-blue-700 bg-blue-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {receiptSortField === "forPaymentOf" ? (
+                                receiptSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleReceiptSort("amount")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Jumlah Uang"
+                          >
+                            <span>Jumlah Uang</span>
+                            <span className={`p-0.5 rounded transition ${receiptSortField === "amount" ? "text-blue-700 bg-blue-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {receiptSortField === "amount" ? (
+                                receiptSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleReceiptSort("bank")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Rekening Penampung"
+                          >
+                            <span>Rekening Penampung</span>
+                            <span className={`p-0.5 rounded transition ${receiptSortField === "bank" ? "text-blue-700 bg-blue-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {receiptSortField === "bank" ? (
+                                receiptSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
                         <th className="px-4 py-3 text-right">Aksi Dokumen</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700">
-                      {officialReceipts
-                        .filter(rec => {
-                          if (receiptFilterType !== "ALL") {
-                            if (receiptFilterType === "SALES_INVOICE" && rec.receiptType === "OTHER_INCOME") return false;
-                            if (receiptFilterType === "OTHER_INCOME" && rec.receiptType !== "OTHER_INCOME") return false;
-                          }
-                          if (receiptSearchTerm.trim()) {
-                            const term = receiptSearchTerm.toLowerCase();
-                            const matchNum = rec.receiptNumber.toLowerCase().includes(term);
-                            const matchClient = rec.clientName.toLowerCase().includes(term);
-                            const matchPurpose = rec.forPaymentOf.toLowerCase().includes(term);
-                            const matchCat = (rec.category || "").toLowerCase().includes(term);
-                            if (!matchNum && !matchClient && !matchPurpose && !matchCat) return false;
-                          }
-                          return true;
-                        })
+                      {sortedOfficialReceipts
                         .map((rec) => {
                           const isOther = rec.receiptType === "OTHER_INCOME";
                           return (
