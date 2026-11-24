@@ -51,7 +51,9 @@ import {
   RotateCcw,
   ZoomIn,
   Plus,
-  Upload
+  Upload,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import { PrintableDocumentModal } from "@/components/PrintableDocumentModal";
 import { 
@@ -216,6 +218,372 @@ export default function DashboardPage() {
       return requestSortOrder === "ASC" ? comp : -comp;
     });
   }, [filteredRequests, requestSortField, requestSortOrder]);
+
+  // ==========================================
+  // 2. DISBURSEMENT (PENCAIRAN KAS) FILTER & SORT STATE
+  // ==========================================
+  type DisburseSortField = "docNumber" | "title" | "category" | "unit" | "requester" | "amount" | "dueDate" | "status" | "voucher";
+  const [disburseSearchQuery, setDisburseSearchQuery] = useState<string>("");
+  const [disburseUnit, setDisburseUnit] = useState<string>("ALL");
+  const [disburseCategoryFilter, setDisburseCategoryFilter] = useState<string>("ALL");
+  const [disburseStatusFilter, setDisburseStatusFilter] = useState<string>("ALL");
+  const [disburseSortField, setDisburseSortField] = useState<DisburseSortField | null>(null);
+  const [disburseSortOrder, setDisburseSortOrder] = useState<SortOrder>(null);
+
+  const handleToggleDisburseSort = (field: DisburseSortField) => {
+    if (disburseSortField !== field) {
+      setDisburseSortField(field);
+      setDisburseSortOrder("ASC");
+    } else if (disburseSortOrder === "ASC") {
+      setDisburseSortOrder("DESC");
+    } else {
+      setDisburseSortField(null);
+      setDisburseSortOrder(null);
+    }
+  };
+
+  const isDisburseFilterActive =
+    disburseUnit !== "ALL" ||
+    disburseCategoryFilter !== "ALL" ||
+    disburseStatusFilter !== "ALL" ||
+    disburseSearchQuery.trim() !== "" ||
+    disburseSortField !== null;
+
+  const handleResetDisburseFilters = () => {
+    setDisburseUnit("ALL");
+    setDisburseCategoryFilter("ALL");
+    setDisburseStatusFilter("ALL");
+    setDisburseSearchQuery("");
+    setDisburseSortField(null);
+    setDisburseSortOrder(null);
+  };
+
+  const filteredDisburseRequests = useMemo(() => {
+    return requests
+      .filter((r) => r.status === "APPROVED_READY_PAY" || r.disbursement)
+      .filter((r) => {
+        if (disburseUnit !== "ALL" && r.unit !== disburseUnit) return false;
+        if (disburseCategoryFilter !== "ALL") {
+          const cat = r.category || (r.requestType === "CASH_ADVANCE" ? "Kasbon" : "Perlengkapan & Peralatan");
+          if (cat !== disburseCategoryFilter) return false;
+        }
+        if (disburseStatusFilter !== "ALL") {
+          if (disburseStatusFilter === "READY" && r.disbursement) return false;
+          if (disburseStatusFilter === "DISBURSED" && !r.disbursement) return false;
+          if (disburseStatusFilter === "CASH_ADVANCE" && r.requestType !== "CASH_ADVANCE") return false;
+          if (disburseStatusFilter === "PURCHASE_REQUISITION" && r.requestType !== "PURCHASE_REQUISITION") return false;
+        }
+        if (disburseSearchQuery.trim()) {
+          const q = disburseSearchQuery.toLowerCase();
+          const matchDoc = (r.requestNumber || "").toLowerCase().includes(q);
+          const matchVoucher = (r.disbursement?.voucherNumber || "").toLowerCase().includes(q);
+          const matchTitle = (r.title || "").toLowerCase().includes(q);
+          const matchRequester = (r.requesterName || "").toLowerCase().includes(q);
+          const matchCat = (r.category || "").toLowerCase().includes(q);
+          const matchUnit = String(r.unit || "").toLowerCase().includes(q);
+          if (!matchDoc && !matchVoucher && !matchTitle && !matchRequester && !matchCat && !matchUnit) {
+            return false;
+          }
+        }
+        return true;
+      });
+  }, [requests, disburseUnit, disburseCategoryFilter, disburseStatusFilter, disburseSearchQuery]);
+
+  const sortedDisburseRequests = useMemo(() => {
+    const list = [...filteredDisburseRequests];
+    if (!disburseSortField || !disburseSortOrder) return list;
+
+    return list.sort((a, b) => {
+      let comp = 0;
+      switch (disburseSortField) {
+        case "docNumber":
+          comp = (a.requestNumber || "").localeCompare(b.requestNumber || "");
+          break;
+        case "title":
+          comp = (a.title || "").localeCompare(b.title || "");
+          break;
+        case "category": {
+          const catA = a.category || (a.requestType === "CASH_ADVANCE" ? "Kasbon" : "Perlengkapan & Peralatan");
+          const catB = b.category || (b.requestType === "CASH_ADVANCE" ? "Kasbon" : "Perlengkapan & Peralatan");
+          comp = catA.localeCompare(catB);
+          break;
+        }
+        case "unit":
+          comp = String(a.unit || "").localeCompare(String(b.unit || ""));
+          break;
+        case "requester":
+          comp = (a.requesterName || "").localeCompare(b.requesterName || "");
+          break;
+        case "amount":
+          comp = a.totalAmount - b.totalAmount;
+          break;
+        case "dueDate":
+          comp = (a.dueDate || "").localeCompare(b.dueDate || "");
+          break;
+        case "status": {
+          const statA = a.disbursement ? "DISBURSED" : "READY";
+          const statB = b.disbursement ? "DISBURSED" : "READY";
+          comp = statA.localeCompare(statB);
+          break;
+        }
+        case "voucher": {
+          const vA = a.disbursement?.voucherNumber || "";
+          const vB = b.disbursement?.voucherNumber || "";
+          comp = vA.localeCompare(vB);
+          break;
+        }
+      }
+      return disburseSortOrder === "ASC" ? comp : -comp;
+    });
+  }, [filteredDisburseRequests, disburseSortField, disburseSortOrder]);
+
+  // ==========================================
+  // 3. LPJ REALIZATION (REALISASI & LPJ) FILTER & SORT STATE
+  // ==========================================
+  type LpjSortField = "docNumber" | "title" | "unit" | "requester" | "advance" | "actual" | "diff" | "status";
+  const [lpjSearchQuery, setLpjSearchQuery] = useState<string>("");
+  const [lpjUnit, setLpjUnit] = useState<string>("ALL");
+  const [lpjReconciliationFilter, setLpjReconciliationFilter] = useState<string>("ALL");
+  const [lpjStatusFilter, setLpjStatusFilter] = useState<string>("ALL");
+  const [lpjSortField, setLpjSortField] = useState<LpjSortField | null>(null);
+  const [lpjSortOrder, setLpjSortOrder] = useState<SortOrder>(null);
+
+  const handleToggleLpjSort = (field: LpjSortField) => {
+    if (lpjSortField !== field) {
+      setLpjSortField(field);
+      setLpjSortOrder("ASC");
+    } else if (lpjSortOrder === "ASC") {
+      setLpjSortOrder("DESC");
+    } else {
+      setLpjSortField(null);
+      setLpjSortOrder(null);
+    }
+  };
+
+  const isLpjFilterActive =
+    lpjUnit !== "ALL" ||
+    lpjReconciliationFilter !== "ALL" ||
+    lpjStatusFilter !== "ALL" ||
+    lpjSearchQuery.trim() !== "" ||
+    lpjSortField !== null;
+
+  const handleResetLpjFilters = () => {
+    setLpjUnit("ALL");
+    setLpjReconciliationFilter("ALL");
+    setLpjStatusFilter("ALL");
+    setLpjSearchQuery("");
+    setLpjSortField(null);
+    setLpjSortOrder(null);
+  };
+
+  const filteredLpjRequests = useMemo(() => {
+    return requests
+      .filter((r) => r.status === "DISBURSED" || r.disbursement || r.realization)
+      .filter((r) => {
+        if (lpjUnit !== "ALL" && r.unit !== lpjUnit) return false;
+        
+        // Status Approval LPJ
+        if (lpjStatusFilter !== "ALL") {
+          if (lpjStatusFilter === "NO_LPJ" && r.realization) return false;
+          if (lpjStatusFilter === "IN_REVIEW" && (!r.realization || ["COMPLETED", "REJECTED"].includes(r.realization.status))) return false;
+          if (lpjStatusFilter === "SETTLEMENT" && r.realization?.status !== "PENDING_FINANCE_SETTLEMENT") return false;
+          if (lpjStatusFilter === "COMPLETED" && r.realization?.status !== "COMPLETED") return false;
+          if (lpjStatusFilter === "PENDING_AUDIT" && r.realization?.status !== "PENDING_AUDIT") return false;
+          if (lpjStatusFilter === "PENDING_PM" && r.realization?.status !== "PENDING_PM") return false;
+          if (lpjStatusFilter === "PENDING_GM" && r.realization?.status !== "PENDING_GM") return false;
+          if (lpjStatusFilter === "PENDING_DIRECTOR" && r.realization?.status !== "PENDING_DIRECTOR") return false;
+          if (lpjStatusFilter === "WAITING_REIMBURSEMENT" && r.realization?.status !== "WAITING_REIMBURSEMENT") return false;
+        }
+
+        // Status Rekonsiliasi Saldo (Pas, Sisa Kasir, Nombok/Reimburse)
+        if (lpjReconciliationFilter !== "ALL") {
+          if (!r.realization) return false;
+          const diff = r.realization.balanceDifference;
+          if (lpjReconciliationFilter === "EXACT" && diff !== 0) return false;
+          if (lpjReconciliationFilter === "SURPLUS" && diff <= 0) return false;
+          if (lpjReconciliationFilter === "DEFICIT" && diff >= 0) return false;
+        }
+
+        // Search query
+        if (lpjSearchQuery.trim()) {
+          const q = lpjSearchQuery.toLowerCase();
+          const matchDoc = (r.requestNumber || "").toLowerCase().includes(q);
+          const matchLPJ = (r.realization?.lpjNumber || "").toLowerCase().includes(q);
+          const matchTitle = (r.title || "").toLowerCase().includes(q);
+          const matchRequester = (r.requesterName || "").toLowerCase().includes(q);
+          const matchUnit = String(r.unit || "").toLowerCase().includes(q);
+          if (!matchDoc && !matchLPJ && !matchTitle && !matchRequester && !matchUnit) {
+            return false;
+          }
+        }
+        return true;
+      });
+  }, [requests, lpjUnit, lpjStatusFilter, lpjReconciliationFilter, lpjSearchQuery]);
+
+  const sortedLpjRequests = useMemo(() => {
+    const list = [...filteredLpjRequests];
+    if (!lpjSortField || !lpjSortOrder) return list;
+
+    return list.sort((a, b) => {
+      let comp = 0;
+      switch (lpjSortField) {
+        case "docNumber": {
+          const numA = a.realization?.lpjNumber || a.requestNumber || "";
+          const numB = b.realization?.lpjNumber || b.requestNumber || "";
+          comp = numA.localeCompare(numB);
+          break;
+        }
+        case "title":
+          comp = (a.title || "").localeCompare(b.title || "");
+          break;
+        case "unit":
+          comp = String(a.unit || "").localeCompare(String(b.unit || ""));
+          break;
+        case "requester":
+          comp = (a.requesterName || "").localeCompare(b.requesterName || "");
+          break;
+        case "advance": {
+          const advA = a.disbursement?.amountPaid || a.totalAmount;
+          const advB = b.disbursement?.amountPaid || b.totalAmount;
+          comp = advA - advB;
+          break;
+        }
+        case "actual": {
+          const actA = a.realization?.totalRealizedAmount || 0;
+          const actB = b.realization?.totalRealizedAmount || 0;
+          comp = actA - actB;
+          break;
+        }
+        case "diff": {
+          const diffA = a.realization?.balanceDifference || 0;
+          const diffB = b.realization?.balanceDifference || 0;
+          comp = diffA - diffB;
+          break;
+        }
+        case "status": {
+          const statA = a.realization?.status || "NO_LPJ";
+          const statB = b.realization?.status || "NO_LPJ";
+          comp = statA.localeCompare(statB);
+          break;
+        }
+      }
+      return lpjSortOrder === "ASC" ? comp : -comp;
+    });
+  }, [filteredLpjRequests, lpjSortField, lpjSortOrder]);
+
+  // ==========================================
+  // 4. GOODS RECEIPT (PENERIMAAN BARANG FISIK - BAST) FILTER & SORT STATE
+  // ==========================================
+  type GrSortField = "docNumber" | "title" | "vendor" | "unit" | "amount" | "status" | "date";
+  const [grSearchQuery, setGrSearchQuery] = useState<string>("");
+  const [grUnit, setGrUnit] = useState<string>("ALL");
+  const [grCategoryFilter, setGrCategoryFilter] = useState<string>("ALL");
+  const [grStatusFilter, setGrStatusFilter] = useState<string>("ALL");
+  const [grSortField, setGrSortField] = useState<GrSortField | null>(null);
+  const [grSortOrder, setGrSortOrder] = useState<SortOrder>(null);
+  const [expandedGrIds, setExpandedGrIds] = useState<string[]>([]);
+
+  const toggleGrExpand = (id: string) => {
+    setExpandedGrIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const handleToggleGrSort = (field: GrSortField) => {
+    if (grSortField !== field) {
+      setGrSortField(field);
+      setGrSortOrder("ASC");
+    } else if (grSortOrder === "ASC") {
+      setGrSortOrder("DESC");
+    } else {
+      setGrSortField(null);
+      setGrSortOrder(null);
+    }
+  };
+
+  const isGrFilterActive =
+    grUnit !== "ALL" ||
+    grCategoryFilter !== "ALL" ||
+    grStatusFilter !== "ALL" ||
+    grSearchQuery.trim() !== "" ||
+    grSortField !== null;
+
+  const handleResetGrFilters = () => {
+    setGrUnit("ALL");
+    setGrCategoryFilter("ALL");
+    setGrStatusFilter("ALL");
+    setGrSearchQuery("");
+    setGrSortField(null);
+    setGrSortOrder(null);
+  };
+
+  const filteredGrRequests = useMemo(() => {
+    return requests
+      .filter((r) => r.requestType === "PURCHASE_REQUISITION")
+      .filter((r) => {
+        if (grUnit !== "ALL" && r.unit !== grUnit) return false;
+        if (grCategoryFilter !== "ALL") {
+          const cat = r.category || "Perlengkapan & Peralatan";
+          if (cat !== grCategoryFilter) return false;
+        }
+        if (grStatusFilter !== "ALL") {
+          if (grStatusFilter === "PENDING" && r.goodsReceipt) return false;
+          if (grStatusFilter === "COMPLETED" && !r.goodsReceipt) return false;
+        }
+        if (grSearchQuery.trim()) {
+          const q = grSearchQuery.toLowerCase();
+          const matchDoc = (r.requestNumber || "").toLowerCase().includes(q);
+          const matchBAST = (r.goodsReceipt?.receiptNumber || "").toLowerCase().includes(q);
+          const matchVendor = (r.goodsReceipt?.vendorName || r.vendorInfo?.vendorName || "").toLowerCase().includes(q);
+          const matchTitle = (r.title || "").toLowerCase().includes(q);
+          const matchUnit = String(r.unit || "").toLowerCase().includes(q);
+          if (!matchDoc && !matchBAST && !matchVendor && !matchTitle && !matchUnit) {
+            return false;
+          }
+        }
+        return true;
+      });
+  }, [requests, grUnit, grCategoryFilter, grStatusFilter, grSearchQuery]);
+
+  const sortedGrRequests = useMemo(() => {
+    const list = [...filteredGrRequests];
+    if (!grSortField || !grSortOrder) return list;
+
+    return list.sort((a, b) => {
+      let comp = 0;
+      switch (grSortField) {
+        case "docNumber":
+          comp = (a.requestNumber || "").localeCompare(b.requestNumber || "");
+          break;
+        case "title":
+          comp = (a.title || "").localeCompare(b.title || "");
+          break;
+        case "vendor": {
+          const vA = a.goodsReceipt?.vendorName || a.vendorInfo?.vendorName || "";
+          const vB = b.goodsReceipt?.vendorName || b.vendorInfo?.vendorName || "";
+          comp = vA.localeCompare(vB);
+          break;
+        }
+        case "unit":
+          comp = String(a.unit || "").localeCompare(String(b.unit || ""));
+          break;
+        case "amount":
+          comp = a.totalAmount - b.totalAmount;
+          break;
+        case "status": {
+          const sA = a.goodsReceipt ? "COMPLETED" : "PENDING";
+          const sB = b.goodsReceipt ? "COMPLETED" : "PENDING";
+          comp = sA.localeCompare(sB);
+          break;
+        }
+        case "date": {
+          const dA = a.goodsReceipt?.receivedDate || a.createdAt || "";
+          const dB = b.goodsReceipt?.receivedDate || b.createdAt || "";
+          comp = dA.localeCompare(dB);
+          break;
+        }
+      }
+      return grSortOrder === "ASC" ? comp : -comp;
+    });
+  }, [filteredGrRequests, grSortField, grSortOrder]);
 
   // Period Filter State (Monthly vs Yearly)
   const [filterPeriodType, setFilterPeriodType] = useState<"MONTHLY" | "YEARLY">("MONTHLY");
@@ -3644,145 +4012,410 @@ export default function DashboardPage() {
             {/* KONTEN TAHAP 2: PENCAIRAN KAS (FINANCE GATE) */}
             {requestWorkflowSubTab === "DISBURSEMENT" && (
               <div className="space-y-4">
-                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex justify-between items-center text-xs text-emerald-900">
-                  <div>
-                    <h3 className="font-bold text-sm text-emerald-950 flex items-center gap-2">
-                      <Wallet className="w-4 h-4 text-emerald-700" />
-                      Pencairan Dana Kas & Bank oleh Tim Finance
-                    </h3>
-                    <p className="text-[11px] text-emerald-800 mt-0.5">
-                      Pengajuan yang telah mendapat otorisasi Direktur Utama siap diproses pembayarannya (Transfer Bank / Kas Kecil) dan dicetak Form Bukti Pencairannya.
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[10px] text-emerald-700 uppercase font-bold block">Total Siap Dicairkan:</span>
-                    <strong className="text-sm font-extrabold text-emerald-950">
-                      {formatRupiah(
-                        requests.filter(r => r.status === "APPROVED_READY_PAY").reduce((acc, r) => acc + r.totalAmount, 0)
-                      )}
+                {/* 4 Kartu KPI / Status Pencairan Kas */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                  <div
+                    onClick={() => setDisburseStatusFilter(prev => prev === "READY" ? "ALL" : "READY")}
+                    className={`p-3 bg-white rounded-xl border transition cursor-pointer hover:shadow-xs ${
+                      disburseStatusFilter === "READY" ? "border-amber-400 bg-amber-50/50 ring-1 ring-amber-300" : "border-slate-200"
+                    }`}
+                  >
+                    <span className="text-slate-500 block">Siap Dicairkan</span>
+                    <strong className="text-base text-amber-700 font-extrabold">
+                      {requests.filter(r => r.status === "APPROVED_READY_PAY" && !r.disbursement).length} Dokumen
                     </strong>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">
+                      {formatRupiah(requests.filter(r => r.status === "APPROVED_READY_PAY" && !r.disbursement).reduce((acc, r) => acc + r.totalAmount, 0))}
+                    </span>
+                  </div>
+
+                  <div
+                    onClick={() => setDisburseStatusFilter(prev => prev === "DISBURSED" ? "ALL" : "DISBURSED")}
+                    className={`p-3 bg-white rounded-xl border transition cursor-pointer hover:shadow-xs ${
+                      disburseStatusFilter === "DISBURSED" ? "border-emerald-400 bg-emerald-50/50 ring-1 ring-emerald-300" : "border-slate-200"
+                    }`}
+                  >
+                    <span className="text-slate-500 block">Sudah Cair (BKK Terbit)</span>
+                    <strong className="text-base text-emerald-700 font-extrabold">
+                      {requests.filter(r => !!r.disbursement).length} Dokumen
+                    </strong>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">
+                      {formatRupiah(requests.filter(r => !!r.disbursement).reduce((acc, r) => acc + (r.disbursement?.amountPaid || r.totalAmount), 0))}
+                    </span>
+                  </div>
+
+                  <div
+                    onClick={() => setDisburseStatusFilter(prev => prev === "CASH_ADVANCE" ? "ALL" : "CASH_ADVANCE")}
+                    className={`p-3 bg-white rounded-xl border transition cursor-pointer hover:shadow-xs ${
+                      disburseStatusFilter === "CASH_ADVANCE" ? "border-purple-400 bg-purple-50/50 ring-1 ring-purple-300" : "border-slate-200"
+                    }`}
+                  >
+                    <span className="text-slate-500 block">Kasbon Lapangan</span>
+                    <strong className="text-base text-purple-700 font-extrabold">
+                      {requests.filter(r => (r.status === "APPROVED_READY_PAY" || r.disbursement) && r.requestType === "CASH_ADVANCE").length} Dokumen
+                    </strong>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Operasional tim teknisi site</span>
+                  </div>
+
+                  <div
+                    onClick={() => setDisburseStatusFilter(prev => prev === "PURCHASE_REQUISITION" ? "ALL" : "PURCHASE_REQUISITION")}
+                    className={`p-3 bg-white rounded-xl border transition cursor-pointer hover:shadow-xs ${
+                      disburseStatusFilter === "PURCHASE_REQUISITION" ? "border-blue-400 bg-blue-50/50 ring-1 ring-blue-300" : "border-slate-200"
+                    }`}
+                  >
+                    <span className="text-slate-500 block">Pengadaan PO / Vendor</span>
+                    <strong className="text-base text-blue-700 font-extrabold">
+                      {requests.filter(r => (r.status === "APPROVED_READY_PAY" || r.disbursement) && r.requestType === "PURCHASE_REQUISITION").length} Dokumen
+                    </strong>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Tagihan material &amp; supplier</span>
                   </div>
                 </div>
 
+                {/* Tabel Pencairan Kas */}
                 <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+                  <div className="p-3 border-b border-slate-100 flex flex-wrap justify-between items-center gap-2 text-xs">
+                    <div>
+                      <span className="font-bold text-slate-900 text-sm block">Daftar Pencairan Kas &amp; Pembayaran Bank</span>
+                    </div>
+                  </div>
+
+                  {/* BAR FILTER LENGKAP & PENCARIAN */}
+                  <div className="p-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center gap-2.5 text-xs">
+                    {/* Search Input */}
+                    <div className="relative flex-1 min-w-[200px]">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={disburseSearchQuery}
+                        onChange={(e) => setDisburseSearchQuery(e.target.value)}
+                        placeholder="Cari no. dokumen, no. voucher, pemohon..."
+                        className="w-full bg-white border border-slate-200 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-400 shadow-2xs"
+                      />
+                      {disburseSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setDisburseSearchQuery("")}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Filter Site / Divisi */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-500 font-medium shrink-0">Site:</span>
+                      <select
+                        value={disburseUnit}
+                        onChange={(e) => setDisburseUnit(e.target.value)}
+                        className="border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 cursor-pointer focus:outline-none focus:border-emerald-400 shadow-2xs"
+                      >
+                        <option value="ALL">Semua Site / Divisi</option>
+                        <optgroup label="Site Operasional">
+                          {SITE_DIVISIONS.filter(s => !s.startsWith("HO")).map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Head Office (HO)">
+                          {SITE_DIVISIONS.filter(s => s.startsWith("HO")).map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Unit Bisnis Legacy">
+                          <option value="ME_CORE">Jasa ME Core</option>
+                          <option value="STARLITE_FTTH">Starlite FTTH</option>
+                          <option value="OVERHEAD_OPERASIONAL">Overhead / Umum</option>
+                        </optgroup>
+                      </select>
+                    </div>
+
+                    {/* Filter Kategori Pengeluaran */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-500 font-medium shrink-0">Kategori:</span>
+                      <select
+                        value={disburseCategoryFilter}
+                        onChange={(e) => setDisburseCategoryFilter(e.target.value)}
+                        className="border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 cursor-pointer focus:outline-none focus:border-emerald-400 shadow-2xs max-w-[170px]"
+                      >
+                        <option value="ALL">Semua Kategori</option>
+                        {EXPENSE_CATEGORIES.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Filter Status Pencairan */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-500 font-medium shrink-0">Status:</span>
+                      <select
+                        value={disburseStatusFilter}
+                        onChange={(e) => setDisburseStatusFilter(e.target.value)}
+                        className="border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 cursor-pointer focus:outline-none focus:border-emerald-400 shadow-2xs"
+                      >
+                        <option value="ALL">Semua Status</option>
+                        <option value="READY">Siap Dicairkan</option>
+                        <option value="DISBURSED">Sudah Cair (BKK Terbit)</option>
+                        <option value="CASH_ADVANCE">Kasbon Saja</option>
+                        <option value="PURCHASE_REQUISITION">PO Supplier Saja</option>
+                      </select>
+                    </div>
+
+                    {/* Tombol Reset Filter */}
+                    {isDisburseFilterActive && (
+                      <button
+                        type="button"
+                        onClick={handleResetDisburseFilters}
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-medium text-xs transition cursor-pointer"
+                        title="Reset semua filter"
+                      >
+                        <RotateCw className="w-3 h-3" />
+                        <span>Reset</span>
+                      </button>
+                    )}
+
+                    {/* Status Sort Aktif Indicator */}
+                    {disburseSortField && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-medium">
+                        <span>
+                          Sort: <strong>{
+                            disburseSortField === "docNumber" ? "No. Dokumen" :
+                            disburseSortField === "title" ? "Keperluan" :
+                            disburseSortField === "category" ? "Kategori" :
+                            disburseSortField === "unit" ? "Site" :
+                            disburseSortField === "requester" ? "Penerima" :
+                            disburseSortField === "amount" ? "Nominal" :
+                            disburseSortField === "dueDate" ? "Jatuh Tempo" :
+                            disburseSortField === "voucher" ? "No. Voucher" : "Status"
+                          }</strong> ({disburseSortOrder === "ASC" ? "A-Z / Naik" : "Z-A / Turun"})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => { setDisburseSortField(null); setDisburseSortOrder(null); }}
+                          className="ml-0.5 text-emerald-600 hover:text-emerald-900 cursor-pointer font-bold"
+                          title="Hapus urutan"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    )}
+
+                    <span className="text-[11px] text-slate-400 ml-auto shrink-0 font-mono">
+                      Menampilkan <strong className="text-slate-700">{sortedDisburseRequests.length}</strong> dari {requests.filter(r => r.status === "APPROVED_READY_PAY" || r.disbursement).length} data
+                    </span>
+                  </div>
+
                   <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
                     <thead className="bg-slate-50 font-semibold text-slate-600">
                       <tr>
-                        <th className="px-4 py-3">No. Pengajuan</th>
-                        <th className="px-4 py-3">Keperluan Dana</th>
-                        <th className="px-4 py-3">Divisi & Penerima</th>
-                        <th className="px-4 py-3">Nominal Pencairan</th>
-                        <th className="px-4 py-3">Status Pencairan</th>
-                        <th className="px-4 py-3">Info Voucher Kas</th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleDisburseSort("docNumber")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-emerald-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan No. Dokumen"
+                          >
+                            <span>No. Dokumen</span>
+                            <span className={`p-0.5 rounded transition ${disburseSortField === "docNumber" ? "text-emerald-700 bg-emerald-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {disburseSortField === "docNumber" ? (
+                                disburseSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleDisburseSort("title")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-emerald-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Keperluan"
+                          >
+                            <span>Keperluan Dana</span>
+                            <span className={`p-0.5 rounded transition ${disburseSortField === "title" ? "text-emerald-700 bg-emerald-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {disburseSortField === "title" ? (
+                                disburseSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleDisburseSort("unit")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-emerald-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Site / Divisi"
+                          >
+                            <span>Divisi &amp; Penerima</span>
+                            <span className={`p-0.5 rounded transition ${disburseSortField === "unit" ? "text-emerald-700 bg-emerald-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {disburseSortField === "unit" ? (
+                                disburseSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleDisburseSort("amount")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-emerald-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Nominal Pencairan"
+                          >
+                            <span>Nominal Pencairan</span>
+                            <span className={`p-0.5 rounded transition ${disburseSortField === "amount" ? "text-emerald-700 bg-emerald-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {disburseSortField === "amount" ? (
+                                disburseSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleDisburseSort("status")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-emerald-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Status Pencairan"
+                          >
+                            <span>Status Pencairan</span>
+                            <span className={`p-0.5 rounded transition ${disburseSortField === "status" ? "text-emerald-700 bg-emerald-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {disburseSortField === "status" ? (
+                                disburseSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleDisburseSort("voucher")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-emerald-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Info Voucher Kas"
+                          >
+                            <span>Info Voucher Kas</span>
+                            <span className={`p-0.5 rounded transition ${disburseSortField === "voucher" ? "text-emerald-700 bg-emerald-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {disburseSortField === "voucher" ? (
+                                disburseSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
                         <th className="px-4 py-3 text-right">Aksi Finance</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700">
-                      {requests
-                        .filter(r => r.status === "APPROVED_READY_PAY" || r.disbursement)
-                        .map((req) => (
-                          <tr key={req.id} className="hover:bg-slate-50/70 transition">
-                            <td className="px-4 py-3 font-mono font-bold text-slate-900">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedDetailRequest(req)}
-                                className="hover:text-blue-600 hover:underline cursor-pointer text-left"
-                                title="Klik untuk melihat detail lengkap pengajuan"
-                              >
-                                {req.requestNumber}
-                              </button>
-                            </td>
-                            <td className="px-4 py-3">
-                              <div
-                                onClick={() => setSelectedDetailRequest(req)}
-                                className="font-bold text-slate-900 hover:text-blue-600 hover:underline cursor-pointer"
-                                title="Klik untuk melihat detail lengkap pengajuan"
-                              >
-                                {req.title}
-                              </div>
-                              <span className="text-[10px] text-slate-400 font-mono">
-                                Tipe: {req.requestType === "CASH_ADVANCE" ? "Kas Bon Lapangan" : "Pengadaan PO"}
+                      {sortedDisburseRequests.map((req) => (
+                        <tr key={req.id} className="hover:bg-slate-50/70 transition">
+                          <td className="px-4 py-3 font-mono font-bold text-slate-900">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedDetailRequest(req)}
+                              className="hover:text-blue-600 hover:underline cursor-pointer text-left"
+                              title="Klik untuk melihat detail lengkap pengajuan"
+                            >
+                              {req.requestNumber}
+                            </button>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div
+                              onClick={() => setSelectedDetailRequest(req)}
+                              className="font-bold text-slate-900 hover:text-blue-600 hover:underline cursor-pointer"
+                              title="Klik untuk melihat detail lengkap pengajuan"
+                            >
+                              {req.title}
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              Tipe: {req.requestType === "CASH_ADVANCE" ? "Kas Bon Lapangan" : req.requestType === "REIMBURSEMENT" ? "Reimbursement" : "Pengadaan PO"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="font-semibold text-slate-800">{req.requesterName}</div>
+                            <div className="text-[10px] text-slate-500">{req.unit}</div>
+                          </td>
+                          <td className="px-4 py-3 font-bold text-emerald-700 font-mono text-xs">
+                            {formatRupiah(req.totalAmount)}
+                          </td>
+                          <td className="px-4 py-3">
+                            {req.disbursement ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                <CheckCircle2 className="w-3 h-3" /> Telah Dicairkan
                               </span>
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="font-semibold text-slate-800">{req.requesterName}</div>
-                              <div className="text-[10px] text-slate-500">{req.unit}</div>
-                            </td>
-                            <td className="px-4 py-3 font-bold text-emerald-700 font-mono text-xs">
-                              {formatRupiah(req.totalAmount)}
-                            </td>
-                            <td className="px-4 py-3">
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 animate-pulse">
+                                <Clock className="w-3 h-3" /> Siap Dicairkan
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-[11px]">
+                            {req.disbursement ? (
+                              <div>
+                                <span className="font-mono font-bold text-slate-900 block">{req.disbursement.voucherNumber}</span>
+                                <span className="text-[10px] text-slate-500 block">{req.disbursement.sourceAccount}</span>
+                                {req.disbursement.proofAttachment ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedProofPreview(req.disbursement?.proofAttachment || null)}
+                                    className="inline-flex items-center gap-1 text-[10px] text-blue-700 hover:text-blue-900 font-medium underline mt-0.5 cursor-pointer"
+                                  >
+                                    <Paperclip className="w-2.5 h-2.5 text-blue-600" />
+                                    <span>Lihat Bukti Transfer ({req.disbursement.proofAttachment.name.slice(0, 15)}...)</span>
+                                  </button>
+                                ) : (
+                                  <span className="text-[10px] text-amber-600 italic block mt-0.5">Bukti transfer belum diunggah</span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 italic">Menunggu eksekusi kasir Finance</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
                               {req.disbursement ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                                  <CheckCircle2 className="w-3 h-3" /> Telah Dicairkan
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 animate-pulse">
-                                  <Clock className="w-3 h-3" /> Siap Dicairkan
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-[11px]">
-                              {req.disbursement ? (
-                                <div>
-                                  <span className="font-mono font-bold text-slate-900 block">{req.disbursement.voucherNumber}</span>
-                                  <span className="text-[10px] text-slate-500 block">{req.disbursement.sourceAccount}</span>
-                                  {req.disbursement.proofAttachment ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenPrintModal(req, "DISBURSEMENT")}
+                                    className="flex items-center gap-1 px-2.5 py-1 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                                    title="Cetak Bukti Kas Keluar (BKK) Resmi"
+                                  >
+                                    <Printer className="w-3.5 h-3.5 text-emerald-700" />
+                                    <span>Cetak Voucher BKK</span>
+                                  </button>
+                                  {req.disbursement.proofAttachment && (
                                     <button
                                       type="button"
                                       onClick={() => setSelectedProofPreview(req.disbursement?.proofAttachment || null)}
-                                      className="inline-flex items-center gap-1 text-[10px] text-blue-700 hover:text-blue-900 font-medium underline mt-0.5 cursor-pointer"
+                                      className="flex items-center gap-1 px-2 py-1 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-300 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                                      title="Pratinjau Bukti Transfer"
                                     >
-                                      <Paperclip className="w-2.5 h-2.5 text-blue-600" />
-                                      <span>Lihat Bukti Transfer ({req.disbursement.proofAttachment.name.slice(0, 15)}...)</span>
+                                      <Eye className="w-3.5 h-3.5 text-blue-600" />
+                                      <span>Bukti</span>
                                     </button>
-                                  ) : (
-                                    <span className="text-[10px] text-amber-600 italic block mt-0.5">Bukti transfer belum diunggah</span>
                                   )}
-                                </div>
+                                </>
                               ) : (
-                                <span className="text-slate-400 italic">Menunggu eksekusi kasir Finance</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenDisbursementModal(req)}
+                                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs flex items-center gap-1"
+                                >
+                                  <Wallet className="w-3.5 h-3.5" />
+                                  <span>Cairkan &amp; Lampirkan Bukti</span>
+                                </button>
                               )}
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                                {req.disbursement ? (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenPrintModal(req, "DISBURSEMENT")}
-                                      className="flex items-center gap-1 px-2.5 py-1 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg text-[11px] font-bold transition cursor-pointer"
-                                      title="Cetak Bukti Kas Keluar (BKK) Resmi"
-                                    >
-                                      <Printer className="w-3.5 h-3.5 text-emerald-700" />
-                                      <span>Cetak Voucher BKK</span>
-                                    </button>
-                                    {req.disbursement.proofAttachment && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setSelectedProofPreview(req.disbursement?.proofAttachment || null)}
-                                        className="flex items-center gap-1 px-2 py-1 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-300 rounded-lg text-[11px] font-semibold transition cursor-pointer"
-                                        title="Pratinjau Bukti Transfer"
-                                      >
-                                        <Eye className="w-3.5 h-3.5 text-blue-600" />
-                                        <span>Bukti</span>
-                                      </button>
-                                    )}
-                                  </>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenDisbursementModal(req)}
-                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs flex items-center gap-1"
-                                  >
-                                    <Wallet className="w-3.5 h-3.5" />
-                                    <span>Cairkan &amp; Lampirkan Bukti</span>
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -3792,316 +4425,589 @@ export default function DashboardPage() {
             {/* KONTEN TAHAP 3: LAPORAN REALISASI & LPJ (APPROVAL BERJENJANG & REKONSILIASI KAS) */}
             {requestWorkflowSubTab === "REALIZATION" && (
               <div className="space-y-4">
-                <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-xs text-purple-900 shadow-2xs">
-                  <div>
-                    <h3 className="font-bold text-sm text-purple-950 flex items-center gap-2">
-                      <Receipt className="w-4 h-4 text-purple-700" />
-                      Laporan Pertanggungjawaban (LPJ) &amp; Rekonsiliasi Kas Bon
-                    </h3>
-                    <p className="text-[11px] text-purple-800 mt-0.5">
-                      Alur Berjenjang: Pelapor Input Nota &rarr; Audit (Uji Fisik) &rarr; PM &rarr; GM &rarr; (Dirut jika &gt; Rp 5 Jt) &rarr; Finance (Settle / Terima Setoran Sisa / Auto-Reimbursement).
-                    </p>
+                {/* 4 Kartu KPI / Status LPJ & Realisasi */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                  <div
+                    onClick={() => setLpjStatusFilter(prev => prev === "NO_LPJ" ? "ALL" : "NO_LPJ")}
+                    className={`p-3 bg-white rounded-xl border transition cursor-pointer hover:shadow-xs ${
+                      lpjStatusFilter === "NO_LPJ" ? "border-amber-400 bg-amber-50/50 ring-1 ring-amber-300" : "border-slate-200"
+                    }`}
+                  >
+                    <span className="text-slate-500 block">Belum Ada LPJ</span>
+                    <strong className="text-base text-amber-700 font-extrabold">
+                      {requests.filter(r => (r.status === "DISBURSED" || r.disbursement) && !r.realization).length} Dokumen
+                    </strong>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Kasbon cair, menunggu nota</span>
                   </div>
-                  <div className="flex gap-2 text-right">
-                    <div className="bg-white/80 px-3 py-1.5 rounded-lg border border-purple-200 text-center">
-                      <span className="text-[10px] text-purple-700 uppercase font-semibold block">Belum Dilaporkan:</span>
-                      <strong className="text-sm font-extrabold text-amber-700">
-                        {requests.filter(r => (r.status === "DISBURSED" || r.disbursement) && !r.realization).length} Dokumen
-                      </strong>
-                    </div>
-                    <div className="bg-white/80 px-3 py-1.5 rounded-lg border border-purple-200 text-center">
-                      <span className="text-[10px] text-purple-700 uppercase font-semibold block">Dalam Review:</span>
-                      <strong className="text-sm font-extrabold text-purple-900">
-                        {requests.filter(r => r.realization && !["COMPLETED", "REJECTED"].includes(r.realization.status)).length} Dokumen
-                      </strong>
-                    </div>
+
+                  <div
+                    onClick={() => setLpjStatusFilter(prev => prev === "IN_REVIEW" ? "ALL" : "IN_REVIEW")}
+                    className={`p-3 bg-white rounded-xl border transition cursor-pointer hover:shadow-xs ${
+                      lpjStatusFilter === "IN_REVIEW" ? "border-purple-400 bg-purple-50/50 ring-1 ring-purple-300" : "border-slate-200"
+                    }`}
+                  >
+                    <span className="text-slate-500 block">Dalam Review Approval</span>
+                    <strong className="text-base text-purple-700 font-extrabold">
+                      {requests.filter(r => r.realization && !["COMPLETED", "REJECTED"].includes(r.realization.status)).length} Dokumen
+                    </strong>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Uji Audit, PM, GM &amp; Dirut</span>
+                  </div>
+
+                  <div
+                    onClick={() => setLpjStatusFilter(prev => prev === "SETTLEMENT" ? "ALL" : "SETTLEMENT")}
+                    className={`p-3 bg-white rounded-xl border transition cursor-pointer hover:shadow-xs ${
+                      lpjStatusFilter === "SETTLEMENT" ? "border-blue-400 bg-blue-50/50 ring-1 ring-blue-300" : "border-slate-200"
+                    }`}
+                  >
+                    <span className="text-slate-500 block">Siap Penyelesaian Kasir</span>
+                    <strong className="text-base text-blue-700 font-extrabold">
+                      {requests.filter(r => r.realization && r.realization.status === "PENDING_FINANCE_SETTLEMENT").length} Dokumen
+                    </strong>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Setor sisa / reimburse / settle</span>
+                  </div>
+
+                  <div
+                    onClick={() => setLpjStatusFilter(prev => prev === "COMPLETED" ? "ALL" : "COMPLETED")}
+                    className={`p-3 bg-white rounded-xl border transition cursor-pointer hover:shadow-xs ${
+                      lpjStatusFilter === "COMPLETED" ? "border-emerald-400 bg-emerald-50/50 ring-1 ring-emerald-300" : "border-slate-200"
+                    }`}
+                  >
+                    <span className="text-slate-500 block">LPJ Lunas &amp; Selesai</span>
+                    <strong className="text-base text-emerald-700 font-extrabold">
+                      {requests.filter(r => r.realization?.status === "COMPLETED").length} Dokumen
+                    </strong>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Rekonsiliasi saldo selesai</span>
                   </div>
                 </div>
 
                 {/* Tabel Dokumen LPJ & Realisasi Anggaran */}
                 <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+                  <div className="p-3 border-b border-slate-100 flex flex-wrap justify-between items-center gap-2 text-xs">
+                    <div>
+                      <span className="font-bold text-slate-900 text-sm block">Daftar Laporan Realisasi (LPJ) &amp; Rekonsiliasi Saldo Kasbon</span>
+                    </div>
+                  </div>
+
+                  {/* BAR FILTER LENGKAP & PENCARIAN */}
+                  <div className="p-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center gap-2.5 text-xs">
+                    {/* Search Input */}
+                    <div className="relative flex-1 min-w-[200px]">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={lpjSearchQuery}
+                        onChange={(e) => setLpjSearchQuery(e.target.value)}
+                        placeholder="Cari no. LPJ, no. kasbon, uraian, pelapor..."
+                        className="w-full bg-white border border-slate-200 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-400 shadow-2xs"
+                      />
+                      {lpjSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setLpjSearchQuery("")}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Filter Site / Divisi */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-500 font-medium shrink-0">Site:</span>
+                      <select
+                        value={lpjUnit}
+                        onChange={(e) => setLpjUnit(e.target.value)}
+                        className="border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 cursor-pointer focus:outline-none focus:border-purple-400 shadow-2xs"
+                      >
+                        <option value="ALL">Semua Site / Divisi</option>
+                        <optgroup label="Site Operasional">
+                          {SITE_DIVISIONS.filter(s => !s.startsWith("HO")).map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Head Office (HO)">
+                          {SITE_DIVISIONS.filter(s => s.startsWith("HO")).map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Unit Bisnis Legacy">
+                          <option value="ME_CORE">Jasa ME Core</option>
+                          <option value="STARLITE_FTTH">Starlite FTTH</option>
+                          <option value="OVERHEAD_OPERASIONAL">Overhead / Umum</option>
+                        </optgroup>
+                      </select>
+                    </div>
+
+                    {/* Filter Status Rekonsiliasi Saldo */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-500 font-medium shrink-0">Rekonsiliasi:</span>
+                      <select
+                        value={lpjReconciliationFilter}
+                        onChange={(e) => setLpjReconciliationFilter(e.target.value)}
+                        className="border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 cursor-pointer focus:outline-none focus:border-purple-400 shadow-2xs"
+                      >
+                        <option value="ALL">Semua Rekonsiliasi</option>
+                        <option value="EXACT">Pas (Rp 0)</option>
+                        <option value="SURPLUS">Sisa Kasbon (+Lebih)</option>
+                        <option value="DEFICIT">Kekurangan Dana (-Kurang)</option>
+                      </select>
+                    </div>
+
+                    {/* Filter Status Approval LPJ */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-500 font-medium shrink-0">Status:</span>
+                      <select
+                        value={lpjStatusFilter}
+                        onChange={(e) => setLpjStatusFilter(e.target.value)}
+                        className="border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 cursor-pointer focus:outline-none focus:border-purple-400 shadow-2xs"
+                      >
+                        <option value="ALL">Semua Status</option>
+                        <option value="NO_LPJ">Belum Ada LPJ</option>
+                        <option value="PENDING_AUDIT">Menunggu Audit LPJ</option>
+                        <option value="PENDING_PM">Menunggu PM</option>
+                        <option value="PENDING_GM">Menunggu GM</option>
+                        <option value="PENDING_DIRECTOR">Menunggu Dirut (&gt;5 Jt)</option>
+                        <option value="SETTLEMENT">Siap Penyelesaian Kasir</option>
+                        <option value="WAITING_REIMBURSEMENT">Menunggu Reimburse</option>
+                        <option value="COMPLETED">Lunas &amp; Selesai</option>
+                      </select>
+                    </div>
+
+                    {/* Tombol Reset Filter */}
+                    {isLpjFilterActive && (
+                      <button
+                        type="button"
+                        onClick={handleResetLpjFilters}
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-medium text-xs transition cursor-pointer"
+                        title="Reset semua filter"
+                      >
+                        <RotateCw className="w-3 h-3" />
+                        <span>Reset</span>
+                      </button>
+                    )}
+
+                    {/* Status Sort Aktif Indicator */}
+                    {lpjSortField && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-purple-50 border border-purple-200 text-purple-800 text-[11px] font-medium">
+                        <span>
+                          Sort: <strong>{
+                            lpjSortField === "docNumber" ? "No. Kasbon & LPJ" :
+                            lpjSortField === "title" ? "Uraian Proyek" :
+                            lpjSortField === "unit" ? "Site / Divisi" :
+                            lpjSortField === "requester" ? "Pelapor" :
+                            lpjSortField === "advance" ? "Uang Muka Awal" :
+                            lpjSortField === "actual" ? "Realisasi Riil" :
+                            lpjSortField === "diff" ? "Selisih Saldo" : "Status Approval"
+                          }</strong> ({lpjSortOrder === "ASC" ? "A-Z / Naik" : "Z-A / Turun"})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => { setLpjSortField(null); setLpjSortOrder(null); }}
+                          className="ml-0.5 text-purple-600 hover:text-purple-900 cursor-pointer font-bold"
+                          title="Hapus urutan"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    )}
+
+                    <span className="text-[11px] text-slate-400 ml-auto shrink-0 font-mono">
+                      Menampilkan <strong className="text-slate-700">{sortedLpjRequests.length}</strong> dari {requests.filter(r => r.status === "DISBURSED" || r.disbursement || r.realization).length} data
+                    </span>
+                  </div>
+
                   <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
                     <thead className="bg-slate-50 font-semibold text-slate-600">
                       <tr>
-                        <th className="px-4 py-3">No. Kasbon &amp; LPJ</th>
-                        <th className="px-4 py-3">Uraian Pekerjaan / Proyek</th>
-                        <th className="px-4 py-3">Pelapor &amp; Divisi</th>
-                        <th className="px-4 py-3 text-right">Uang Muka Awal</th>
-                        <th className="px-4 py-3 text-right">Realisasi Riil</th>
-                        <th className="px-4 py-3 text-center">Status Rekonsiliasi Saldo</th>
-                        <th className="px-4 py-3 text-center">Status Approval LPJ</th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleLpjSort("docNumber")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-purple-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan No. Kasbon & LPJ"
+                          >
+                            <span>No. Kasbon &amp; LPJ</span>
+                            <span className={`p-0.5 rounded transition ${lpjSortField === "docNumber" ? "text-purple-700 bg-purple-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {lpjSortField === "docNumber" ? (
+                                lpjSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleLpjSort("title")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-purple-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Uraian Pekerjaan / Proyek"
+                          >
+                            <span>Uraian Pekerjaan / Proyek</span>
+                            <span className={`p-0.5 rounded transition ${lpjSortField === "title" ? "text-purple-700 bg-purple-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {lpjSortField === "title" ? (
+                                lpjSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleLpjSort("unit")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-purple-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Pelapor & Divisi"
+                          >
+                            <span>Pelapor &amp; Divisi</span>
+                            <span className={`p-0.5 rounded transition ${lpjSortField === "unit" ? "text-purple-700 bg-purple-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {lpjSortField === "unit" ? (
+                                lpjSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleLpjSort("advance")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-purple-700 transition cursor-pointer select-none group ml-auto"
+                            title="Urutkan berdasarkan Uang Muka Awal"
+                          >
+                            <span>Uang Muka Awal</span>
+                            <span className={`p-0.5 rounded transition ${lpjSortField === "advance" ? "text-purple-700 bg-purple-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {lpjSortField === "advance" ? (
+                                lpjSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleLpjSort("actual")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-purple-700 transition cursor-pointer select-none group ml-auto"
+                            title="Urutkan berdasarkan Realisasi Riil"
+                          >
+                            <span>Realisasi Riil</span>
+                            <span className={`p-0.5 rounded transition ${lpjSortField === "actual" ? "text-purple-700 bg-purple-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {lpjSortField === "actual" ? (
+                                lpjSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleLpjSort("diff")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-purple-700 transition cursor-pointer select-none group mx-auto"
+                            title="Urutkan berdasarkan Status Rekonsiliasi Saldo"
+                          >
+                            <span>Status Rekonsiliasi Saldo</span>
+                            <span className={`p-0.5 rounded transition ${lpjSortField === "diff" ? "text-purple-700 bg-purple-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {lpjSortField === "diff" ? (
+                                lpjSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleLpjSort("status")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-purple-700 transition cursor-pointer select-none group mx-auto"
+                            title="Urutkan berdasarkan Status Approval LPJ"
+                          >
+                            <span>Status Approval LPJ</span>
+                            <span className={`p-0.5 rounded transition ${lpjSortField === "status" ? "text-purple-700 bg-purple-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {lpjSortField === "status" ? (
+                                lpjSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
                         <th className="px-4 py-3 text-right">Aksi &amp; Cetak</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700">
-                      {requests
-                        .filter(r => (r.status === "DISBURSED" || r.disbursement || r.realization))
-                        .map((req) => {
-                          const hasLPJ = !!req.realization;
-                          const advance = req.disbursement?.amountPaid || req.totalAmount;
-                          const actual = hasLPJ ? req.realization!.totalRealizedAmount : 0;
-                          const diff = hasLPJ ? req.realization!.balanceDifference : 0;
+                      {sortedLpjRequests.map((req) => {
+                        const hasLPJ = !!req.realization;
+                        const advance = req.disbursement?.amountPaid || req.totalAmount;
+                        const actual = hasLPJ ? req.realization!.totalRealizedAmount : 0;
+                        const diff = hasLPJ ? req.realization!.balanceDifference : 0;
 
-                          return (
-                            <tr key={req.id} className="hover:bg-slate-50/70 transition">
-                              {/* No Kasbon & No LPJ */}
-                              <td className="px-4 py-3 font-mono">
+                        return (
+                          <tr key={req.id} className="hover:bg-slate-50/70 transition">
+                            {/* No Kasbon & No LPJ */}
+                            <td className="px-4 py-3 font-mono">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedDetailRequest(req)}
+                                className="font-bold text-slate-900 block hover:text-blue-600 hover:underline cursor-pointer text-left"
+                                title="Lihat Detail Pengajuan Asal"
+                              >
+                                {req.requestNumber}
+                              </button>
+                              {hasLPJ ? (
                                 <button
                                   type="button"
-                                  onClick={() => setSelectedDetailRequest(req)}
-                                  className="font-bold text-slate-900 block hover:text-blue-600 hover:underline cursor-pointer text-left"
-                                  title="Lihat Detail Pengajuan Asal"
+                                  onClick={() => setSelectedDetailLPJ(req)}
+                                  className="text-[10px] text-purple-700 font-bold block mt-0.5 hover:underline cursor-pointer text-left flex items-center gap-1"
+                                  title="Lihat Rincian LPJ & Nota"
                                 >
-                                  {req.requestNumber}
+                                  <Receipt className="w-3 h-3 text-purple-600" />
+                                  <span>{req.realization!.lpjNumber}</span>
                                 </button>
-                                {hasLPJ ? (
+                              ) : (
+                                <span className="text-[10px] text-amber-600 font-medium italic block mt-0.5">
+                                  Belum ada LPJ
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Judul & Kategori */}
+                            <td className="px-4 py-3 max-w-[220px]">
+                              <button
+                                type="button"
+                                onClick={() => hasLPJ ? setSelectedDetailLPJ(req) : setSelectedDetailRequest(req)}
+                                className="font-bold text-slate-900 truncate block hover:text-purple-700 hover:underline cursor-pointer text-left max-w-full"
+                                title={req.title}
+                              >
+                                {req.title}
+                              </button>
+                              <span className="text-[10px] text-slate-400 block font-mono">
+                                {req.category || "Kasbon Lapangan"}
+                              </span>
+                            </td>
+
+                            {/* Pelapor & Divisi */}
+                            <td className="px-4 py-3">
+                              <div className="font-medium text-slate-900">{req.requesterName}</div>
+                              <div className="text-[10px] text-slate-500">{req.unit}</div>
+                            </td>
+
+                            {/* Uang Muka Kasbon Awal */}
+                            <td className="px-4 py-3 text-right font-mono font-semibold text-slate-700">
+                              {formatRupiah(advance)}
+                            </td>
+
+                            {/* Total Realisasi Riil */}
+                            <td className="px-4 py-3 text-right font-mono font-bold text-slate-900">
+                              {hasLPJ ? formatRupiah(actual) : "-"}
+                            </td>
+
+                            {/* Status Selisih Saldo Rekonsiliasi */}
+                            <td className="px-4 py-3 text-center whitespace-nowrap">
+                              {!hasLPJ ? (
+                                <span className="text-[10px] text-slate-400 italic font-mono">-</span>
+                              ) : diff === 0 ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                                  ✓ Pas (Rp 0)
+                                </span>
+                              ) : diff > 0 ? (
+                                <div className="flex flex-col items-center">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                    + Sisa {formatRupiah(diff)}
+                                  </span>
+                                  <span className="text-[9px] text-emerald-700 font-medium mt-0.5">Disetor ke Kasir</span>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-center">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                                    - Kurang {formatRupiah(Math.abs(diff))}
+                                  </span>
+                                  <span className="text-[9px] text-rose-700 font-medium mt-0.5">Klaim Reimbursement</span>
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Status Approval LPJ Berjenjang */}
+                            <td className="px-4 py-3 text-center">
+                              {!hasLPJ && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+                                  Belum Dilaporkan
+                                </span>
+                              )}
+                              {hasLPJ && req.realization!.status === "PENDING_AUDIT" && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                                  <span>Menunggu Audit LPJ</span>
+                                </span>
+                              )}
+                              {hasLPJ && req.realization!.status === "PENDING_PM" && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 text-sky-800 border border-sky-300 shadow-2xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-ping" />
+                                  <span>Menunggu PM</span>
+                                </span>
+                              )}
+                              {hasLPJ && req.realization!.status === "PENDING_GM" && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-300 shadow-2xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-ping" />
+                                  <span>Menunggu GM</span>
+                                </span>
+                              )}
+                              {hasLPJ && req.realization!.status === "PENDING_DIRECTOR" && (
+                                <div className="flex flex-col items-center">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-300 shadow-2xs">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-ping" />
+                                    <span>Menunggu Dirut</span>
+                                  </span>
+                                  <span className="text-[9px] text-indigo-600 font-mono mt-0.5 font-medium">&gt; Rp 5 Juta</span>
+                                </div>
+                              )}
+                              {hasLPJ && req.realization!.status === "PENDING_FINANCE_SETTLEMENT" && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-400 shadow-2xs">
+                                  <Wallet className="w-3 h-3 text-emerald-700" />
+                                  <span>Penyelesaian Kasir</span>
+                                </span>
+                              )}
+                              {hasLPJ && req.realization!.status === "WAITING_REIMBURSEMENT" && (
+                                <div className="flex flex-col items-center">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-400 animate-pulse">
+                                    <span>⏳ Menunggu Cair</span>
+                                  </span>
+                                  <span className="text-[9px] text-purple-700 font-mono mt-0.5 font-bold">
+                                    {req.realization!.reimbursementRequestNumber || "REIM-2026-..."}
+                                  </span>
+                                </div>
+                              )}
+                              {hasLPJ && req.realization!.status === "COMPLETED" && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  <span>Lunas &amp; Selesai</span>
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Aksi & Cetak */}
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                {/* Tombol Input LPJ Baru jika belum ada LPJ */}
+                                {!hasLPJ && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenInputLPJ(req)}
+                                    className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shadow-xs flex items-center gap-1"
+                                  >
+                                    <PlusCircle className="w-3.5 h-3.5" />
+                                    <span>Input LPJ &amp; Nota</span>
+                                  </button>
+                                )}
+
+                                {/* Tombol Detail LPJ */}
+                                {hasLPJ && (
                                   <button
                                     type="button"
                                     onClick={() => setSelectedDetailLPJ(req)}
-                                    className="text-[10px] text-purple-700 font-bold block mt-0.5 hover:underline cursor-pointer text-left flex items-center gap-1"
-                                    title="Lihat Rincian LPJ & Nota"
+                                    className="flex items-center gap-1 px-2 py-1 text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                                    title="Lihat Rincian Nota & Bukti LPJ"
                                   >
-                                    <Receipt className="w-3 h-3 text-purple-600" />
-                                    <span>{req.realization!.lpjNumber}</span>
+                                    <Eye className="w-3.5 h-3.5 text-slate-600" />
+                                    <span>Detail</span>
                                   </button>
-                                ) : (
-                                  <span className="text-[10px] text-amber-600 font-medium italic block mt-0.5">
-                                    Belum ada LPJ
-                                  </span>
                                 )}
-                              </td>
 
-                              {/* Judul & Kategori */}
-                              <td className="px-4 py-3 max-w-[220px]">
-                                <button
-                                  type="button"
-                                  onClick={() => hasLPJ ? setSelectedDetailLPJ(req) : setSelectedDetailRequest(req)}
-                                  className="font-bold text-slate-900 truncate block hover:text-purple-700 hover:underline cursor-pointer text-left max-w-full"
-                                  title={req.title}
-                                >
-                                  {req.title}
-                                </button>
-                                <span className="text-[10px] text-slate-400 block font-mono">
-                                  {req.category || "Kasbon Lapangan"}
-                                </span>
-                              </td>
-
-                              {/* Pelapor & Divisi */}
-                              <td className="px-4 py-3">
-                                <div className="font-medium text-slate-900">{req.requesterName}</div>
-                                <div className="text-[10px] text-slate-500">{req.unit}</div>
-                              </td>
-
-                              {/* Uang Muka Kasbon Awal */}
-                              <td className="px-4 py-3 text-right font-mono font-semibold text-slate-700">
-                                {formatRupiah(advance)}
-                              </td>
-
-                              {/* Total Realisasi Riil */}
-                              <td className="px-4 py-3 text-right font-mono font-bold text-slate-900">
-                                {hasLPJ ? formatRupiah(actual) : "-"}
-                              </td>
-
-                              {/* Status Selisih Saldo Rekonsiliasi */}
-                              <td className="px-4 py-3 text-center whitespace-nowrap">
-                                {!hasLPJ ? (
-                                  <span className="text-[10px] text-slate-400 italic font-mono">-</span>
-                                ) : diff === 0 ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
-                                    ✓ Pas (Rp 0)
-                                  </span>
-                                ) : diff > 0 ? (
-                                  <div className="flex flex-col items-center">
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                                      + Sisa {formatRupiah(diff)}
-                                    </span>
-                                    <span className="text-[9px] text-emerald-700 font-medium mt-0.5">Disetor ke Kasir</span>
-                                  </div>
-                                ) : (
-                                  <div className="flex flex-col items-center">
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
-                                      - Kurang {formatRupiah(Math.abs(diff))}
-                                    </span>
-                                    <span className="text-[9px] text-rose-700 font-medium mt-0.5">Klaim Reimbursement</span>
-                                  </div>
+                                {/* Tombol Cetak Dokumen LPJ */}
+                                {hasLPJ && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenPrintModal(req, "REALIZATION")}
+                                    className="flex items-center gap-1 px-2 py-1 text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                                    title="Cetak Formulir Laporan Realisasi LPJ Resmi"
+                                  >
+                                    <Printer className="w-3.5 h-3.5" />
+                                    <span>Cetak LPJ</span>
+                                  </button>
                                 )}
-                              </td>
 
-                              {/* Status Approval LPJ Berjenjang */}
-                              <td className="px-4 py-3 text-center">
-                                {!hasLPJ && (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
-                                    Belum Dilaporkan
-                                  </span>
-                                )}
+                                {/* Aksi Approval Berjenjang LPJ */}
                                 {hasLPJ && req.realization!.status === "PENDING_AUDIT" && (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
-                                    <span>Menunggu Audit LPJ</span>
-                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAuditApproveLPJ(req.id)}
+                                    className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                  >
+                                    ACC Audit LPJ
+                                  </button>
                                 )}
                                 {hasLPJ && req.realization!.status === "PENDING_PM" && (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 text-sky-800 border border-sky-300 shadow-2xs">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-ping" />
-                                    <span>Menunggu PM</span>
-                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePMApproveLPJ(req.id)}
+                                    className="px-2.5 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                  >
+                                    ACC PM
+                                  </button>
                                 )}
                                 {hasLPJ && req.realization!.status === "PENDING_GM" && (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-300 shadow-2xs">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-ping" />
-                                    <span>Menunggu GM</span>
-                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleGMApproveLPJ(req.id)}
+                                    className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                  >
+                                    ACC GM
+                                  </button>
                                 )}
                                 {hasLPJ && req.realization!.status === "PENDING_DIRECTOR" && (
-                                  <div className="flex flex-col items-center">
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-300 shadow-2xs">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-ping" />
-                                      <span>Menunggu Dirut</span>
-                                    </span>
-                                    <span className="text-[9px] text-indigo-600 font-mono mt-0.5 font-medium">&gt; Rp 5 Juta</span>
-                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDirectorApproveLPJ(req.id)}
+                                    className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                  >
+                                    ACC Dirut LPJ
+                                  </button>
                                 )}
+
+                                {/* Tahap Akhir: Penyelesaian Saldo di Finance Gate */}
                                 {hasLPJ && req.realization!.status === "PENDING_FINANCE_SETTLEMENT" && (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-400 shadow-2xs">
-                                    <Wallet className="w-3 h-3 text-emerald-700" />
-                                    <span>Penyelesaian Kasir</span>
-                                  </span>
+                                  <>
+                                    {diff === 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSettleExactLPJ(req.id)}
+                                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shadow-xs"
+                                      >
+                                        Selesaikan (Settle)
+                                      </button>
+                                    )}
+                                    {diff > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenRefundModal(req)}
+                                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shadow-xs"
+                                      >
+                                        Terima Setoran Sisa Kasir
+                                      </button>
+                                    )}
+                                    {diff < 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCreateReimbursementFromLPJ(req)}
+                                        className="px-2.5 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shadow-xs flex items-center gap-1"
+                                        title="Buat Pengajuan Baru Reimbursement Otomatis"
+                                      >
+                                        <span>⚡ Buat Reimbursement Selisih</span>
+                                      </button>
+                                    )}
+                                  </>
                                 )}
-                                {hasLPJ && req.realization!.status === "WAITING_REIMBURSEMENT" && (
-                                  <div className="flex flex-col items-center">
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-400 animate-pulse">
-                                      <span>⏳ Menunggu Cair</span>
-                                    </span>
-                                    <span className="text-[9px] text-purple-700 font-mono mt-0.5 font-bold">
-                                      {req.realization!.reimbursementRequestNumber || "REIM-2026-..."}
-                                    </span>
-                                  </div>
-                                )}
-                                {hasLPJ && req.realization!.status === "COMPLETED" && (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
-                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                    <span>Lunas &amp; Selesai</span>
-                                  </span>
-                                )}
-                              </td>
-
-                              {/* Aksi & Cetak */}
-                              <td className="px-4 py-3 text-right">
-                                <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                                  {/* Tombol Input LPJ Baru jika belum ada LPJ */}
-                                  {!hasLPJ && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenInputLPJ(req)}
-                                      className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shadow-xs flex items-center gap-1"
-                                    >
-                                      <PlusCircle className="w-3.5 h-3.5" />
-                                      <span>Input LPJ &amp; Nota</span>
-                                    </button>
-                                  )}
-
-                                  {/* Tombol Detail LPJ */}
-                                  {hasLPJ && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setSelectedDetailLPJ(req)}
-                                      className="flex items-center gap-1 px-2 py-1 text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-[11px] font-semibold transition cursor-pointer"
-                                      title="Lihat Rincian Nota & Bukti LPJ"
-                                    >
-                                      <Eye className="w-3.5 h-3.5 text-slate-600" />
-                                      <span>Detail</span>
-                                    </button>
-                                  )}
-
-                                  {/* Tombol Cetak Dokumen LPJ */}
-                                  {hasLPJ && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenPrintModal(req, "REALIZATION")}
-                                      className="flex items-center gap-1 px-2 py-1 text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg text-[11px] font-bold transition cursor-pointer"
-                                      title="Cetak Formulir Laporan Realisasi LPJ Resmi"
-                                    >
-                                      <Printer className="w-3.5 h-3.5" />
-                                      <span>Cetak LPJ</span>
-                                    </button>
-                                  )}
-
-                                  {/* Aksi Approval Berjenjang LPJ */}
-                                  {hasLPJ && req.realization!.status === "PENDING_AUDIT" && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleAuditApproveLPJ(req.id)}
-                                      className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
-                                    >
-                                      ACC Audit LPJ
-                                    </button>
-                                  )}
-                                  {hasLPJ && req.realization!.status === "PENDING_PM" && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handlePMApproveLPJ(req.id)}
-                                      className="px-2.5 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
-                                    >
-                                      ACC PM
-                                    </button>
-                                  )}
-                                  {hasLPJ && req.realization!.status === "PENDING_GM" && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleGMApproveLPJ(req.id)}
-                                      className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
-                                    >
-                                      ACC GM
-                                    </button>
-                                  )}
-                                  {hasLPJ && req.realization!.status === "PENDING_DIRECTOR" && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDirectorApproveLPJ(req.id)}
-                                      className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
-                                    >
-                                      ACC Dirut LPJ
-                                    </button>
-                                  )}
-
-                                  {/* Tahap Akhir: Penyelesaian Saldo di Finance Gate */}
-                                  {hasLPJ && req.realization!.status === "PENDING_FINANCE_SETTLEMENT" && (
-                                    <>
-                                      {diff === 0 && (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleSettleExactLPJ(req.id)}
-                                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shadow-xs"
-                                        >
-                                          Selesaikan (Settle)
-                                        </button>
-                                      )}
-                                      {diff > 0 && (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleOpenRefundModal(req)}
-                                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shadow-xs"
-                                        >
-                                          Terima Setoran Sisa Kasir
-                                        </button>
-                                      )}
-                                      {diff < 0 && (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleCreateReimbursementFromLPJ(req)}
-                                          className="px-2.5 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shadow-xs flex items-center gap-1"
-                                          title="Buat Pengajuan Baru Reimbursement Otomatis"
-                                        >
-                                          <span>⚡ Buat Reimbursement Selisih</span>
-                                        </button>
-                                      )}
-                                    </>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -4111,101 +5017,467 @@ export default function DashboardPage() {
             {/* KONTEN TAHAP 4: PENERIMAAN BARANG FISIK (TIM AUDIT BAST GUDANG) */}
             {requestWorkflowSubTab === "GOODS_RECEIPT" && (
               <div className="space-y-4">
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex justify-between items-center text-xs text-amber-900">
-                  <div>
-                    <h3 className="font-bold text-sm text-amber-950 flex items-center gap-2">
-                      <Boxes className="w-4 h-4 text-amber-700" />
-                      Penerimaan Barang Fisik (Goods Receipt / BAST oleh Tim Audit)
-                    </h3>
-                    <p className="text-[11px] text-amber-800 mt-0.5">
-                      Pengecekan fisik material proyek (ME & Starlite FTTH) oleh Tim Audit Internal saat barang tiba dari vendor pemasok. Hasil inspeksi disahkan dalam Form Penerimaan Barang.
-                    </p>
+                {/* 4 Kartu KPI / Status Penerimaan Barang Fisik */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                  <div
+                    onClick={() => setGrStatusFilter(prev => prev === "PENDING" ? "ALL" : "PENDING")}
+                    className={`p-3 bg-white rounded-xl border transition cursor-pointer hover:shadow-xs ${
+                      grStatusFilter === "PENDING" ? "border-amber-400 bg-amber-50/50 ring-1 ring-amber-300" : "border-slate-200"
+                    }`}
+                  >
+                    <span className="text-slate-500 block">Menunggu Pemeriksaan Fisik</span>
+                    <strong className="text-base text-amber-700 font-extrabold">
+                      {requests.filter(r => r.requestType === "PURCHASE_REQUISITION" && !r.goodsReceipt).length} Dokumen
+                    </strong>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Barang tiba, perlu audit BAST</span>
+                  </div>
+
+                  <div
+                    onClick={() => setGrStatusFilter(prev => prev === "COMPLETED" ? "ALL" : "COMPLETED")}
+                    className={`p-3 bg-white rounded-xl border transition cursor-pointer hover:shadow-xs ${
+                      grStatusFilter === "COMPLETED" ? "border-emerald-400 bg-emerald-50/50 ring-1 ring-emerald-300" : "border-slate-200"
+                    }`}
+                  >
+                    <span className="text-slate-500 block">BAST Lengkap &amp; Diterima</span>
+                    <strong className="text-base text-emerald-700 font-extrabold">
+                      {requests.filter(r => r.requestType === "PURCHASE_REQUISITION" && !!r.goodsReceipt).length} Dokumen
+                    </strong>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Inspeksi fisik lolos uji</span>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                    <span className="text-slate-500 block">Total Nilai Pengadaan PO</span>
+                    <strong className="text-base text-slate-900 font-extrabold">
+                      {formatRupiah(requests.filter(r => r.requestType === "PURCHASE_REQUISITION").reduce((acc, r) => acc + r.totalAmount, 0))}
+                    </strong>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Total pesanan material proyek</span>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                    <span className="text-slate-500 block">Gudang Logistik &amp; Site</span>
+                    <strong className="text-base text-slate-900 font-extrabold">
+                      {requests.filter(r => r.requestType === "PURCHASE_REQUISITION").length} Pesanan PO
+                    </strong>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Gudang Sentul &amp; Site Proyek</span>
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  {requests
-                    .filter(r => r.requestType === "PURCHASE_REQUISITION")
-                    .map((req) => (
-                      <div key={req.id} className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-3">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-slate-100">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-bold text-slate-900 text-xs">{req.requestNumber}</span>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                req.goodsReceipt ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
-                              }`}>
-                                {req.goodsReceipt ? "BAST Terbit & Terverifikasi" : "Menunggu Pemeriksaan Fisik"}
-                              </span>
-                            </div>
-                            <h4 className="font-bold text-sm text-slate-900 mt-0.5">{req.title}</h4>
-                            <span className="text-[11px] text-slate-500">
-                              Pemasok: <strong>{req.goodsReceipt?.vendorName || req.vendorInfo?.vendorName || "PT. Schneider / Distributor"}</strong> &bull; Lokasi: {req.goodsReceipt?.inspectionLocation || "Gudang Utama Sentul"}
+                {/* Tabel Penerimaan Barang Fisik */}
+                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+                  <div className="p-3 border-b border-slate-100 flex flex-wrap justify-between items-center gap-2 text-xs">
+                    <div>
+                      <span className="font-bold text-slate-900 text-sm block">Daftar Penerimaan Barang Fisik (Goods Receipt &amp; BAST Audit)</span>
+                    </div>
+                  </div>
+
+                  {/* BAR FILTER LENGKAP & PENCARIAN */}
+                  <div className="p-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center gap-2.5 text-xs">
+                    {/* Search Input */}
+                    <div className="relative flex-1 min-w-[200px]">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={grSearchQuery}
+                        onChange={(e) => setGrSearchQuery(e.target.value)}
+                        placeholder="Cari no. PO, no. BAST, vendor, barang..."
+                        className="w-full bg-white border border-slate-200 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-amber-400 shadow-2xs"
+                      />
+                      {grSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setGrSearchQuery("")}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Filter Site / Gudang */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-500 font-medium shrink-0">Site:</span>
+                      <select
+                        value={grUnit}
+                        onChange={(e) => setGrUnit(e.target.value)}
+                        className="border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 cursor-pointer focus:outline-none focus:border-amber-400 shadow-2xs"
+                      >
+                        <option value="ALL">Semua Site / Divisi</option>
+                        <optgroup label="Site Operasional">
+                          {SITE_DIVISIONS.filter(s => !s.startsWith("HO")).map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Head Office (HO)">
+                          {SITE_DIVISIONS.filter(s => s.startsWith("HO")).map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Unit Bisnis Legacy">
+                          <option value="ME_CORE">Jasa ME Core</option>
+                          <option value="STARLITE_FTTH">Starlite FTTH</option>
+                          <option value="OVERHEAD_OPERASIONAL">Overhead / Umum</option>
+                        </optgroup>
+                      </select>
+                    </div>
+
+                    {/* Filter Kategori PO */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-500 font-medium shrink-0">Kategori:</span>
+                      <select
+                        value={grCategoryFilter}
+                        onChange={(e) => setGrCategoryFilter(e.target.value)}
+                        className="border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 cursor-pointer focus:outline-none focus:border-amber-400 shadow-2xs max-w-[170px]"
+                      >
+                        <option value="ALL">Semua Kategori PO</option>
+                        {EXPENSE_CATEGORIES.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Filter Status Fisik */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-500 font-medium shrink-0">Status:</span>
+                      <select
+                        value={grStatusFilter}
+                        onChange={(e) => setGrStatusFilter(e.target.value)}
+                        className="border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 cursor-pointer focus:outline-none focus:border-amber-400 shadow-2xs"
+                      >
+                        <option value="ALL">Semua Status</option>
+                        <option value="PENDING">Menunggu Pemeriksaan Fisik</option>
+                        <option value="COMPLETED">BAST Lengkap &amp; Diterima</option>
+                      </select>
+                    </div>
+
+                    {/* Tombol Reset Filter */}
+                    {isGrFilterActive && (
+                      <button
+                        type="button"
+                        onClick={handleResetGrFilters}
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-medium text-xs transition cursor-pointer"
+                        title="Reset semua filter"
+                      >
+                        <RotateCw className="w-3 h-3" />
+                        <span>Reset</span>
+                      </button>
+                    )}
+
+                    {/* Status Sort Aktif Indicator */}
+                    {grSortField && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium">
+                        <span>
+                          Sort: <strong>{
+                            grSortField === "docNumber" ? "No. PO & BAST" :
+                            grSortField === "title" ? "Rincian Pengadaan" :
+                            grSortField === "vendor" ? "Pemasok" :
+                            grSortField === "unit" ? "Site / Gudang" :
+                            grSortField === "amount" ? "Nilai PO" :
+                            grSortField === "date" ? "Tanggal" : "Status Fisik"
+                          }</strong> ({grSortOrder === "ASC" ? "A-Z / Naik" : "Z-A / Turun"})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => { setGrSortField(null); setGrSortOrder(null); }}
+                          className="ml-0.5 text-amber-600 hover:text-amber-900 cursor-pointer font-bold"
+                          title="Hapus urutan"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    )}
+
+                    <span className="text-[11px] text-slate-400 ml-auto shrink-0 font-mono">
+                      Menampilkan <strong className="text-slate-700">{sortedGrRequests.length}</strong> dari {requests.filter(r => r.requestType === "PURCHASE_REQUISITION").length} data
+                    </span>
+                  </div>
+
+                  <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
+                    <thead className="bg-slate-50 font-semibold text-slate-600">
+                      <tr>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleGrSort("docNumber")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-amber-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan No. PO & BAST"
+                          >
+                            <span>No. PO &amp; BAST</span>
+                            <span className={`p-0.5 rounded transition ${grSortField === "docNumber" ? "text-amber-700 bg-amber-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {grSortField === "docNumber" ? (
+                                grSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
                             </span>
-                          </div>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleGrSort("title")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-amber-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Rincian Pengadaan"
+                          >
+                            <span>Rincian Pengadaan</span>
+                            <span className={`p-0.5 rounded transition ${grSortField === "title" ? "text-amber-700 bg-amber-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {grSortField === "title" ? (
+                                grSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleGrSort("vendor")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-amber-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Pemasok"
+                          >
+                            <span>Pemasok &amp; Lokasi</span>
+                            <span className={`p-0.5 rounded transition ${grSortField === "vendor" ? "text-amber-700 bg-amber-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {grSortField === "vendor" ? (
+                                grSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleGrSort("unit")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-amber-700 transition cursor-pointer select-none group"
+                            title="Urutkan berdasarkan Site / Divisi"
+                          >
+                            <span>Site / Divisi</span>
+                            <span className={`p-0.5 rounded transition ${grSortField === "unit" ? "text-amber-700 bg-amber-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {grSortField === "unit" ? (
+                                grSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleGrSort("amount")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-amber-700 transition cursor-pointer select-none group ml-auto"
+                            title="Urutkan berdasarkan Nilai PO"
+                          >
+                            <span>Nilai PO</span>
+                            <span className={`p-0.5 rounded transition ${grSortField === "amount" ? "text-amber-700 bg-amber-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {grSortField === "amount" ? (
+                                grSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleGrSort("status")}
+                            className="inline-flex items-center gap-1.5 font-semibold hover:text-amber-700 transition cursor-pointer select-none group mx-auto"
+                            title="Urutkan berdasarkan Status Pemeriksaan"
+                          >
+                            <span>Status Pemeriksaan</span>
+                            <span className={`p-0.5 rounded transition ${grSortField === "status" ? "text-amber-700 bg-amber-100" : "text-slate-400 group-hover:text-slate-600"}`}>
+                              {grSortField === "status" ? (
+                                grSortOrder === "ASC" ? <ArrowUpNarrowWide className="w-3.5 h-3.5" /> : <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3 text-right">Aksi &amp; BAST</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-700">
+                      {sortedGrRequests.map((req) => {
+                        const isExpanded = expandedGrIds.includes(req.id);
+                        const items = req.goodsReceipt?.items || (req.procurementItems || req.items).map((it: any) => ({
+                          itemId: it.id,
+                          itemName: it.itemName || it.description,
+                          qtyOrdered: it.quantity,
+                          qtyReceived: it.quantity,
+                          unit: it.unit,
+                          condition: "GOOD",
+                          physicalAuditNotes: "Kondisi fisik segel lengkap sesuai PO."
+                        }));
 
-                          <div className="flex items-center gap-2">
-                            {req.goodsReceipt ? (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenPrintModal(req, "GOODS_RECEIPT")}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold transition cursor-pointer shadow-xs"
-                              >
-                                <Printer className="w-3.5 h-3.5 text-amber-700" />
-                                <span>Cetak Form Penerimaan Barang (BAST)</span>
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleAuditGoodsReceipt(req.id)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs"
-                              >
-                                <ClipboardCheck className="w-3.5 h-3.5" />
-                                <span>Lakukan Audit Fisik & Terbitkan BAST</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
+                        return (
+                          <React.Fragment key={req.id}>
+                            <tr className="hover:bg-slate-50/70 transition">
+                              {/* No PO & BAST */}
+                              <td className="px-4 py-3 font-mono">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedDetailRequest(req)}
+                                  className="font-bold text-slate-900 block hover:text-blue-600 hover:underline cursor-pointer text-left"
+                                  title="Lihat Detail Pengajuan PO"
+                                >
+                                  {req.requestNumber}
+                                </button>
+                                {req.goodsReceipt ? (
+                                  <span className="text-[10px] text-emerald-700 font-semibold block mt-0.5">
+                                    {req.goodsReceipt.receiptNumber}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-amber-600 font-medium italic block mt-0.5">
+                                    Belum terbit BAST
+                                  </span>
+                                )}
+                              </td>
 
-                        {/* Detail Checklist Fisik */}
-                        <div className="overflow-x-auto">
-                          <table className="min-w-full text-xs text-left border border-slate-200">
-                            <thead className="bg-slate-50 text-slate-600">
-                              <tr>
-                                <th className="px-3 py-2 border-b border-slate-200">Rincian Barang / Material</th>
-                                <th className="px-3 py-2 border-b border-slate-200 text-center">Qty Dipesan</th>
-                                <th className="px-3 py-2 border-b border-slate-200 text-center">Qty Fisik Tiba</th>
-                                <th className="px-3 py-2 border-b border-slate-200 text-center">Kondisi Fisik</th>
-                                <th className="px-3 py-2 border-b border-slate-200">Catatan Pengecekan Audit</th>
+                              {/* Rincian Pengadaan */}
+                              <td className="px-4 py-3 max-w-[220px]">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedDetailRequest(req)}
+                                  className="font-bold text-slate-900 truncate block hover:text-blue-600 hover:underline cursor-pointer text-left max-w-full"
+                                  title={req.title}
+                                >
+                                  {req.title}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleGrExpand(req.id)}
+                                  className="text-[10px] text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 mt-0.5 cursor-pointer"
+                                >
+                                  <span>{items.length} Item Material</span>
+                                  {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                </button>
+                              </td>
+
+                              {/* Pemasok & Lokasi */}
+                              <td className="px-4 py-3">
+                                <div className="font-semibold text-slate-800 truncate max-w-[180px]">
+                                  {req.goodsReceipt?.vendorName || req.vendorInfo?.vendorName || "PT. Schneider / Distributor"}
+                                </div>
+                                <div className="text-[10px] text-slate-500">
+                                  {req.goodsReceipt?.inspectionLocation || "Gudang Utama Sentul"}
+                                </div>
+                              </td>
+
+                              {/* Site / Divisi */}
+                              <td className="px-4 py-3 font-medium text-slate-800">
+                                {req.unit}
+                              </td>
+
+                              {/* Nilai PO */}
+                              <td className="px-4 py-3 text-right font-mono font-bold text-slate-900">
+                                {formatRupiah(req.totalAmount)}
+                              </td>
+
+                              {/* Status Pemeriksaan */}
+                              <td className="px-4 py-3 text-center">
+                                {req.goodsReceipt ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                    <span>BAST Terbit</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">
+                                    <Clock className="w-3 h-3" />
+                                    <span>Menunggu Audit Fisik</span>
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Aksi & BAST */}
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                  {req.goodsReceipt ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenPrintModal(req, "GOODS_RECEIPT")}
+                                      className="flex items-center gap-1 px-2.5 py-1 text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                                      title="Cetak Form Penerimaan Barang Fisik (BAST) Resmi"
+                                    >
+                                      <Printer className="w-3.5 h-3.5 text-amber-700" />
+                                      <span>Cetak BAST</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAuditGoodsReceipt(req.id)}
+                                      className="flex items-center gap-1 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shadow-xs"
+                                    >
+                                      <ClipboardCheck className="w-3.5 h-3.5" />
+                                      <span>Audit Fisik &amp; BAST</span>
+                                    </button>
+                                  )}
+
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleGrExpand(req.id)}
+                                    className="p-1 text-slate-400 hover:text-slate-600 rounded transition cursor-pointer"
+                                    title={isExpanded ? "Sembunyikan checklist item" : "Lihat checklist item"}
+                                  >
+                                    {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+
+                            {/* Accordion Rincian Checklist Fisik Barang */}
+                            {isExpanded && (
+                              <tr className="bg-amber-50/30">
+                                <td colSpan={7} className="px-4 py-3 border-t border-b border-amber-200">
+                                  <div className="bg-white rounded-lg border border-amber-200 p-3 shadow-2xs">
+                                    <div className="flex justify-between items-center mb-2">
+                                      <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                                        <Boxes className="w-3.5 h-3.5 text-amber-600" />
+                                        <span>Hasil Checklist Pemeriksaan Fisik Barang oleh Tim Audit</span>
+                                      </span>
+                                      <span className="text-[11px] text-slate-500 font-mono">
+                                        Ref PO: {req.requestNumber}
+                                      </span>
+                                    </div>
+                                    <table className="min-w-full text-xs text-left border border-slate-200">
+                                      <thead className="bg-slate-50 text-slate-600">
+                                        <tr>
+                                          <th className="px-3 py-1.5 border-b border-slate-200 w-10 text-center">#</th>
+                                          <th className="px-3 py-1.5 border-b border-slate-200">Nama Barang / Material Proyek</th>
+                                          <th className="px-3 py-1.5 border-b border-slate-200 text-center w-24">Qty Dipesan</th>
+                                          <th className="px-3 py-1.5 border-b border-slate-200 text-center w-24">Qty Fisik Tiba</th>
+                                          <th className="px-3 py-1.5 border-b border-slate-200 text-center w-28">Kondisi Fisik</th>
+                                          <th className="px-3 py-1.5 border-b border-slate-200">Catatan Verifikasi Audit</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-slate-100">
+                                        {items.map((item: any, idx: number) => (
+                                          <tr key={item.itemId || idx} className="hover:bg-slate-50/50">
+                                            <td className="px-3 py-1.5 text-center text-slate-400 font-mono">{idx + 1}</td>
+                                            <td className="px-3 py-1.5 font-medium text-slate-900">{item.itemName}</td>
+                                            <td className="px-3 py-1.5 text-center">{item.qtyOrdered} {item.unit}</td>
+                                            <td className="px-3 py-1.5 text-center font-bold text-blue-700">{item.qtyReceived} {item.unit}</td>
+                                            <td className="px-3 py-1.5 text-center">
+                                              <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                                                {item.condition === "GOOD" ? "BAIK / LENGKAP" : item.condition}
+                                              </span>
+                                            </td>
+                                            <td className="px-3 py-1.5 text-slate-600 text-[11px]">{item.physicalAuditNotes}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </td>
                               </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {(req.goodsReceipt?.items || (req.procurementItems || req.items).map((it: any) => ({
-                                itemId: it.id,
-                                itemName: it.itemName || it.description,
-                                qtyOrdered: it.quantity,
-                                qtyReceived: it.quantity,
-                                unit: it.unit,
-                                condition: "GOOD",
-                                physicalAuditNotes: "Kondisi fisik segel lengkap sesuai PO."
-                              }))).map((item: any, idx: number) => (
-                                <tr key={item.itemId || idx} className="hover:bg-slate-50/50">
-                                  <td className="px-3 py-2 font-medium text-slate-900">{item.itemName}</td>
-                                  <td className="px-3 py-2 text-center">{item.qtyOrdered} {item.unit}</td>
-                                  <td className="px-3 py-2 text-center font-bold text-blue-700">{item.qtyReceived} {item.unit}</td>
-                                  <td className="px-3 py-2 text-center">
-                                    <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                                      {item.condition === "GOOD" ? "BAIK / LENGKAP" : item.condition}
-                                    </span>
-                                  </td>
-                                  <td className="px-3 py-2 text-slate-600 text-[11px]">{item.physicalAuditNotes}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    ))}
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
