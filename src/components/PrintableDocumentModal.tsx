@@ -416,15 +416,38 @@ export function PrintableDocumentModal({
                       </div>
                       <div>
                         <span className="text-slate-500 block">
-                          {diff >= 0 ? "Sisa Dana (Disetor ke Kasir):" : "Kekurangan Dana (Klaim Reimburse):"}
+                          {diff > 0 ? "Sisa Kasbon (Setor Kasir):" : diff < 0 ? "Kekurangan (Klaim Reimburse):" : "Status Saldo:"}
                         </span>
-                        <strong className={`text-sm ${diff >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                          {formatRupiah(Math.abs(diff))}
+                        <strong className={`text-sm ${diff === 0 ? "text-slate-800" : diff > 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                          {diff === 0 ? "Rp 0 (Pas / Sesuai Pagu)" : formatRupiah(Math.abs(diff))}
                         </strong>
+                        {diff > 0 && request.realization?.refundReceiptNumber && (
+                          <span className="text-[10px] text-emerald-800 font-mono block mt-0.5">
+                            BKM Kasir: {request.realization.refundReceiptNumber}
+                          </span>
+                        )}
+                        {diff < 0 && request.realization?.reimbursementRequestNumber && (
+                          <span className="text-[10px] text-rose-800 font-mono block mt-0.5">
+                            Doc Reimburse: {request.realization.reimbursementRequestNumber}
+                          </span>
+                        )}
                       </div>
                     </div>
                   );
                 })()}
+
+                {/* Catatan Verifikasi & Penyelesaian Saldo */}
+                {(request.realization?.auditNotes || request.realization?.financeNotes) && (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs mb-4">
+                    <strong className="block text-slate-800 mb-1">Catatan Verifikasi &amp; Rekonsiliasi Kas:</strong>
+                    {request.realization.auditNotes && (
+                      <p className="text-slate-600 mb-1"><span className="font-semibold text-slate-700">Audit Internal:</span> {request.realization.auditNotes}</p>
+                    )}
+                    {request.realization.financeNotes && (
+                      <p className="text-slate-600"><span className="font-semibold text-emerald-700">Finance &amp; Kasir:</span> {request.realization.financeNotes}</p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -757,7 +780,7 @@ export function PrintableDocumentModal({
             <div className="mt-8 pt-4 border-t-2 border-slate-800">
               {request ? (
                 /* Alur Approval Berjenjang untuk Pengajuan Anggaran & Kas Keluar */
-                <div className={`grid ${docType === "DISBURSEMENT" ? "grid-cols-6" : "grid-cols-5"} gap-2 text-center text-xs`}>
+                <div className={`grid ${docType === "DISBURSEMENT" || docType === "REALIZATION" ? "grid-cols-6" : "grid-cols-5"} gap-2 text-center text-xs`}>
                   {/* 1. Pemohon */}
                   <div className="flex flex-col justify-between h-32 border border-slate-200 p-1.5 rounded bg-slate-50/50">
                     <span className="text-[9px] uppercase font-bold text-slate-500">
@@ -823,7 +846,7 @@ export function PrintableDocumentModal({
                     <span className="text-[9px] uppercase font-bold text-slate-500">
                       5. Otorisasi Dirut:
                     </span>
-                    {request.totalAmount > 5000000 ? (
+                    {((docType === "REALIZATION" ? (request.realization?.totalRealizedAmount || request.totalAmount) : request.totalAmount) > 5000000) ? (
                       <>
                         <div className="font-serif italic text-indigo-700 text-[11px] my-auto font-bold">
                           [Approved by Dirut]
@@ -846,14 +869,22 @@ export function PrintableDocumentModal({
                     )}
                   </div>
 
-                  {/* 6. Kasir / Finance (Khusus Form Pencairan BKK) */}
-                  {docType === "DISBURSEMENT" && (
+                  {/* 6. Kasir / Finance (Khusus Form Pencairan BKK & Rekonsiliasi Kasbon LPJ) */}
+                  {(docType === "DISBURSEMENT" || docType === "REALIZATION") && (
                     <div className="flex flex-col justify-between h-32 border border-emerald-300 p-1.5 rounded bg-emerald-50/50">
                       <span className="text-[9px] uppercase font-bold text-emerald-800">
-                        6. Dibayarkan (Kasir):
+                        {docType === "DISBURSEMENT" ? "6. Dibayarkan (Kasir):" : "6. Rekonsiliasi (Finance):"}
                       </span>
-                      <div className="font-serif italic text-emerald-800 text-[11px] my-auto font-bold">
-                        [Paid &amp; Attached]
+                      <div className="font-serif italic text-emerald-800 text-[10px] my-auto font-bold px-1">
+                        {docType === "DISBURSEMENT" ? (
+                          "[Paid & Attached]"
+                        ) : request.realization?.balanceDifference === 0 ? (
+                          "[Rekonsiliasi Selesai (Pas)]"
+                        ) : (request.realization?.balanceDifference || 0) > 0 ? (
+                          `[Setor Kasir: ${request.realization?.refundReceiptNumber || "BKM Lunas"}]`
+                        ) : (
+                          `[Klaim: ${request.realization?.reimbursementRequestNumber || "REIM-2026"}]`
+                        )}
                       </div>
                       <div>
                         <strong className="block text-emerald-950 underline text-[11px]">Dewi Anggraeni, SE</strong>

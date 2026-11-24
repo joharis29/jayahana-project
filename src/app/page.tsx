@@ -49,7 +49,9 @@ import {
   ArrowUpNarrowWide,
   Edit3,
   RotateCcw,
-  ZoomIn
+  ZoomIn,
+  Plus,
+  Upload
 } from "lucide-react";
 import { PrintableDocumentModal } from "@/components/PrintableDocumentModal";
 import { 
@@ -74,7 +76,7 @@ import {
   type PendingApprovalItem
 } from "@/lib/constants";
 import { formatRupiah, formatDateIndo } from "@/lib/utils";
-import { BusinessUnit, BudgetRequest, RequestType, UserRole, FinancialTransaction, ProcurementItem, SalesInvoice, OfficialReceiptBKM, InvoicePaymentRecord, SITE_DIVISIONS, EXPENSE_CATEGORIES, ExpenseCategory, RequestAttachment, DisbursementRecord, ApprovalStatus } from "@/types";
+import { BusinessUnit, BudgetRequest, RequestType, UserRole, FinancialTransaction, ProcurementItem, SalesInvoice, OfficialReceiptBKM, InvoicePaymentRecord, SITE_DIVISIONS, EXPENSE_CATEGORIES, ExpenseCategory, RequestAttachment, DisbursementRecord, ApprovalStatus, LPJApprovalStatus, RealizationRecord, RealizationItem } from "@/types";
 
 const MONTH_NAMES = [
   { num: 1, name: "Januari", short: "Jan" },
@@ -422,6 +424,26 @@ export default function DashboardPage() {
 
   // Pop-up Modal Detail Pengajuan Lengkap (Ketika No Dokumen / Judul diklik)
   const [selectedDetailRequest, setSelectedDetailRequest] = useState<BudgetRequest | null>(null);
+
+  // States untuk Alur Laporan Realisasi & LPJ Berjenjang
+  const [isInputLPJModalOpen, setIsInputLPJModalOpen] = useState(false);
+  const [lpjTargetReq, setLpjTargetReq] = useState<BudgetRequest | null>(null);
+  const [lpjReceiptItems, setLpjReceiptItems] = useState<Array<{ id: string; receiptDate: string; description: string; vendor: string; receiptNumber: string; amount: number; }>>([
+    { id: "rcp-1", receiptDate: new Date().toISOString().split("T")[0], description: "", vendor: "", receiptNumber: "", amount: 0 }
+  ]);
+  const [lpjGeneralNotes, setLpjGeneralNotes] = useState("");
+  const [lpjAttachments, setLpjAttachments] = useState<RequestAttachment[]>([]);
+  const lpjFileInputRef = useRef<HTMLInputElement>(null);
+  const lpjCameraInputRef = useRef<HTMLInputElement>(null);
+
+  // Modal Terima Setoran Sisa Kasir (Refund to Cashier)
+  const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
+  const [refundTargetReq, setRefundTargetReq] = useState<BudgetRequest | null>(null);
+  const [refundMethod, setRefundMethod] = useState<"CASH" | "TRANSFER">("CASH");
+  const [refundReceiptNo, setRefundReceiptNo] = useState("");
+
+  // Modal Detail Nota & Dokumen LPJ
+  const [selectedDetailLPJ, setSelectedDetailLPJ] = useState<BudgetRequest | null>(null);
 
   // New Income form state
   const [incomeTitle, setIncomeTitle] = useState("");
@@ -812,13 +834,26 @@ export default function DashboardPage() {
     };
 
     setRequests(prev => prev.map(r => {
-      if (r.id !== disburseTargetReq.id) return r;
-      return {
-        ...r,
-        status: "DISBURSED",
-        disbursedAt: disburseDate,
-        disbursement: disburseRecord
-      };
+      if (r.id === disburseTargetReq.id) {
+        return {
+          ...r,
+          status: "DISBURSED",
+          disbursedAt: disburseDate,
+          disbursement: disburseRecord
+        };
+      }
+      // Jika ada LPJ yang menunggu pencairan pengajuan reimbursement ini, otomatis selesaikan LPJ-nya!
+      if (r.realization && r.realization.reimbursementRequestId === disburseTargetReq.id) {
+        return {
+          ...r,
+          realization: {
+            ...r.realization,
+            status: "COMPLETED" as LPJApprovalStatus,
+            financeNotes: `Reimbursement talangan sebesar ${formatRupiah(disburseRecord.amountPaid)} telah dicairkan oleh Finance via voucher ${vNum} (${disburseRecord.transferReference}). Seluruh pertanggungjawaban dana resmi LUNAS & SELESAI.`
+          }
+        };
+      }
+      return r;
     }));
 
     setIsDisburseModalOpen(false);
@@ -843,6 +878,291 @@ export default function DashboardPage() {
     if (target) {
       handleOpenDisbursementModal(target);
     }
+  };
+
+  // ===================== ALUR LAPORAN REALISASI & LPJ BERJENJANG =====================
+  const handleOpenInputLPJ = (req: BudgetRequest) => {
+    setLpjTargetReq(req);
+    const initialItems = req.items && req.items.length > 0 ? req.items.map((it, idx) => ({
+      id: `rcp-${idx + 1}`,
+      receiptDate: new Date().toISOString().split("T")[0],
+      description: it.description,
+      vendor: "Vendor Terverifikasi",
+      receiptNumber: `STR-${Math.floor(1000 + Math.random() * 9000)}`,
+      amount: it.totalPrice
+    })) : [
+      { id: "rcp-1", receiptDate: new Date().toISOString().split("T")[0], description: "", vendor: "", receiptNumber: "", amount: 0 }
+    ];
+    setLpjReceiptItems(initialItems);
+    setLpjGeneralNotes(`Pertanggungjawaban penggunaan kasbon ${req.requestNumber} untuk ${req.title}`);
+    setLpjAttachments(req.attachments || []);
+    setIsInputLPJModalOpen(true);
+  };
+
+  const handleAddLpjItem = () => {
+    setLpjReceiptItems(prev => [
+      ...prev,
+      { id: `rcp-${Date.now()}`, receiptDate: new Date().toISOString().split("T")[0], description: "", vendor: "", receiptNumber: "", amount: 0 }
+    ]);
+  };
+
+  const handleRemoveLpjItem = (id: string) => {
+    setLpjReceiptItems(prev => prev.length > 1 ? prev.filter(i => i.id !== id) : prev);
+  };
+
+  const handleLpjItemChange = (id: string, field: string, value: any) => {
+    setLpjReceiptItems(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+  };
+
+  const handleLpjFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
+        setLpjAttachments((prev) => [
+          ...prev,
+          {
+            id: `att-lpj-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            name: file.name,
+            type: file.type || "image/png",
+            size: file.size,
+            dataUrl,
+            uploadedAt: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+          },
+        ]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = "";
+  };
+
+  const handleSubmitNewLPJ = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!lpjTargetReq) return;
+
+    const totalRealized = lpjReceiptItems.reduce((acc, it) => acc + (Number(it.amount) || 0), 0);
+    if (totalRealized <= 0) {
+      alert("Total pengeluaran riil nota harus lebih dari Rp 0.");
+      return;
+    }
+
+    const advance = lpjTargetReq.disbursement?.amountPaid || lpjTargetReq.totalAmount;
+    const diff = advance - totalRealized; // >0: sisa kasir, <0: nombok/reimburse
+    const action = diff > 0 ? "REFUND_TO_CASHIER" : diff < 0 ? "REIMBURSE_ADDITIONAL" : "EXACT";
+    const lpjNum = `LPJ-2026-11-${Math.floor(100 + Math.random() * 900)}`;
+
+    const newRecord: RealizationRecord = {
+      id: `lpj-${Date.now()}`,
+      requestId: lpjTargetReq.id,
+      lpjNumber: lpjNum,
+      submittedAt: new Date().toISOString().split("T")[0],
+      submittedBy: lpjTargetReq.requesterName,
+      initialAdvanceAmount: advance,
+      totalRealizedAmount: totalRealized,
+      balanceDifference: diff,
+      settlementAction: action,
+      status: "PENDING_AUDIT",
+      items: lpjReceiptItems.map((it, idx) => ({
+        id: it.id || `r-${idx + 1}`,
+        receiptDate: it.receiptDate,
+        description: it.description,
+        amount: Number(it.amount) || 0,
+        receiptNumber: it.receiptNumber || `NOTA-${idx + 1}`,
+        vendor: it.vendor || "Toko Lapangan"
+      })),
+      receiptAttachments: lpjAttachments.length > 0 ? lpjAttachments : undefined,
+      auditNotes: lpjGeneralNotes
+    };
+
+    setRequests(prev => prev.map(r => r.id === lpjTargetReq.id ? { ...r, realization: newRecord } : r));
+    setIsInputLPJModalOpen(false);
+    setApprovalNotification(`Laporan Realisasi & LPJ ${lpjNum} berhasil disubmit. Menunggu verifikasi fisik oleh Tim Audit.`);
+    setTimeout(() => setApprovalNotification(null), 3500);
+  };
+
+  // Alur Approval Berjenjang LPJ (Audit -> PM -> GM -> DU (>5jt) -> Finance)
+  const handleAuditApproveLPJ = (reqId: string) => {
+    setRequests(prev => prev.map(r => {
+      if (r.id !== reqId || !r.realization) return r;
+      return {
+        ...r,
+        realization: {
+          ...r.realization,
+          status: "PENDING_PM",
+          auditNotes: "Fisik nota, struk toko, dan kelengkapan transaksi telah diverifikasi dan absah."
+        }
+      };
+    }));
+    setApprovalNotification("Audit Internal telah memverifikasi bukti fisik nota LPJ. Diteruskan ke Project Manager.");
+    setTimeout(() => setApprovalNotification(null), 3500);
+  };
+
+  const handlePMApproveLPJ = (reqId: string) => {
+    setRequests(prev => prev.map(r => {
+      if (r.id !== reqId || !r.realization) return r;
+      return {
+        ...r,
+        realization: {
+          ...r.realization,
+          status: "PENDING_GM",
+          pmNotes: "Pengeluaran lapangan sesuai progres fisik pekerjaan proyek."
+        }
+      };
+    }));
+    setApprovalNotification("Project Manager menyetujui realisasi LPJ. Diteruskan ke General Manager.");
+    setTimeout(() => setApprovalNotification(null), 3500);
+  };
+
+  const handleGMApproveLPJ = (reqId: string) => {
+    const target = requests.find(r => r.id === reqId);
+    if (!target || !target.realization) return;
+
+    const totalRealized = target.realization.totalRealizedAmount;
+    const isAbove5M = totalRealized > 5000000 || target.totalAmount > 5000000;
+    const nextStatus: LPJApprovalStatus = isAbove5M ? "PENDING_DIRECTOR" : "PENDING_FINANCE_SETTLEMENT";
+
+    setRequests(prev => prev.map(r => {
+      if (r.id !== reqId || !r.realization) return r;
+      return {
+        ...r,
+        realization: {
+          ...r.realization,
+          status: nextStatus,
+          gmNotes: "General Manager menyetujui efisiensi biaya realisasi belanja."
+        }
+      };
+    }));
+
+    if (isAbove5M) {
+      setApprovalNotification(`General Manager menyetujui LPJ. Karena nominal realisasi (${formatRupiah(totalRealized)}) > Rp 5 Juta, diteruskan ke Direktur Utama.`);
+    } else {
+      setApprovalNotification(`General Manager menyetujui LPJ. Siap direkonsiliasi dan diselesaikan saldonya oleh Finance.`);
+    }
+    setTimeout(() => setApprovalNotification(null), 4000);
+  };
+
+  const handleDirectorApproveLPJ = (reqId: string) => {
+    setRequests(prev => prev.map(r => {
+      if (r.id !== reqId || !r.realization) return r;
+      return {
+        ...r,
+        realization: {
+          ...r.realization,
+          status: "PENDING_FINANCE_SETTLEMENT",
+          directorNotes: "Direktur Utama memberikan otorisasi final realisasi dana."
+        }
+      };
+    }));
+    setApprovalNotification("Direktur Utama mengesahkan LPJ. Berkas diteruskan ke Finance untuk rekonsiliasi saldo kas.");
+    setTimeout(() => setApprovalNotification(null), 3500);
+  };
+
+  // Penyelesaian Saldo di Finance
+  const handleSettleExactLPJ = (reqId: string) => {
+    setRequests(prev => prev.map(r => {
+      if (r.id !== reqId || !r.realization) return r;
+      return {
+        ...r,
+        realization: {
+          ...r.realization,
+          status: "COMPLETED",
+          financeNotes: "Saldo kasbon dan realisasi nota belanja cocok 100% (Selisih Rp 0). Berkas LPJ selesai dan lunas."
+        }
+      };
+    }));
+    setApprovalNotification("LPJ resmi selesai & diselesaikan (Settle) tanpa selisih saldo.");
+    setTimeout(() => setApprovalNotification(null), 3500);
+  };
+
+  const handleOpenRefundModal = (req: BudgetRequest) => {
+    setRefundTargetReq(req);
+    setRefundMethod("CASH");
+    setRefundReceiptNo(`BKM-SETOR-${Date.now().toString().slice(-6)}`);
+    setIsRefundModalOpen(true);
+  };
+
+  const handleConfirmRefund = () => {
+    if (!refundTargetReq || !refundTargetReq.realization) return;
+    const diffAmount = refundTargetReq.realization.balanceDifference;
+
+    setRequests(prev => prev.map(r => {
+      if (r.id !== refundTargetReq.id || !r.realization) return r;
+      return {
+        ...r,
+        realization: {
+          ...r.realization,
+          status: "COMPLETED",
+          refundReceiptNumber: refundReceiptNo,
+          refundReceivedAt: new Date().toISOString().split("T")[0],
+          financeNotes: `Sisa dana kasbon sebesar ${formatRupiah(diffAmount)} telah disetorkan kembali ke Kasir via ${refundMethod === "CASH" ? "Tunai" : "Transfer Bank"} (No. BKM: ${refundReceiptNo}).`
+        }
+      };
+    }));
+
+    setIsRefundModalOpen(false);
+    setApprovalNotification(`Pengembalian sisa kasbon sebesar ${formatRupiah(diffAmount)} berhasil diverifikasi Kasir (No: ${refundReceiptNo}). LPJ Lunas!`);
+    setTimeout(() => setApprovalNotification(null), 4000);
+  };
+
+  // FITUR KHUSUS: ⚡ Buat Pengajuan Reimbursement Baru Otomatis dari LPJ
+  const handleCreateReimbursementFromLPJ = (req: BudgetRequest) => {
+    if (!req.realization || req.realization.balanceDifference >= 0) return;
+
+    const shortage = Math.abs(req.realization.balanceDifference);
+    const unitCode = String(req.unit).startsWith("HO") ? "HO" : req.unit === "ME_CORE" ? "ME" : "STAR";
+    const newDocNum = `REIM-2026-${unitCode}-${Math.floor(100 + Math.random() * 900)}`;
+
+    const newReimReq: BudgetRequest = {
+      id: `req-${Date.now()}`,
+      requestNumber: newDocNum,
+      title: `Reimbursement Kekurangan Dana LPJ: ${req.realization.lpjNumber} - ${req.title}`,
+      category: "Reimbursement",
+      requestType: "REIMBURSEMENT",
+      unit: req.unit,
+      costCenterId: req.costCenterId,
+      requesterName: req.requesterName,
+      requesterRole: req.requesterRole,
+      totalAmount: shortage,
+      status: "PENDING_AUDIT",
+      purpose: `Klaim reimbursement atas dana talangan pribadi pemohon pada pengeluaran darurat lapangan sesuai ${req.realization.lpjNumber} (Kasbon awal: ${req.requestNumber}).`,
+      createdAt: new Date().toISOString().split("T")[0],
+      dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0],
+      items: [
+        {
+          id: `reim-itm-${Date.now()}`,
+          description: `Penggantian talangan belanja riil lapangan sesuai nota LPJ ${req.realization.lpjNumber}`,
+          quantity: 1,
+          unit: "Paket",
+          estimatedPrice: shortage,
+          totalPrice: shortage
+        }
+      ],
+      attachments: req.attachments
+    };
+
+    // Update parent LPJ status to WAITING_REIMBURSEMENT with linked ID
+    setRequests(prev => [
+      newReimReq,
+      ...prev.map(r => {
+        if (r.id !== req.id || !r.realization) return r;
+        return {
+          ...r,
+          realization: {
+            ...r.realization,
+            status: "WAITING_REIMBURSEMENT" as LPJApprovalStatus,
+            reimbursementRequestId: newReimReq.id,
+            reimbursementRequestNumber: newDocNum,
+            financeNotes: `Menunggu pencairan dokumen reimbursement baru ${newDocNum} di Tab 2.`
+          }
+        };
+      })
+    ]);
+
+    setApprovalNotification(`Pengajuan Reimbursement baru ${newDocNum} sebesar ${formatRupiah(shortage)} berhasil dibuat dan masuk antrean approval di Tab 1.`);
+    setTimeout(() => setApprovalNotification(null), 4500);
   };
 
   // Penerimaan Barang Fisik oleh Tim Audit (BAST Gudang)
@@ -3475,85 +3795,321 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* KONTEN TAHAP 3: LAPORAN REALISASI & LPJ */}
+            {/* KONTEN TAHAP 3: LAPORAN REALISASI & LPJ (APPROVAL BERJENJANG & REKONSILIASI KAS) */}
             {requestWorkflowSubTab === "REALIZATION" && (
               <div className="space-y-4">
-                <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl flex justify-between items-center text-xs text-purple-900">
+                <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-xs text-purple-900 shadow-2xs">
                   <div>
                     <h3 className="font-bold text-sm text-purple-950 flex items-center gap-2">
                       <Receipt className="w-4 h-4 text-purple-700" />
-                      Laporan Pertanggungjawaban (LPJ) & Rekonsiliasi Kas Bon
+                      Laporan Pertanggungjawaban (LPJ) &amp; Rekonsiliasi Kas Bon
                     </h3>
                     <p className="text-[11px] text-purple-800 mt-0.5">
-                      Pencocokan nota fisik/struk transaksi lapangan terhadap uang muka kas bon. Memerlukan approval Audit &rarr; Finance &rarr; Direktur, dan dapat dicetak Form Realisasi LPJ.
+                      Alur Berjenjang: Pelapor Input Nota &rarr; Audit (Uji Fisik) &rarr; PM &rarr; GM &rarr; (Dirut jika &gt; Rp 5 Jt) &rarr; Finance (Settle / Terima Setoran Sisa / Auto-Reimbursement).
                     </p>
+                  </div>
+                  <div className="flex gap-2 text-right">
+                    <div className="bg-white/80 px-3 py-1.5 rounded-lg border border-purple-200 text-center">
+                      <span className="text-[10px] text-purple-700 uppercase font-semibold block">Belum Dilaporkan:</span>
+                      <strong className="text-sm font-extrabold text-amber-700">
+                        {requests.filter(r => (r.status === "DISBURSED" || r.disbursement) && !r.realization).length} Dokumen
+                      </strong>
+                    </div>
+                    <div className="bg-white/80 px-3 py-1.5 rounded-lg border border-purple-200 text-center">
+                      <span className="text-[10px] text-purple-700 uppercase font-semibold block">Dalam Review:</span>
+                      <strong className="text-sm font-extrabold text-purple-900">
+                        {requests.filter(r => r.realization && !["COMPLETED", "REJECTED"].includes(r.realization.status)).length} Dokumen
+                      </strong>
+                    </div>
                   </div>
                 </div>
 
-                {/* Grid Kas Bon Realisasi */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {requests
-                    .filter(r => r.requestType === "CASH_ADVANCE" && r.disbursement)
-                    .map((req) => {
-                      const advance = req.realization?.initialAdvanceAmount || req.totalAmount;
-                      const actual = req.realization?.totalRealizedAmount || (advance - 150000);
-                      const diff = advance - actual;
+                {/* Tabel Dokumen LPJ & Realisasi Anggaran */}
+                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+                  <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
+                    <thead className="bg-slate-50 font-semibold text-slate-600">
+                      <tr>
+                        <th className="px-4 py-3">No. Kasbon &amp; LPJ</th>
+                        <th className="px-4 py-3">Uraian Pekerjaan / Proyek</th>
+                        <th className="px-4 py-3">Pelapor &amp; Divisi</th>
+                        <th className="px-4 py-3 text-right">Uang Muka Awal</th>
+                        <th className="px-4 py-3 text-right">Realisasi Riil</th>
+                        <th className="px-4 py-3 text-center">Status Rekonsiliasi Saldo</th>
+                        <th className="px-4 py-3 text-center">Status Approval LPJ</th>
+                        <th className="px-4 py-3 text-right">Aksi &amp; Cetak</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-700">
+                      {requests
+                        .filter(r => (r.status === "DISBURSED" || r.disbursement || r.realization))
+                        .map((req) => {
+                          const hasLPJ = !!req.realization;
+                          const advance = req.disbursement?.amountPaid || req.totalAmount;
+                          const actual = hasLPJ ? req.realization!.totalRealizedAmount : 0;
+                          const diff = hasLPJ ? req.realization!.balanceDifference : 0;
 
-                      return (
-                        <div key={req.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3">
-                          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                            <div>
-                              <span className="font-mono font-bold text-xs text-slate-900">{req.requestNumber}</span>
-                              <h4 className="text-xs font-bold text-slate-900">{req.title}</h4>
-                            </div>
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800">
-                              {req.realization ? req.realization.status : "Belum LPJ"}
-                            </span>
-                          </div>
+                          return (
+                            <tr key={req.id} className="hover:bg-slate-50/70 transition">
+                              {/* No Kasbon & No LPJ */}
+                              <td className="px-4 py-3 font-mono">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedDetailRequest(req)}
+                                  className="font-bold text-slate-900 block hover:text-blue-600 hover:underline cursor-pointer text-left"
+                                  title="Lihat Detail Pengajuan Asal"
+                                >
+                                  {req.requestNumber}
+                                </button>
+                                {hasLPJ ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedDetailLPJ(req)}
+                                    className="text-[10px] text-purple-700 font-bold block mt-0.5 hover:underline cursor-pointer text-left flex items-center gap-1"
+                                    title="Lihat Rincian LPJ & Nota"
+                                  >
+                                    <Receipt className="w-3 h-3 text-purple-600" />
+                                    <span>{req.realization!.lpjNumber}</span>
+                                  </button>
+                                ) : (
+                                  <span className="text-[10px] text-amber-600 font-medium italic block mt-0.5">
+                                    Belum ada LPJ
+                                  </span>
+                                )}
+                              </td>
 
-                          <div className="text-xs text-slate-600">
-                            Pemohon: <strong>{req.requesterName}</strong> &bull; Site / Divisi: <strong>{req.unit === "ME_CORE" ? "ME Core" : req.unit === "STARLITE_FTTH" ? "Starlite FTTH" : req.unit}</strong>
-                          </div>
+                              {/* Judul & Kategori */}
+                              <td className="px-4 py-3 max-w-[220px]">
+                                <button
+                                  type="button"
+                                  onClick={() => hasLPJ ? setSelectedDetailLPJ(req) : setSelectedDetailRequest(req)}
+                                  className="font-bold text-slate-900 truncate block hover:text-purple-700 hover:underline cursor-pointer text-left max-w-full"
+                                  title={req.title}
+                                >
+                                  {req.title}
+                                </button>
+                                <span className="text-[10px] text-slate-400 block font-mono">
+                                  {req.category || "Kasbon Lapangan"}
+                                </span>
+                              </td>
 
-                          {/* Box Komparasi Saldo */}
-                          <div className="grid grid-cols-3 gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-center text-xs">
-                            <div>
-                              <span className="text-[10px] text-slate-400 block uppercase">Kasbon Awal</span>
-                              <strong className="text-slate-900 font-mono text-xs">{formatRupiah(advance)}</strong>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-slate-400 block uppercase">Total Realisasi</span>
-                              <strong className="text-slate-900 font-mono text-xs">{formatRupiah(actual)}</strong>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-slate-400 block uppercase">
-                                {diff >= 0 ? "Sisa Disetor" : "Klaim Kurang"}
-                              </span>
-                              <strong className={`font-mono text-xs ${diff >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                                {formatRupiah(Math.abs(diff))}
-                              </strong>
-                            </div>
-                          </div>
+                              {/* Pelapor & Divisi */}
+                              <td className="px-4 py-3">
+                                <div className="font-medium text-slate-900">{req.requesterName}</div>
+                                <div className="text-[10px] text-slate-500">{req.unit}</div>
+                              </td>
 
-                          {/* Tombol Cetak & Aksi */}
-                          <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-xs">
-                            <span className="text-[11px] text-slate-400">
-                              {req.realization ? `${req.realization.items?.length || 3} Nota Fisik Terlampir` : "Menunggu upload nota"}
-                            </span>
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleOpenPrintModal(req, "REALIZATION")}
-                                className="flex items-center gap-1 px-3 py-1 bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 rounded-lg font-bold text-xs transition cursor-pointer"
-                              >
-                                <Printer className="w-3.5 h-3.5" />
-                                <span>Cetak Form Realisasi</span>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                              {/* Uang Muka Kasbon Awal */}
+                              <td className="px-4 py-3 text-right font-mono font-semibold text-slate-700">
+                                {formatRupiah(advance)}
+                              </td>
+
+                              {/* Total Realisasi Riil */}
+                              <td className="px-4 py-3 text-right font-mono font-bold text-slate-900">
+                                {hasLPJ ? formatRupiah(actual) : "-"}
+                              </td>
+
+                              {/* Status Selisih Saldo Rekonsiliasi */}
+                              <td className="px-4 py-3 text-center whitespace-nowrap">
+                                {!hasLPJ ? (
+                                  <span className="text-[10px] text-slate-400 italic font-mono">-</span>
+                                ) : diff === 0 ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                                    ✓ Pas (Rp 0)
+                                  </span>
+                                ) : diff > 0 ? (
+                                  <div className="flex flex-col items-center">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                      + Sisa {formatRupiah(diff)}
+                                    </span>
+                                    <span className="text-[9px] text-emerald-700 font-medium mt-0.5">Disetor ke Kasir</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-col items-center">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                                      - Kurang {formatRupiah(Math.abs(diff))}
+                                    </span>
+                                    <span className="text-[9px] text-rose-700 font-medium mt-0.5">Klaim Reimbursement</span>
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* Status Approval LPJ Berjenjang */}
+                              <td className="px-4 py-3 text-center">
+                                {!hasLPJ && (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+                                    Belum Dilaporkan
+                                  </span>
+                                )}
+                                {hasLPJ && req.realization!.status === "PENDING_AUDIT" && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                                    <span>Menunggu Audit LPJ</span>
+                                  </span>
+                                )}
+                                {hasLPJ && req.realization!.status === "PENDING_PM" && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 text-sky-800 border border-sky-300 shadow-2xs">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-ping" />
+                                    <span>Menunggu PM</span>
+                                  </span>
+                                )}
+                                {hasLPJ && req.realization!.status === "PENDING_GM" && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-300 shadow-2xs">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-ping" />
+                                    <span>Menunggu GM</span>
+                                  </span>
+                                )}
+                                {hasLPJ && req.realization!.status === "PENDING_DIRECTOR" && (
+                                  <div className="flex flex-col items-center">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-300 shadow-2xs">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-ping" />
+                                      <span>Menunggu Dirut</span>
+                                    </span>
+                                    <span className="text-[9px] text-indigo-600 font-mono mt-0.5 font-medium">&gt; Rp 5 Juta</span>
+                                  </div>
+                                )}
+                                {hasLPJ && req.realization!.status === "PENDING_FINANCE_SETTLEMENT" && (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-400 shadow-2xs">
+                                    <Wallet className="w-3 h-3 text-emerald-700" />
+                                    <span>Penyelesaian Kasir</span>
+                                  </span>
+                                )}
+                                {hasLPJ && req.realization!.status === "WAITING_REIMBURSEMENT" && (
+                                  <div className="flex flex-col items-center">
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-400 animate-pulse">
+                                      <span>⏳ Menunggu Cair</span>
+                                    </span>
+                                    <span className="text-[9px] text-purple-700 font-mono mt-0.5 font-bold">
+                                      {req.realization!.reimbursementRequestNumber || "REIM-2026-..."}
+                                    </span>
+                                  </div>
+                                )}
+                                {hasLPJ && req.realization!.status === "COMPLETED" && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                    <span>Lunas &amp; Selesai</span>
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Aksi & Cetak */}
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                  {/* Tombol Input LPJ Baru jika belum ada LPJ */}
+                                  {!hasLPJ && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenInputLPJ(req)}
+                                      className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shadow-xs flex items-center gap-1"
+                                    >
+                                      <PlusCircle className="w-3.5 h-3.5" />
+                                      <span>Input LPJ &amp; Nota</span>
+                                    </button>
+                                  )}
+
+                                  {/* Tombol Detail LPJ */}
+                                  {hasLPJ && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedDetailLPJ(req)}
+                                      className="flex items-center gap-1 px-2 py-1 text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                                      title="Lihat Rincian Nota & Bukti LPJ"
+                                    >
+                                      <Eye className="w-3.5 h-3.5 text-slate-600" />
+                                      <span>Detail</span>
+                                    </button>
+                                  )}
+
+                                  {/* Tombol Cetak Dokumen LPJ */}
+                                  {hasLPJ && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenPrintModal(req, "REALIZATION")}
+                                      className="flex items-center gap-1 px-2 py-1 text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                                      title="Cetak Formulir Laporan Realisasi LPJ Resmi"
+                                    >
+                                      <Printer className="w-3.5 h-3.5" />
+                                      <span>Cetak LPJ</span>
+                                    </button>
+                                  )}
+
+                                  {/* Aksi Approval Berjenjang LPJ */}
+                                  {hasLPJ && req.realization!.status === "PENDING_AUDIT" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAuditApproveLPJ(req.id)}
+                                      className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                    >
+                                      ACC Audit LPJ
+                                    </button>
+                                  )}
+                                  {hasLPJ && req.realization!.status === "PENDING_PM" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handlePMApproveLPJ(req.id)}
+                                      className="px-2.5 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                    >
+                                      ACC PM
+                                    </button>
+                                  )}
+                                  {hasLPJ && req.realization!.status === "PENDING_GM" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleGMApproveLPJ(req.id)}
+                                      className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                    >
+                                      ACC GM
+                                    </button>
+                                  )}
+                                  {hasLPJ && req.realization!.status === "PENDING_DIRECTOR" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDirectorApproveLPJ(req.id)}
+                                      className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                    >
+                                      ACC Dirut LPJ
+                                    </button>
+                                  )}
+
+                                  {/* Tahap Akhir: Penyelesaian Saldo di Finance Gate */}
+                                  {hasLPJ && req.realization!.status === "PENDING_FINANCE_SETTLEMENT" && (
+                                    <>
+                                      {diff === 0 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSettleExactLPJ(req.id)}
+                                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shadow-xs"
+                                        >
+                                          Selesaikan (Settle)
+                                        </button>
+                                      )}
+                                      {diff > 0 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenRefundModal(req)}
+                                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shadow-xs"
+                                        >
+                                          Terima Setoran Sisa Kasir
+                                        </button>
+                                      )}
+                                      {diff < 0 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCreateReimbursementFromLPJ(req)}
+                                          className="px-2.5 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shadow-xs flex items-center gap-1"
+                                          title="Buat Pengajuan Baru Reimbursement Otomatis"
+                                        >
+                                          <span>⚡ Buat Reimbursement Selisih</span>
+                                        </button>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
@@ -6001,6 +6557,602 @@ export default function DashboardPage() {
                   Tutup
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 11: FORM INPUT LAPORAN REALISASI & LPJ NOTA BELANJA */}
+      {isInputLPJModalOpen && lpjTargetReq && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 my-6 max-h-[92vh] overflow-y-auto">
+            {/* Header Modal */}
+            <div className="flex justify-between items-start pb-3 border-b border-slate-100 mb-4">
+              <div>
+                <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded bg-purple-100 text-purple-800">
+                  Formulir Pertanggungjawaban (LPJ) &amp; Nota Lapangan
+                </span>
+                <h3 className="text-lg font-bold text-slate-900 mt-1">
+                  Laporan Realisasi Kasbon: {lpjTargetReq.requestNumber}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {lpjTargetReq.title} &bull; Pemohon: <span className="font-semibold text-slate-700">{lpjTargetReq.requesterName}</span> ({lpjTargetReq.unit})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsInputLPJModalOpen(false)}
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Info Dana Kasbon Diterima vs Realisasi Riil */}
+            {(() => {
+              const advance = lpjTargetReq.disbursement?.amountPaid || lpjTargetReq.totalAmount;
+              const totalRealized = lpjReceiptItems.reduce((acc, it) => acc + (Number(it.amount) || 0), 0);
+              const diff = advance - totalRealized;
+
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-purple-50/60 border border-purple-200 rounded-xl mb-4 text-center">
+                  <div className="bg-white p-2.5 rounded-lg border border-purple-100">
+                    <span className="text-[10px] text-slate-500 uppercase font-semibold block">Kasbon Diterima</span>
+                    <strong className="text-base font-bold text-slate-800 font-mono">
+                      {formatRupiah(advance)}
+                    </strong>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-lg border border-purple-100">
+                    <span className="text-[10px] text-slate-500 uppercase font-semibold block">Total Realisasi Riil (Nota)</span>
+                    <strong className="text-base font-bold text-purple-900 font-mono">
+                      {formatRupiah(totalRealized)}
+                    </strong>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-lg border border-purple-100">
+                    <span className="text-[10px] text-slate-500 uppercase font-semibold block">
+                      {diff === 0 ? "Status Saldo" : diff > 0 ? "Sisa Lebih (Setor Kasir)" : "Kekurangan (Reimburse)"}
+                    </span>
+                    <strong className={`text-base font-bold font-mono ${diff === 0 ? "text-slate-700" : diff > 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                      {diff === 0 ? "Rp 0 (Pas)" : formatRupiah(Math.abs(diff))}
+                    </strong>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <form onSubmit={handleSubmitNewLPJ} className="space-y-4">
+              {/* Tabel Bukti Fisik Nota / Kwitansi */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <h4 className="font-bold text-xs uppercase text-slate-800 flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-purple-600" />
+                    <span>Daftar Bukti Pengeluaran Riil (Nota / Kwitansi)</span>
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={handleAddLpjItem}
+                    className="flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Tambah Nota</span>
+                  </button>
+                </div>
+
+                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+                  <table className="min-w-full divide-y divide-slate-200 text-xs">
+                    <thead className="bg-slate-50 font-semibold text-slate-600">
+                      <tr>
+                        <th className="px-3 py-2 text-center w-8">#</th>
+                        <th className="px-3 py-2 text-left w-28">Tgl Nota</th>
+                        <th className="px-3 py-2 text-left">Uraian Pembelian / Pengeluaran</th>
+                        <th className="px-3 py-2 text-left w-36">Toko / Vendor</th>
+                        <th className="px-3 py-2 text-left w-28">No. Nota</th>
+                        <th className="px-3 py-2 text-right w-36">Nominal (Rp)</th>
+                        <th className="px-2 py-2 text-center w-10">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {lpjReceiptItems.map((item, idx) => (
+                        <tr key={item.id} className="hover:bg-slate-50/70">
+                          <td className="px-3 py-2 text-center text-slate-400 font-mono">{idx + 1}</td>
+                          <td className="px-2 py-1.5">
+                            <input
+                              type="date"
+                              value={item.receiptDate}
+                              onChange={(e) => handleLpjItemChange(item.id, "receiptDate", e.target.value)}
+                              className="w-full px-2 py-1 border border-slate-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-purple-500"
+                              required
+                            />
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <input
+                              type="text"
+                              value={item.description}
+                              onChange={(e) => handleLpjItemChange(item.id, "description", e.target.value)}
+                              placeholder="Contoh: BBM Mobil Tangga Sentul"
+                              className="w-full px-2 py-1 border border-slate-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-purple-500"
+                              required
+                            />
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <input
+                              type="text"
+                              value={item.vendor}
+                              onChange={(e) => handleLpjItemChange(item.id, "vendor", e.target.value)}
+                              placeholder="Nama Toko / SPBU"
+                              className="w-full px-2 py-1 border border-slate-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-purple-500"
+                            />
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <input
+                              type="text"
+                              value={item.receiptNumber}
+                              onChange={(e) => handleLpjItemChange(item.id, "receiptNumber", e.target.value)}
+                              placeholder="No. Struk"
+                              className="w-full px-2 py-1 border border-slate-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono"
+                            />
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <input
+                              type="number"
+                              min="0"
+                              value={item.amount || ""}
+                              onChange={(e) => handleLpjItemChange(item.id, "amount", Number(e.target.value))}
+                              placeholder="0"
+                              className="w-full px-2 py-1 border border-slate-300 rounded text-xs bg-white text-right font-mono font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                              required
+                            />
+                          </td>
+                          <td className="px-2 py-1.5 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveLpjItem(item.id)}
+                              disabled={lpjReceiptItems.length <= 1}
+                              className="p-1 text-slate-400 hover:text-rose-600 disabled:opacity-30 transition cursor-pointer"
+                              title="Hapus baris nota"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
+                      <tr>
+                        <td colSpan={5} className="px-3 py-2 text-right text-slate-700">Total Pengeluaran Riil (Nota):</td>
+                        <td className="px-3 py-2 text-right font-mono text-purple-950 text-sm">
+                          {formatRupiah(lpjReceiptItems.reduce((acc, it) => acc + (Number(it.amount) || 0), 0))}
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
+              {/* Upload Foto Fisik Struk / Nota */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Paperclip className="w-3.5 h-3.5 text-slate-600" />
+                    <span>Upload Foto Struk / Nota Fisik (Audit Trail)</span>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => lpjFileInputRef.current?.click()}
+                      className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg shadow-2xs transition cursor-pointer"
+                    >
+                      <Upload className="w-3.5 h-3.5 text-slate-600" />
+                      <span>Pilih File</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => lpjCameraInputRef.current?.click()}
+                      className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg shadow-2xs transition cursor-pointer"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-purple-600" />
+                      <span>Foto Kamera</span>
+                    </button>
+                    <input
+                      ref={lpjFileInputRef}
+                      type="file"
+                      accept="image/*,.pdf"
+                      multiple
+                      className="hidden"
+                      onChange={handleLpjFileUpload}
+                    />
+                    <input
+                      ref={lpjCameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={handleLpjFileUpload}
+                    />
+                  </div>
+                </div>
+
+                {lpjAttachments.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
+                    {lpjAttachments.map((att, idx) => (
+                      <div key={att.id || idx} className="relative group border border-slate-300 rounded-lg overflow-hidden bg-white p-1 text-center">
+                        {att.type.startsWith("image/") ? (
+                          <img src={att.dataUrl} alt={att.name} className="w-full h-16 object-cover rounded" />
+                        ) : (
+                          <div className="w-full h-16 flex items-center justify-center bg-slate-100 rounded text-slate-400">
+                            <FileText className="w-8 h-8 text-red-500" />
+                          </div>
+                        )}
+                        <span className="block text-[10px] text-slate-700 truncate mt-1 px-1 font-medium">{att.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setLpjAttachments(prev => prev.filter((_, i) => i !== idx))}
+                          className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition cursor-pointer shadow-xs"
+                          title="Hapus foto"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 italic text-center py-2">
+                    Belum ada foto nota yang diunggah. Foto nota dapat disertakan untuk verifikasi fisik tim audit.
+                  </p>
+                )}
+              </div>
+
+              {/* Catatan Pelapor */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Catatan Keterangan Lapangan / Penjelasan Penggunaan Dana:
+                </label>
+                <textarea
+                  value={lpjGeneralNotes}
+                  onChange={(e) => setLpjGeneralNotes(e.target.value)}
+                  rows={2}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  placeholder="Keterangan tambahan kendala lapangan atau rincian pelaksanaan..."
+                />
+              </div>
+
+              {/* Tombol Aksi */}
+              <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
+                <button
+                  type="button"
+                  onClick={() => setIsInputLPJModalOpen(false)}
+                  className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-sm transition cursor-pointer flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Kirim Laporan LPJ ke Tim Audit</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 12: KONFIRMASI PENERIMAAN SETORAN SISA KASBON (REFUND TO CASHIER) */}
+      {isRefundModalOpen && refundTargetReq && refundTargetReq.realization && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
+            <div className="flex justify-between items-start pb-3 border-b border-slate-100 mb-4">
+              <div>
+                <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                  Kasir &bull; Penerimaan Kas Masuk (BKM)
+                </span>
+                <h3 className="text-lg font-bold text-slate-900 mt-1">
+                  Terima Setoran Sisa Kasbon
+                </h3>
+                <p className="text-xs text-slate-500">
+                  No. LPJ: <span className="font-mono font-semibold text-purple-700">{refundTargetReq.realization.lpjNumber}</span> &bull; {refundTargetReq.requestNumber}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsRefundModalOpen(false)}
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl mb-4 text-center">
+              <span className="text-xs text-emerald-800 font-semibold block">Nominal Sisa Kasbon yang Disetorkan:</span>
+              <strong className="text-2xl font-black text-emerald-900 font-mono block my-1">
+                {formatRupiah(refundTargetReq.realization.balanceDifference)}
+              </strong>
+              <span className="text-[11px] text-emerald-700">
+                Disetorkan oleh: <span className="font-bold">{refundTargetReq.requesterName}</span> ({refundTargetReq.unit})
+              </span>
+            </div>
+
+            <div className="space-y-3 text-xs mb-5">
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">Metode Penyetoran:</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRefundMethod("CASH")}
+                    className={`p-2.5 rounded-lg border text-center font-bold transition cursor-pointer ${
+                      refundMethod === "CASH" 
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-xs" 
+                        : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    💵 Tunai (Kasir Fisik)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRefundMethod("TRANSFER")}
+                    className={`p-2.5 rounded-lg border text-center font-bold transition cursor-pointer ${
+                      refundMethod === "TRANSFER" 
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-xs" 
+                        : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    🏦 Transfer Bank PT
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">No. Bukti Kas Masuk (BKM):</label>
+                <input
+                  type="text"
+                  value={refundReceiptNo}
+                  onChange={(e) => setRefundReceiptNo(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono text-xs focus:ring-1 focus:ring-emerald-500 bg-white"
+                  placeholder="BKM-2026-..."
+                  required
+                />
+              </div>
+
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 text-[11px] leading-relaxed">
+                ℹ️ Dengan mengonfirmasi penerimaan kas ini, saldo pengembalian kasbon masuk ke pembukuan kas perusahaan dan status LPJ menjadi <strong className="text-emerald-700 font-bold">Lunas &amp; Selesai</strong>.
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsRefundModalOpen(false)}
+                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-100 transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRefund}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer flex items-center gap-1.5"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Konfirmasi Terima Kas &amp; Selesaikan LPJ</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 13: POP-UP DETAIL LENGKAP LPJ & BUKTI NOTA */}
+      {selectedDetailLPJ && selectedDetailLPJ.realization && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 my-6 max-h-[92vh] overflow-y-auto">
+            {/* Header Modal Detail LPJ */}
+            <div className="flex justify-between items-start pb-3 border-b border-slate-100 mb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded bg-purple-100 text-purple-800">
+                    Detail Pertanggungjawaban (LPJ)
+                  </span>
+                  <span className="text-xs text-slate-500 font-mono">
+                    Ref Kasbon: {selectedDetailLPJ.requestNumber}
+                  </span>
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 mt-1 flex items-center gap-2">
+                  <Receipt className="w-5 h-5 text-purple-700" />
+                  <span>{selectedDetailLPJ.realization.lpjNumber}</span>
+                </h3>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  {selectedDetailLPJ.title} &bull; Pemohon: <span className="font-semibold text-slate-800">{selectedDetailLPJ.requesterName}</span> ({selectedDetailLPJ.unit})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedDetailLPJ(null)}
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Kartu Status Rekonsiliasi & Perbandingan */}
+            {(() => {
+              const advance = selectedDetailLPJ.realization.initialAdvanceAmount;
+              const actual = selectedDetailLPJ.realization.totalRealizedAmount;
+              const diff = selectedDetailLPJ.realization.balanceDifference;
+
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-purple-50/50 border border-purple-200 rounded-xl mb-4 text-center text-xs">
+                  <div className="bg-white p-2.5 rounded-lg border border-purple-100">
+                    <span className="text-[10px] text-slate-500 uppercase font-semibold block">Kasbon Diterima</span>
+                    <strong className="text-sm font-bold text-slate-800 font-mono">
+                      {formatRupiah(advance)}
+                    </strong>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-lg border border-purple-100">
+                    <span className="text-[10px] text-slate-500 uppercase font-semibold block">Total Realisasi Riil</span>
+                    <strong className="text-sm font-bold text-purple-900 font-mono">
+                      {formatRupiah(actual)}
+                    </strong>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-lg border border-purple-100">
+                    <span className="text-[10px] text-slate-500 uppercase font-semibold block">
+                      {diff === 0 ? "Saldo Sisa" : diff > 0 ? "Sisa Lebih (Disetor)" : "Kekurangan (Reimburse)"}
+                    </span>
+                    <strong className={`text-sm font-bold font-mono ${diff === 0 ? "text-slate-700" : diff > 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                      {diff === 0 ? "Rp 0 (Pas)" : formatRupiah(Math.abs(diff))}
+                    </strong>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Status Approval LPJ Single Badge & Audit Trail */}
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs mb-4">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-[10px] uppercase font-bold text-slate-500">Status Persetujuan LPJ Saat Ini:</span>
+                <div>
+                  {selectedDetailLPJ.realization.status === "PENDING_AUDIT" && (
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                      Menunggu Verifikasi Tim Audit
+                    </span>
+                  )}
+                  {selectedDetailLPJ.realization.status === "PENDING_PM" && (
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-100 text-sky-800 border border-sky-300">
+                      Menunggu Persetujuan Project Manager
+                    </span>
+                  )}
+                  {selectedDetailLPJ.realization.status === "PENDING_GM" && (
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-300">
+                      Menunggu Persetujuan General Manager
+                    </span>
+                  )}
+                  {selectedDetailLPJ.realization.status === "PENDING_DIRECTOR" && (
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800 border border-indigo-300">
+                      Menunggu Persetujuan Direktur Utama (&gt; Rp 5 Jt)
+                    </span>
+                  )}
+                  {selectedDetailLPJ.realization.status === "PENDING_FINANCE_SETTLEMENT" && (
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-400">
+                      Siap Rekonsiliasi &amp; Penyelesaian Kasir Finance
+                    </span>
+                  )}
+                  {selectedDetailLPJ.realization.status === "WAITING_REIMBURSEMENT" && (
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-900 border border-orange-400">
+                      Menunggu Pencairan Reimbursement ({selectedDetailLPJ.realization.reimbursementRequestNumber})
+                    </span>
+                  )}
+                  {selectedDetailLPJ.realization.status === "COMPLETED" && (
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
+                      ✓ Lunas &amp; Selesai
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Catatan Verifikasi Berjenjang */}
+              <div className="space-y-1.5 pt-2 border-t border-slate-200 text-[11px] text-slate-700">
+                {selectedDetailLPJ.realization.auditNotes && (
+                  <div><span className="font-bold text-blue-800">Uji Fisik Audit:</span> {selectedDetailLPJ.realization.auditNotes}</div>
+                )}
+                {selectedDetailLPJ.realization.pmNotes && (
+                  <div><span className="font-bold text-sky-800">Catatan PM:</span> {selectedDetailLPJ.realization.pmNotes}</div>
+                )}
+                {selectedDetailLPJ.realization.gmNotes && (
+                  <div><span className="font-bold text-purple-800">Catatan GM:</span> {selectedDetailLPJ.realization.gmNotes}</div>
+                )}
+                {selectedDetailLPJ.realization.directorNotes && (
+                  <div><span className="font-bold text-indigo-800">Otorisasi Dirut:</span> {selectedDetailLPJ.realization.directorNotes}</div>
+                )}
+                {selectedDetailLPJ.realization.financeNotes && (
+                  <div><span className="font-bold text-emerald-800">Catatan Kasir / Finance:</span> {selectedDetailLPJ.realization.financeNotes}</div>
+                )}
+              </div>
+            </div>
+
+            {/* Rincian Nota & Pengeluaran */}
+            <div className="mb-4">
+              <h4 className="font-bold text-slate-800 text-xs uppercase mb-2">Rincian Nota &amp; Struk Belanja</h4>
+              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+                <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
+                  <thead className="bg-slate-50 font-semibold text-slate-600">
+                    <tr>
+                      <th className="px-3 py-2 text-center w-8">No</th>
+                      <th className="px-3 py-2 w-24">Tgl Nota</th>
+                      <th className="px-3 py-2">Uraian Barang / Jasa</th>
+                      <th className="px-3 py-2 w-32">Toko / Vendor</th>
+                      <th className="px-3 py-2 w-24">No. Struk</th>
+                      <th className="px-3 py-2 text-right w-28">Nominal</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {(selectedDetailLPJ.realization.items || []).map((it, idx) => (
+                      <tr key={it.id || idx} className="hover:bg-slate-50/70">
+                        <td className="px-3 py-2 text-center text-slate-400 font-mono">{idx + 1}</td>
+                        <td className="px-3 py-2 text-slate-500">{it.receiptDate}</td>
+                        <td className="px-3 py-2 font-medium text-slate-800">{it.description}</td>
+                        <td className="px-3 py-2 text-slate-600">{it.vendor || "-"}</td>
+                        <td className="px-3 py-2 font-mono text-slate-500">{it.receiptNumber || "-"}</td>
+                        <td className="px-3 py-2 text-right font-bold font-mono text-slate-900">{formatRupiah(it.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
+                    <tr>
+                      <td colSpan={5} className="px-3 py-2 text-right text-slate-700">Total Realisasi Nota:</td>
+                      <td className="px-3 py-2 text-right font-mono text-purple-950 text-sm">
+                        {formatRupiah(selectedDetailLPJ.realization.totalRealizedAmount)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+
+            {/* Lampiran Foto Nota / Struk Fisik */}
+            {selectedDetailLPJ.realization.receiptAttachments && selectedDetailLPJ.realization.receiptAttachments.length > 0 && (
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs mb-4">
+                <span className="text-[10px] text-slate-500 uppercase font-bold block mb-2">Lampiran Bukti Foto Nota Fisik:</span>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {selectedDetailLPJ.realization.receiptAttachments.map((att, idx) => (
+                    <div
+                      key={att.id || idx}
+                      onClick={() => setSelectedProofPreview(att)}
+                      className="border border-slate-200 rounded-lg p-1 bg-white hover:border-purple-300 transition cursor-pointer text-center"
+                    >
+                      {att.type.startsWith("image/") ? (
+                        <img src={att.dataUrl} alt={att.name} className="w-full h-16 object-cover rounded" />
+                      ) : (
+                        <div className="w-full h-16 flex items-center justify-center bg-slate-100 rounded">
+                          <FileText className="w-8 h-8 text-red-500" />
+                        </div>
+                      )}
+                      <span className="block text-[10px] text-slate-700 truncate mt-1 font-medium">{att.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Tombol Aksi di Bawah Modal */}
+            <div className="pt-3 flex justify-between items-center border-t border-slate-100 flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const req = selectedDetailLPJ;
+                  handleOpenPrintModal(req, "REALIZATION");
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-purple-800 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg text-xs font-bold transition cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5 text-purple-700" />
+                <span>Cetak Formulir LPJ (A4)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedDetailLPJ(null)}
+                className="px-4 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-semibold hover:bg-slate-900 transition cursor-pointer"
+              >
+                Tutup
+              </button>
             </div>
           </div>
         </div>

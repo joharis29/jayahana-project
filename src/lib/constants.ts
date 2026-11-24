@@ -328,6 +328,88 @@ export const INITIAL_REQUESTS: BudgetRequest[] = [
       { id: "itm-16", description: "Aki Basah GS Yuasa N70 12V 70Ah", quantity: 1, unit: "Unit", estimatedPrice: 1750000, totalPrice: 1750000 },
       { id: "itm-17", description: "Jasa Servis, Filter & Oli Mesin Genset", quantity: 1, unit: "Paket", estimatedPrice: 2000000, totalPrice: 2000000 }
     ]
+  },
+  {
+    id: "req-009",
+    requestNumber: "CA-2026-STAR-050",
+    title: "Kasbon Penarikan Kabel Drop Core & Splicing Cluster Tagogapu",
+    category: "Kasbon",
+    unit: "Tagogapu",
+    costCenterId: "cc-star-02",
+    requesterName: "Rudi Haryanto",
+    requesterRole: "FIELD_TECH",
+    requestType: "CASH_ADVANCE",
+    totalAmount: 2500000,
+    status: "DISBURSED",
+    purpose: "Biaya klem darurat tiang PLN, sewa tangga bambu tambahan, dan BBM tim penarikan kabel drop core",
+    createdAt: "2026-11-18",
+    dueDate: "2026-11-25",
+    disbursedAt: "2026-11-19",
+    items: [
+      { id: "itm-18", description: "BBM & Operasional Mobil Lapangan", quantity: 1, unit: "Paket", estimatedPrice: 700000, totalPrice: 700000 },
+      { id: "itm-19", description: "Aksesoris Klem Tiang FO & Kabel Ties", quantity: 1, unit: "Paket", estimatedPrice: 1000000, totalPrice: 1000000 },
+      { id: "itm-20", description: "Konsumsi Lembur Teknisi (3 Hari)", quantity: 3, unit: "Hari", estimatedPrice: 266667, totalPrice: 800000 }
+    ],
+    disbursement: {
+      disbursedAt: "2026-11-19",
+      disbursedBy: "Dewi Anggraeni (Finance)",
+      voucherNumber: "BKK-2026-11-050",
+      sourceAccount: "Kas Kecil Lapangan (Petty Cash)",
+      paymentMethod: "CASH_KAS_KECIL",
+      transferReference: "KAS-KECIL-050",
+      amountPaid: 2500000
+    },
+    realization: {
+      id: "lpj-009",
+      requestId: "req-009",
+      lpjNumber: "LPJ-2026-11-050",
+      submittedAt: "2026-11-21",
+      submittedBy: "Rudi Haryanto",
+      initialAdvanceAmount: 2500000,
+      totalRealizedAmount: 2875000,
+      balanceDifference: -375000, // Kekurangan dana Rp 375.000 (nombok)
+      settlementAction: "REIMBURSE_ADDITIONAL",
+      status: "PENDING_FINANCE_SETTLEMENT",
+      items: [
+        { id: "r-91", receiptDate: "19/11/2026", description: "BBM Pertamax & Tol Operasional Tagogapu", vendor: "SPBU Pertamina Tagogapu", receiptNumber: "STR-4412", amount: 750000 },
+        { id: "r-92", receiptDate: "20/11/2026", description: "Baut Klem Tiang Tambahan & Hook Suspension", vendor: "Toko Baut Cahaya Teknik", receiptNumber: "NTA-903", amount: 1180000 },
+        { id: "r-93", receiptDate: "21/11/2026", description: "Konsumsi & Kopi Lembur Malam Tim Teknisi (4 Orang)", vendor: "Warung Makan Barokah", receiptNumber: "STR-002", amount: 945000 }
+      ],
+      auditNotes: "Fisik nota lengkap & sah. Terdapat kelebihan pengeluaran riil Rp 375.000 yang ditanggung teknisi.",
+      pmNotes: "Disetujui. Pekerjaan selesai sesuai target cluster baru.",
+      gmNotes: "Disetujui. Diteruskan ke Finance untuk proses reimbursement dana talangan Rp 375.000."
+    }
+  },
+  {
+    id: "req-010",
+    requestNumber: "CA-2026-STAR-055",
+    title: "Kasbon Biaya Koordinasi & Permit Jalur FO Padalarang",
+    category: "Operasional Permit",
+    unit: "Padalarang",
+    costCenterId: "cc-star-02",
+    requesterName: "Agus Pratama",
+    requesterRole: "SITE_SPV",
+    requestType: "CASH_ADVANCE",
+    totalAmount: 1800000,
+    status: "DISBURSED",
+    purpose: "Biaya koordinasi aparat desa dan konsumsi tim survei perizinan crossing rel kereta api",
+    createdAt: "2026-11-22",
+    dueDate: "2026-11-29",
+    disbursedAt: "2026-11-23",
+    items: [
+      { id: "itm-21", description: "Biaya Koordinasi Lapangan & Petugas Jalur", quantity: 1, unit: "Paket", estimatedPrice: 1200000, totalPrice: 1200000 },
+      { id: "itm-22", description: "Konsumsi Tim Pengawas (2 Hari)", quantity: 2, unit: "Hari", estimatedPrice: 300000, totalPrice: 600000 }
+    ],
+    disbursement: {
+      disbursedAt: "2026-11-23",
+      disbursedBy: "Dewi Anggraeni (Finance)",
+      voucherNumber: "BKK-2026-11-055",
+      sourceAccount: "Bank BCA Operasional (A/C: 731-0982-11)",
+      paymentMethod: "TRANSFER_BANK",
+      transferReference: "TRF-BCA-9812455",
+      amountPaid: 1800000
+    }
+    // realization is undefined -> Belum dilaporkan LPJ-nya!
   }
 ];
 

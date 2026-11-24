@@ -54,6 +54,7 @@ export const EXPENSE_CATEGORIES = [
   "PNSI",
   "PT Lunar Global",
   "Recurring",
+  "Reimbursement",
   "Sewa",
   "Survey",
   "Token listrik",
@@ -168,7 +169,21 @@ export interface RealizationItem {
   amount: number;
   receiptNumber: string;
   vendor: string;
+  receiptAttachment?: RequestAttachment;
 }
+
+export type LPJApprovalStatus =
+  | 'PENDING_SUBMISSION'
+  | 'PENDING_AUDIT'
+  | 'PENDING_PM'
+  | 'PENDING_GM'
+  | 'PENDING_DIRECTOR'
+  | 'PENDING_FINANCE_SETTLEMENT'
+  | 'WAITING_REIMBURSEMENT'
+  | 'NEED_REVISION'
+  | 'COMPLETED'
+  | 'REJECTED'
+  | 'PENDING_FINANCE';
 
 export interface RealizationRecord {
   id: string;
@@ -180,11 +195,21 @@ export interface RealizationRecord {
   totalRealizedAmount: number;
   balanceDifference: number; // >0: sisa dana disetor ke kasir, <0: klaim reimbursement tambahan
   settlementAction: 'REFUND_TO_CASHIER' | 'REIMBURSE_ADDITIONAL' | 'EXACT';
-  status: 'PENDING_AUDIT' | 'PENDING_FINANCE' | 'PENDING_DIRECTOR' | 'COMPLETED' | 'REJECTED';
+  status: LPJApprovalStatus;
   items: RealizationItem[];
+  reimbursementRequestId?: string;
+  reimbursementRequestNumber?: string;
+  refundReceiptNumber?: string;
+  refundReceivedAt?: string;
+  refundProofAttachment?: RequestAttachment;
+  revisionNote?: string;
+  rejectedNote?: string;
   auditNotes?: string;
-  financeNotes?: string;
+  pmNotes?: string;
+  gmNotes?: string;
   directorNotes?: string;
+  financeNotes?: string;
+  receiptAttachments?: RequestAttachment[];
 }
 
 export interface GoodsReceiptItem {
