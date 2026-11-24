@@ -716,6 +716,8 @@ export const INITIAL_RECEIPTS_BKM: OfficialReceiptBKM[] = [
   {
     id: "bkm-001",
     receiptNumber: "BKM-2026-11-001",
+    receiptType: "SALES_INVOICE",
+    category: "Pelunasan Faktur Penjualan",
     invoiceNumber: "INV-2026-ME-001",
     clientName: "PT. Astra Otoparts Tbk (Kawasan Industri KIIC)",
     amountReceived: 130800000,
@@ -724,11 +726,14 @@ export const INITIAL_RECEIPTS_BKM: OfficialReceiptBKM[] = [
     bankTarget: "Bank Mandiri Operasional (A/C: 133-00-981240-8)",
     forPaymentOf: "Pelunasan Termin I (30%) Pekerjaan Instalasi Panel & Kabel Pabrik KIIC (SPK-2026-ME-01)",
     cashierName: "Siti Rahmawati (Kasir)",
-    authorizedBy: "Dewi Anggraeni, SE (Finance Head)"
+    authorizedBy: "Dewi Anggraeni, SE (Finance Head)",
+    referenceNumber: "TRF-MND-889120"
   },
   {
     id: "bkm-002",
     receiptNumber: "BKM-2026-11-002",
+    receiptType: "SALES_INVOICE",
+    category: "Pelunasan Faktur Penjualan",
     invoiceNumber: "INV-2026-STAR-092",
     clientName: "Pengelola Warga Cluster Sentul Tahap 2 (Kolektif)",
     amountReceived: 9823500,
@@ -737,7 +742,38 @@ export const INITIAL_RECEIPTS_BKM: OfficialReceiptBKM[] = [
     bankTarget: "Bank BCA Operasional (A/C: 731-0982-11)",
     forPaymentOf: "Pelunasan Tagihan Kolektif 28 Pelanggan Residensial Starlite FTTH Periode November 2026",
     cashierName: "Siti Rahmawati (Kasir)",
-    authorizedBy: "Dewi Anggraeni, SE (Finance Head)"
+    authorizedBy: "Dewi Anggraeni, SE (Finance Head)",
+    referenceNumber: "TRF-BCA-551902"
+  },
+  {
+    id: "bkm-003",
+    receiptNumber: "BKM-2026-11-003",
+    receiptType: "OTHER_INCOME",
+    category: "Pendapatan Jasa Giro & Bunga Bank",
+    clientName: "Bank Mandiri (Persero) Tbk",
+    amountReceived: 1850000,
+    receivedDate: "2026-11-15",
+    paymentMethod: "Kredit Otomatis Bank",
+    bankTarget: "Bank Mandiri Operasional (A/C: 133-00-981240-8)",
+    forPaymentOf: "Pendapatan Bunga Jasa Giro Rekening Operasional Mandiri Periode Oktober-November 2026",
+    cashierName: "Siti Rahmawati (Kasir)",
+    authorizedBy: "Dewi Anggraeni, SE (Finance Head)",
+    referenceNumber: "AUTO-INT-112026"
+  },
+  {
+    id: "bkm-004",
+    receiptNumber: "BKM-2026-11-004",
+    receiptType: "OTHER_INCOME",
+    category: "Penjualan Sisa Material / Scrap",
+    clientName: "CV. Logam Daur Ulang Mandiri",
+    amountReceived: 4250000,
+    receivedDate: "2026-11-19",
+    paymentMethod: "Tunai / Kasir",
+    bankTarget: "Kas Kecil Lapangan (Petty Cash Operasional)",
+    forPaymentOf: "Penjualan Potongan Kabel Scrap Tembaga & Drum Kayu Bekas Penarikan FTTH Sentul",
+    cashierName: "Siti Rahmawati (Kasir)",
+    authorizedBy: "Dewi Anggraeni, SE (Finance Head)",
+    referenceNumber: "KSR-SETOR-091"
   }
 ];
 

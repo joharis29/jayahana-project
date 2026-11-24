@@ -707,6 +707,12 @@ export function PrintableDocumentModal({
                           <span className="text-slate-500 font-medium">Telah Diterima Dari</span>
                           <span className="col-span-3 font-bold text-slate-900 text-sm">: {payer}</span>
                         </div>
+                        {receipt?.category && (
+                          <div className="grid grid-cols-4 gap-2 py-1.5 border-b border-slate-200">
+                            <span className="text-slate-500 font-medium">Kategori Penerimaan</span>
+                            <span className="col-span-3 text-slate-800 font-semibold">: {receipt.category}</span>
+                          </div>
+                        )}
                         <div className="grid grid-cols-4 gap-2 py-1.5 border-b border-slate-200">
                           <span className="text-slate-500 font-medium">Sejumlah Uang</span>
                           <span className="col-span-3 font-bold text-emerald-800 text-sm font-mono">: {formatRupiah(nominal)}</span>
@@ -719,6 +725,12 @@ export function PrintableDocumentModal({
                           <span className="text-slate-500 font-medium">Rekening Penampung</span>
                           <span className="col-span-3 text-slate-700 font-mono">: {bankTarget}</span>
                         </div>
+                        {receipt?.referenceNumber && (
+                          <div className="grid grid-cols-4 gap-2 py-1.5 border-b border-slate-200">
+                            <span className="text-slate-500 font-medium">No. Referensi / ID Transaksi</span>
+                            <span className="col-span-3 text-slate-700 font-mono font-semibold">: {receipt.referenceNumber}</span>
+                          </div>
+                        )}
                         <div className="grid grid-cols-4 gap-2 py-1.5">
                           <span className="text-slate-500 font-medium">Tanggal Diterima</span>
                           <span className="col-span-3 text-slate-700 font-medium">: {date}</span>

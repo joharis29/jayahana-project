@@ -384,7 +384,9 @@ export interface SalesInvoice {
 export interface OfficialReceiptBKM {
   id: string;
   receiptNumber: string; // "BKM-2026-11-001"
-  invoiceNumber: string;
+  receiptType?: 'SALES_INVOICE' | 'OTHER_INCOME';
+  category?: string; // e.g. "Pelunasan Faktur Penjualan", "Pendapatan Jasa Giro/Bunga Bank", "Penjualan Sisa Material/Scrap", "Pendapatan Sewa Alat", dll.
+  invoiceNumber?: string;
   clientName: string;
   amountReceived: number;
   receivedDate: string;
@@ -393,6 +395,8 @@ export interface OfficialReceiptBKM {
   forPaymentOf: string;
   cashierName: string;
   authorizedBy: string;
+  proofAttachment?: RequestAttachment;
+  referenceNumber?: string;
 }
 
 // Accounting & Financial Reporting Models

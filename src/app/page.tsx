@@ -651,9 +651,10 @@ export default function DashboardPage() {
   // Revenue & Accounts Receivable (AR) State
   const [salesInvoices, setSalesInvoices] = useState<SalesInvoice[]>(INITIAL_SALES_INVOICES);
   const [officialReceipts, setOfficialReceipts] = useState<OfficialReceiptBKM[]>(INITIAL_RECEIPTS_BKM);
-  const [revenueSubTab, setRevenueSubTab] = useState<"INVOICES" | "AR_AGING" | "RECEIPTS">("INVOICES");
+  const [revenueSubTab, setRevenueSubTab] = useState<"INVOICES" | "RECEIPTS">("INVOICES");
+  const [invoiceViewMode, setInvoiceViewMode] = useState<"LIST" | "AR_AGING">("LIST");
 
-  // New Invoice Modal Form State
+  // New Invoice Modal Form State (Modul Faktur Penjualan)
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [newInvClient, setNewInvClient] = useState("");
   const [newInvAddress, setNewInvAddress] = useState("");
@@ -665,6 +666,21 @@ export default function DashboardPage() {
   const [newInvDueDate, setNewInvDueDate] = useState("2026-11-30");
   const [newInvProgress, setNewInvProgress] = useState("30");
   const [newInvIncludePph23, setNewInvIncludePph23] = useState(true);
+
+  // New Receipt Modal Form State (Modul Penerimaan Penjualan dan Lainnya)
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const [receiptType, setReceiptType] = useState<"SALES_INVOICE" | "OTHER_INCOME">("SALES_INVOICE");
+  const [receiptSelectedInvoiceId, setReceiptSelectedInvoiceId] = useState("");
+  const [receiptClientName, setReceiptClientName] = useState("");
+  const [receiptCategory, setReceiptCategory] = useState("Pelunasan Faktur Penjualan");
+  const [receiptForPaymentOf, setReceiptForPaymentOf] = useState("");
+  const [receiptAmount, setReceiptAmount] = useState("");
+  const [receiptPaymentMethod, setReceiptPaymentMethod] = useState("Transfer Bank Mandiri");
+  const [receiptBankTarget, setReceiptBankTarget] = useState("Bank Mandiri Operasional (A/C: 133-00-981240-8)");
+  const [receiptRefNumber, setReceiptRefNumber] = useState("");
+  const [receiptDate, setReceiptDate] = useState("2026-11-24");
+  const [receiptFilterType, setReceiptFilterType] = useState<"ALL" | "SALES_INVOICE" | "OTHER_INCOME">("ALL");
+  const [receiptSearchTerm, setReceiptSearchTerm] = useState("");
   
   // New request form state
   const [newTitle, setNewTitle] = useState("");
@@ -1648,6 +1664,133 @@ export default function DashboardPage() {
 
     setApprovalNotification(`Pembayaran ${targetInv.invoiceNumber} sebesar ${formatRupiah(targetInv.totalAmount)} berhasil diterima & Kuitansi BKM telah terbit.`);
     setTimeout(() => setApprovalNotification(null), 4000);
+  };
+
+  // Handler Buka Modal Formulir Penerimaan Kas & Bank Baru
+  const handleOpenCreateReceipt = (preselectedInvoiceId?: string) => {
+    const today = new Date().toISOString().split("T")[0];
+    setReceiptDate(today);
+
+    if (preselectedInvoiceId) {
+      const inv = salesInvoices.find(i => i.id === preselectedInvoiceId);
+      if (inv) {
+        setReceiptType("SALES_INVOICE");
+        setReceiptSelectedInvoiceId(inv.id);
+        setReceiptClientName(inv.clientName);
+        setReceiptCategory("Pelunasan Faktur Penjualan");
+        setReceiptForPaymentOf(`Pelunasan ${inv.title} (${inv.contractNumber})`);
+        setReceiptAmount(inv.totalAmount.toString());
+        setReceiptPaymentMethod("Transfer Bank Mandiri");
+        setReceiptBankTarget(inv.targetBankAccount || "Bank Mandiri Operasional (A/C: 133-00-981240-8)");
+        setReceiptRefNumber(`TRF-MND-${Date.now().toString().slice(-6)}`);
+        setIsReceiptModalOpen(true);
+        return;
+      }
+    }
+
+    // Default jika dibuka dari tombol umum
+    setReceiptType("SALES_INVOICE");
+    const firstUnpaid = salesInvoices.find(i => i.status !== "PAID_FULL");
+    if (firstUnpaid) {
+      setReceiptSelectedInvoiceId(firstUnpaid.id);
+      setReceiptClientName(firstUnpaid.clientName);
+      setReceiptCategory("Pelunasan Faktur Penjualan");
+      setReceiptForPaymentOf(`Pelunasan ${firstUnpaid.title} (${firstUnpaid.contractNumber})`);
+      setReceiptAmount(firstUnpaid.totalAmount.toString());
+      setReceiptBankTarget(firstUnpaid.targetBankAccount || "Bank Mandiri Operasional (A/C: 133-00-981240-8)");
+    } else {
+      setReceiptSelectedInvoiceId("");
+      setReceiptClientName("");
+      setReceiptCategory("Pelunasan Faktur Penjualan");
+      setReceiptForPaymentOf("");
+      setReceiptAmount("");
+      setReceiptBankTarget("Bank Mandiri Operasional (A/C: 133-00-981240-8)");
+    }
+    setReceiptPaymentMethod("Transfer Bank Mandiri");
+    setReceiptRefNumber(`TRF-MND-${Date.now().toString().slice(-6)}`);
+    setIsReceiptModalOpen(true);
+  };
+
+  // Saat dropdown pilihan invoice berubah di dalam modal penerimaan
+  const handleReceiptInvoiceSelect = (invId: string) => {
+    setReceiptSelectedInvoiceId(invId);
+    const inv = salesInvoices.find(i => i.id === invId);
+    if (inv) {
+      setReceiptClientName(inv.clientName);
+      setReceiptForPaymentOf(`Pelunasan ${inv.title} (${inv.contractNumber})`);
+      setReceiptAmount(inv.totalAmount.toString());
+      setReceiptBankTarget(inv.targetBankAccount || "Bank Mandiri Operasional (A/C: 133-00-981240-8)");
+    }
+  };
+
+  // Submit Formulir Penerimaan Kas & Bank Baru
+  const handleSaveReceipt = (e: React.FormEvent) => {
+    e.preventDefault();
+    const bkmNum = `BKM-2026-11-${Math.floor(100 + Math.random() * 900)}`;
+    const parsedAmount = parseFloat(receiptAmount) || 0;
+    if (parsedAmount <= 0) return;
+
+    if (receiptType === "SALES_INVOICE" && receiptSelectedInvoiceId) {
+      const targetInv = salesInvoices.find(i => i.id === receiptSelectedInvoiceId);
+      if (targetInv) {
+        const paymentRecord: InvoicePaymentRecord = {
+          paymentId: `pay-${Date.now()}`,
+          paymentDate: receiptDate,
+          amountPaid: parsedAmount,
+          voucherNumber: bkmNum,
+          bankAccount: receiptBankTarget,
+          paymentMethod: receiptPaymentMethod.toLowerCase().includes("tunai") ? "CASH" : "TRANSFER_BANK",
+          referenceNote: `Pelunasan ${targetInv.invoiceNumber} - ${targetInv.clientName}`,
+          receivedBy: "Dewi Anggraeni, SE (Finance Head)"
+        };
+
+        setSalesInvoices(prev => prev.map(inv => inv.id === receiptSelectedInvoiceId ? {
+          ...inv,
+          status: "PAID_FULL",
+          paidAmount: parsedAmount,
+          payments: [paymentRecord]
+        } : inv));
+      }
+    }
+
+    const newReceipt: OfficialReceiptBKM = {
+      id: `rcpt-${Date.now()}`,
+      receiptNumber: bkmNum,
+      receiptType: receiptType,
+      category: receiptCategory,
+      invoiceNumber: receiptType === "SALES_INVOICE" ? (salesInvoices.find(i => i.id === receiptSelectedInvoiceId)?.invoiceNumber || "") : undefined,
+      clientName: receiptClientName,
+      amountReceived: parsedAmount,
+      receivedDate: receiptDate,
+      paymentMethod: receiptPaymentMethod,
+      bankTarget: receiptBankTarget,
+      forPaymentOf: receiptForPaymentOf,
+      cashierName: "Siti Rahmawati (Kasir)",
+      authorizedBy: "Dewi Anggraeni, SE (Finance Head)",
+      referenceNumber: receiptRefNumber
+    };
+
+    setOfficialReceipts(prev => [newReceipt, ...prev]);
+
+    // Catat ke transaksi keuangan umum
+    const newTx: FinancialTransaction = {
+      id: `tx-in-${Date.now()}`,
+      transactionNumber: `TX-IN-${Date.now().toString().slice(-6)}`,
+      date: receiptDate,
+      description: receiptForPaymentOf,
+      unit: receiptType === "SALES_INVOICE" ? (salesInvoices.find(i => i.id === receiptSelectedInvoiceId)?.unit || "ME_CORE") : "OVERHEAD_OPERASIONAL",
+      type: "INCOME",
+      category: receiptCategory,
+      amount: parsedAmount,
+      status: "COMPLETED",
+      paymentMethod: receiptPaymentMethod,
+      recipientOrPayer: receiptClientName
+    };
+    setTransactions(prev => [newTx, ...prev]);
+
+    setIsReceiptModalOpen(false);
+    setApprovalNotification(`Penerimaan kas/bank sebesar ${formatRupiah(parsedAmount)} berhasil dicatat. Kuitansi ${bkmNum} diterbitkan.`);
+    setTimeout(() => setApprovalNotification(null), 3500);
   };
 
   const handleCreateSalesInvoice = (e: React.FormEvent) => {
@@ -5554,10 +5697,10 @@ export default function DashboardPage() {
               <div>
                 <h2 className="font-bold text-slate-900 text-base flex items-center gap-2">
                   <TrendingUp className="w-5 h-5 text-emerald-600" />
-                  Alur Pendapatan & Piutang Usaha (Revenue & Accounts Receivable)
+                  Alur Pendapatan &amp; Piutang Usaha (Revenue &amp; Accounts Receivable)
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Pengelolaan terintegrasi: Jasa ME Core (Termin Kontrak Proyek B2B) & Starlite FTTH (Langganan Internet & Pasang Baru).
+                  Pengelolaan terintegrasi: Penagihan Faktur Penjualan (Jasa ME Core &amp; Starlite FTTH), Monitoring Kartu Piutang &amp; AR Aging, serta Penerimaan Kas/Bank Penjualan &amp; Pendapatan Lainnya.
                 </p>
               </div>
 
@@ -5569,17 +5712,28 @@ export default function DashboardPage() {
                 >
                   <option value="ALL">Semua Unit Bisnis</option>
                   <option value="ME_CORE">Jasa ME Core (Termin Proyek)</option>
-                  <option value="STARLITE_FTTH">Starlite FTTH (Internet & PSB)</option>
+                  <option value="STARLITE_FTTH">Starlite FTTH (Internet &amp; PSB)</option>
                 </select>
 
-                <button
-                  type="button"
-                  onClick={() => setIsInvoiceModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 transition cursor-pointer shadow-xs"
-                >
-                  <PlusCircle className="w-4 h-4" />
-                  <span>+ Buat Faktur Tagihan (Invoice)</span>
-                </button>
+                {revenueSubTab === "INVOICES" ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsInvoiceModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 transition cursor-pointer shadow-xs"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                    <span>+ Buat Faktur Penjualan</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenCreateReceipt()}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition cursor-pointer shadow-xs"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                    <span>+ Catat Penerimaan Kas/Bank</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -5606,13 +5760,15 @@ export default function DashboardPage() {
               </div>
 
               <div className="p-3 bg-white rounded-xl border border-emerald-200 bg-emerald-50/30 shadow-2xs">
-                <span className="text-emerald-800 block">Kas Masuk Diterima (Lunas)</span>
+                <span className="text-emerald-800 block">Total Penerimaan Kas &amp; Bank</span>
                 <strong className="text-base text-emerald-900 font-extrabold font-mono block">
                   {formatRupiah(
-                    salesInvoices.filter(i => i.status === "PAID_FULL").reduce((acc, i) => acc + i.totalAmount, 0)
+                    officialReceipts.reduce((acc, r) => acc + r.amountReceived, 0)
                   )}
                 </strong>
-                <span className="text-[10px] text-emerald-700 mt-0.5 block">Kuitansi BKM Terbit</span>
+                <span className="text-[10px] text-emerald-700 mt-0.5 block">
+                  {officialReceipts.length} Kuitansi BKM Terbit
+                </span>
               </div>
 
               <div className="p-3 bg-white rounded-xl border border-rose-200 bg-rose-50/30 shadow-2xs">
@@ -5626,7 +5782,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* SUB-TAB NAVIGASI 3 TAHAP PENDAPATAN & AR */}
+            {/* SUB-TAB NAVIGASI 2 MODUL UTAMA */}
             <div className="flex flex-wrap border-b border-slate-200 gap-2 bg-white p-2 rounded-xl shadow-2xs">
               <button
                 type="button"
@@ -5638,29 +5794,11 @@ export default function DashboardPage() {
                 }`}
               >
                 <FileText className="w-4 h-4" />
-                <span>1. Faktur Tagihan & Invoicing (Approval 3-Pintu)</span>
+                <span>1. Faktur Penjualan</span>
                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
                   revenueSubTab === "INVOICES" ? "bg-emerald-700 text-white" : "bg-slate-200 text-slate-700"
                 }`}>
                   {salesInvoices.length}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setRevenueSubTab("AR_AGING")}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
-                  revenueSubTab === "AR_AGING" 
-                    ? "bg-amber-600 text-white shadow-xs" 
-                    : "text-slate-600 hover:bg-slate-100"
-                }`}
-              >
-                <Clock className="w-4 h-4" />
-                <span>2. Kartu Piutang & Aging AR (Monitoring)</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-                  revenueSubTab === "AR_AGING" ? "bg-amber-700 text-white" : "bg-slate-200 text-slate-700"
-                }`}>
-                  {salesInvoices.filter(i => i.status !== "PAID_FULL").length}
                 </span>
               </button>
 
@@ -5674,7 +5812,7 @@ export default function DashboardPage() {
                 }`}
               >
                 <Receipt className="w-4 h-4" />
-                <span>3. Penerimaan Kas & Kuitansi (Pelunasan BKM)</span>
+                <span>2. Penerimaan Penjualan dan Lainnya</span>
                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
                   revenueSubTab === "RECEIPTS" ? "bg-blue-700 text-white" : "bg-slate-200 text-slate-700"
                 }`}>
@@ -5683,9 +5821,52 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            {/* KONTEN SUB-TAB 1: FAKTUR TAGIHAN & INVOICING (APPROVAL 3 PINTU) */}
+            {/* KONTEN MODUL 1: FAKTUR PENJUALAN & MONITORING AR AGING */}
             {revenueSubTab === "INVOICES" && (
               <div className="space-y-4">
+                {/* Sub-View Switcher: Daftar Faktur vs Kartu Piutang & AR Aging */}
+                <div className="flex justify-between items-center bg-slate-50 border border-slate-200 p-1.5 rounded-xl text-xs">
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceViewMode("LIST")}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                        invoiceViewMode === "LIST"
+                          ? "bg-white text-emerald-800 shadow-xs border border-slate-200"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>Daftar Faktur Penjualan</span>
+                      <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-100 text-slate-700 font-mono">
+                        {salesInvoices.length}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceViewMode("AR_AGING")}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                        invoiceViewMode === "AR_AGING"
+                          ? "bg-white text-amber-900 shadow-xs border border-slate-200"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>Kartu Piutang &amp; AR Aging</span>
+                      <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-800 font-mono">
+                        {salesInvoices.filter(i => i.status !== "PAID_FULL").length}
+                      </span>
+                    </button>
+                  </div>
+
+                  <span className="text-[11px] text-slate-400 font-mono pr-2 hidden sm:inline">
+                    {invoiceViewMode === "LIST" ? "Otorisasi Berjenjang: Audit → Pajak → Direktur" : "Monitoring Umur Jatuh Tempo Piutang"}
+                  </span>
+                </div>
+
+                {/* Sub-View A: Daftar Faktur Penjualan */}
+                {invoiceViewMode === "LIST" && (
                 <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
                   <div className="p-3 border-b border-slate-100 flex justify-between items-center text-xs">
                     <span className="font-bold text-slate-900">Daftar Faktur Penjualan (Sales Invoice B2B & B2C)</span>
@@ -5840,7 +6021,7 @@ export default function DashboardPage() {
                                   {inv.status === "APPROVED_ISSUED" && (
                                     <button
                                       type="button"
-                                      onClick={() => handleSettleInvoicePayment(inv.id)}
+                                      onClick={() => handleOpenCreateReceipt(inv.id)}
                                       className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
                                     >
                                       Terima Bayar
@@ -5859,12 +6040,11 @@ export default function DashboardPage() {
                     </tbody>
                   </table>
                 </div>
-              </div>
-            )}
+                )}
 
-            {/* KONTEN SUB-TAB 2: KARTU PIUTANG & AGING AR (MONITORING JATUH TEMPO) */}
-            {revenueSubTab === "AR_AGING" && (
-              <div className="space-y-4">
+                {/* Sub-View B: Kartu Piutang & AR Aging */}
+                {invoiceViewMode === "AR_AGING" && (
+                  <div className="space-y-4">
                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex justify-between items-center text-xs text-amber-900">
                   <div>
                     <h3 className="font-bold text-sm text-amber-950 flex items-center gap-2">
@@ -5968,7 +6148,7 @@ export default function DashboardPage() {
                               <div className="flex items-center justify-end gap-1.5">
                                 <button
                                   type="button"
-                                  onClick={() => handleSettleInvoicePayment(inv.id)}
+                                  onClick={() => handleOpenCreateReceipt(inv.id)}
                                   className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold shadow-xs cursor-pointer"
                                 >
                                   Terima Bayar
@@ -5987,60 +6167,159 @@ export default function DashboardPage() {
                     </tbody>
                   </table>
                 </div>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* KONTEN SUB-TAB 3: PENERIMAAN KAS & KUITANSI (PELUNASAN BKM) */}
+            {/* KONTEN MODUL 2: PENERIMAAN PENJUALAN DAN LAINNYA */}
             {revenueSubTab === "RECEIPTS" && (
               <div className="space-y-4">
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl flex justify-between items-center text-xs text-blue-900">
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-xs text-blue-900">
                   <div>
                     <h3 className="font-bold text-sm text-blue-950 flex items-center gap-2">
                       <Receipt className="w-4 h-4 text-blue-700" />
-                      Kuitansi Resmi & Bukti Kas Masuk (Official Receipt / BKM)
+                      Penerimaan Penjualan &amp; Penerimaan Lainnya (Kuitansi Resmi BKM)
                     </h3>
                     <p className="text-[11px] text-blue-800 mt-0.5">
-                      Pencatatan tanda terima pembayaran sah yang telah masuk ke rekening bank perusahaan, ditandatangani Kasir dan Finance Manager.
+                      Pencatatan kas dan transfer bank masuk dari pelunasan invoice pelanggan maupun penerimaan non-operasional lainnya (jasa giro, penjualan scrap, sewa alat, dll).
                     </p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenCreateReceipt()}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-xs transition cursor-pointer shrink-0"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span>+ Catat Penerimaan Kas/Bank</span>
+                  </button>
                 </div>
 
+                {/* Filter & Search Bar Penerimaan */}
+                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex flex-wrap items-center gap-2 flex-1">
+                    <div className="relative min-w-[220px] max-w-sm flex-1">
+                      <input
+                        type="text"
+                        value={receiptSearchTerm}
+                        onChange={(e) => setReceiptSearchTerm(e.target.value)}
+                        placeholder="Cari no. kuitansi, klien/pembayar, keterangan..."
+                        className="w-full border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs focus:outline-blue-500"
+                      />
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                    </div>
+
+                    <select
+                      value={receiptFilterType}
+                      onChange={(e) => setReceiptFilterType(e.target.value as any)}
+                      className="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 cursor-pointer"
+                    >
+                      <option value="ALL">Semua Jenis Penerimaan</option>
+                      <option value="SALES_INVOICE">Pelunasan Faktur Penjualan</option>
+                      <option value="OTHER_INCOME">Penerimaan Pendapatan Lainnya</option>
+                    </select>
+
+                    {(receiptSearchTerm || receiptFilterType !== "ALL") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReceiptSearchTerm("");
+                          setReceiptFilterType("ALL");
+                        }}
+                        className="px-2 py-1 text-slate-500 hover:text-slate-800 border border-slate-300 rounded-lg text-[11px] cursor-pointer"
+                      >
+                        Reset Filter
+                      </button>
+                    )}
+                  </div>
+
+                  <span className="text-[11px] text-slate-400 font-mono">
+                    Total {officialReceipts.length} Bukti Kas Masuk
+                  </span>
+                </div>
+
+                {/* Tabel Penerimaan Terpadu */}
                 <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
                   <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
                     <thead className="bg-slate-50 font-semibold text-slate-600">
                       <tr>
                         <th className="px-4 py-3">No. Kuitansi BKM</th>
                         <th className="px-4 py-3">Tgl Diterima</th>
-                        <th className="px-4 py-3">Diterima Dari (Klien)</th>
-                        <th className="px-4 py-3">Untuk Pembayaran</th>
+                        <th className="px-4 py-3">Jenis &amp; Kategori</th>
+                        <th className="px-4 py-3">Diterima Dari (Klien / Pembayar)</th>
+                        <th className="px-4 py-3">Untuk Pembayaran / Uraian</th>
                         <th className="px-4 py-3">Jumlah Uang</th>
                         <th className="px-4 py-3">Rekening Penampung</th>
-                        <th className="px-4 py-3 text-right">Aksi Cetak</th>
+                        <th className="px-4 py-3 text-right">Aksi Dokumen</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700">
-                      {officialReceipts.map((rec) => (
-                        <tr key={rec.id} className="hover:bg-slate-50/70 transition">
-                          <td className="px-4 py-3 font-mono font-bold text-slate-900">{rec.receiptNumber}</td>
-                          <td className="px-4 py-3 text-slate-600">{rec.receivedDate}</td>
-                          <td className="px-4 py-3 font-bold text-slate-900">{rec.clientName}</td>
-                          <td className="px-4 py-3 max-w-[240px] text-slate-600 truncate">{rec.forPaymentOf}</td>
-                          <td className="px-4 py-3 font-mono font-bold text-emerald-700 text-xs">
-                            {formatRupiah(rec.amountReceived)}
-                          </td>
-                          <td className="px-4 py-3 text-[11px] text-slate-500 font-mono">{rec.bankTarget}</td>
-                          <td className="px-4 py-3 text-right">
-                            <button
-                              type="button"
-                              onClick={() => handleOpenPrintReceipt(rec)}
-                              className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg font-bold text-xs transition cursor-pointer"
-                            >
-                              <Printer className="w-3.5 h-3.5" />
-                              <span>Cetak Kuitansi</span>
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {officialReceipts
+                        .filter(rec => {
+                          if (receiptFilterType !== "ALL") {
+                            if (receiptFilterType === "SALES_INVOICE" && rec.receiptType === "OTHER_INCOME") return false;
+                            if (receiptFilterType === "OTHER_INCOME" && rec.receiptType !== "OTHER_INCOME") return false;
+                          }
+                          if (receiptSearchTerm.trim()) {
+                            const term = receiptSearchTerm.toLowerCase();
+                            const matchNum = rec.receiptNumber.toLowerCase().includes(term);
+                            const matchClient = rec.clientName.toLowerCase().includes(term);
+                            const matchPurpose = rec.forPaymentOf.toLowerCase().includes(term);
+                            const matchCat = (rec.category || "").toLowerCase().includes(term);
+                            if (!matchNum && !matchClient && !matchPurpose && !matchCat) return false;
+                          }
+                          return true;
+                        })
+                        .map((rec) => {
+                          const isOther = rec.receiptType === "OTHER_INCOME";
+                          return (
+                            <tr key={rec.id} className="hover:bg-slate-50/70 transition">
+                              <td className="px-4 py-3 font-mono">
+                                <span className="font-bold text-slate-900 block">{rec.receiptNumber}</span>
+                                {rec.referenceNumber && (
+                                  <span className="text-[10px] text-slate-400 block font-mono">Ref: {rec.referenceNumber}</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-slate-600">{rec.receivedDate}</td>
+                              <td className="px-4 py-3">
+                                <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  isOther 
+                                    ? "bg-purple-100 text-purple-800 border border-purple-200" 
+                                    : "bg-blue-100 text-blue-800 border border-blue-200"
+                                }`}>
+                                  {isOther ? "Penerimaan Lainnya" : "Pelunasan Penjualan"}
+                                </span>
+                                {rec.category && (
+                                  <span className="block text-[10px] text-slate-500 font-medium mt-0.5 truncate max-w-[150px]">
+                                    {rec.category}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 font-bold text-slate-900">{rec.clientName}</td>
+                              <td className="px-4 py-3 max-w-[220px]">
+                                <span className="text-slate-700 line-clamp-2" title={rec.forPaymentOf}>
+                                  {rec.forPaymentOf}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 font-mono font-bold text-emerald-700 text-xs">
+                                {formatRupiah(rec.amountReceived)}
+                              </td>
+                              <td className="px-4 py-3 text-[11px] text-slate-500 font-mono max-w-[160px] truncate" title={rec.bankTarget}>
+                                {rec.bankTarget}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenPrintReceipt(rec)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg font-bold text-xs transition cursor-pointer"
+                                >
+                                  <Printer className="w-3.5 h-3.5" />
+                                  <span>Cetak Kuitansi</span>
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                     </tbody>
                   </table>
                 </div>
@@ -6961,6 +7240,297 @@ export default function DashboardPage() {
                   className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition cursor-pointer shadow-xs"
                 >
                   Kirim ke Tim Audit Progres (Step 1)
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PENERIMAAN KAS & BANK BARU (PELUNASAN PENJUALAN & LAINNYA) */}
+      {isReceiptModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in duration-200 my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start pb-2 border-b border-slate-100 mb-4">
+              <div>
+                <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                  <Receipt className="w-5 h-5 text-blue-600" />
+                  Catat Penerimaan Kas &amp; Bank Baru (Bukti Kas Masuk / BKM)
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Formulir resmi pencatatan uang masuk perusahaan dari pelunasan invoice penjualan atau penerimaan pendapatan lain-lain.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsReceiptModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveReceipt} className="space-y-4 text-xs">
+              {/* Pilihan Jenis Penerimaan */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1.5">
+                  Jenis Penerimaan Kas/Bank <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReceiptType("SALES_INVOICE");
+                      setReceiptCategory("Pelunasan Faktur Penjualan");
+                      const firstUnpaid = salesInvoices.find(i => i.status !== "PAID_FULL");
+                      if (firstUnpaid) handleReceiptInvoiceSelect(firstUnpaid.id);
+                      setReceiptRefNumber(`TRF-MND-${Date.now().toString().slice(-6)}`);
+                    }}
+                    className={`flex items-center gap-2 p-3 rounded-xl border font-bold text-left cursor-pointer transition ${
+                      receiptType === "SALES_INVOICE"
+                        ? "border-blue-500 bg-blue-50/70 text-blue-900 shadow-xs ring-1 ring-blue-400"
+                        : "border-slate-200 hover:bg-slate-50 text-slate-700"
+                    }`}
+                  >
+                    <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                    <div>
+                      <span className="block text-xs">Pelunasan Faktur Penjualan</span>
+                      <span className="block text-[10px] text-slate-500 font-normal">Pembayaran invoice dari klien/customer</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReceiptType("OTHER_INCOME");
+                      setReceiptSelectedInvoiceId("");
+                      setReceiptCategory("Pendapatan Jasa Giro & Bunga Bank");
+                      setReceiptClientName("");
+                      setReceiptForPaymentOf("");
+                      setReceiptAmount("");
+                      setReceiptRefNumber(`BKM-IN-${Date.now().toString().slice(-6)}`);
+                    }}
+                    className={`flex items-center gap-2 p-3 rounded-xl border font-bold text-left cursor-pointer transition ${
+                      receiptType === "OTHER_INCOME"
+                        ? "border-purple-500 bg-purple-50/70 text-purple-900 shadow-xs ring-1 ring-purple-400"
+                        : "border-slate-200 hover:bg-slate-50 text-slate-700"
+                    }`}
+                  >
+                    <TrendingUp className="w-4 h-4 text-purple-600 shrink-0" />
+                    <div>
+                      <span className="block text-xs">Penerimaan Pendapatan Lainnya</span>
+                      <span className="block text-[10px] text-slate-500 font-normal">Bunga bank, scrap, sewa alat, dll</span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Opsi 1: Jika Pelunasan Faktur Penjualan */}
+              {receiptType === "SALES_INVOICE" && (
+                <div className="space-y-3 p-3 bg-blue-50/40 border border-blue-200 rounded-xl">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Pilih Faktur Penjualan yang Dilunasi <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={receiptSelectedInvoiceId}
+                      onChange={(e) => handleReceiptInvoiceSelect(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg p-2 bg-white text-slate-800 font-medium"
+                      required
+                    >
+                      <option value="">-- Pilih Faktur Penjualan Belum Lunas --</option>
+                      {salesInvoices
+                        .filter(i => i.status !== "PAID_FULL")
+                        .map(inv => (
+                          <option key={inv.id} value={inv.id}>
+                            [{inv.invoiceNumber}] {inv.clientName} - {formatRupiah(inv.totalAmount)} ({inv.title})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Nama Klien / Pembayar</label>
+                      <input
+                        type="text"
+                        value={receiptClientName}
+                        readOnly
+                        className="w-full border border-slate-200 bg-slate-100 rounded-lg p-2 text-slate-700 cursor-not-allowed font-medium"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Nominal Tagihan Invoice (Rp)</label>
+                      <input
+                        type="text"
+                        value={receiptAmount ? formatRupiah(parseFloat(receiptAmount)) : "Rp 0"}
+                        readOnly
+                        className="w-full border border-slate-200 bg-slate-100 rounded-lg p-2 font-mono font-bold text-emerald-800 cursor-not-allowed"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Keterangan / Uraian Pelunasan</label>
+                    <input
+                      type="text"
+                      value={receiptForPaymentOf}
+                      onChange={(e) => setReceiptForPaymentOf(e.target.value)}
+                      placeholder="Contoh: Pelunasan Termin I Proyek..."
+                      className="w-full border border-slate-300 rounded-lg p-2 bg-white text-slate-800"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Opsi 2: Jika Penerimaan Lainnya */}
+              {receiptType === "OTHER_INCOME" && (
+                <div className="space-y-3 p-3 bg-purple-50/40 border border-purple-200 rounded-xl">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Kategori Penerimaan Lainnya <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={receiptCategory}
+                      onChange={(e) => setReceiptCategory(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg p-2 bg-white text-slate-800 font-medium"
+                      required
+                    >
+                      <option value="Pendapatan Jasa Giro & Bunga Bank">Pendapatan Jasa Giro &amp; Bunga Bank</option>
+                      <option value="Penjualan Sisa Material / Scrap">Penjualan Sisa Material / Drum &amp; Kabel Scrap</option>
+                      <option value="Pendapatan Sewa Alat / Peralatan">Pendapatan Sewa Alat / Peralatan Proyek</option>
+                      <option value="Klaim Pengembalian Asuransi / Restitusi">Klaim Pengembalian Asuransi / Restitusi</option>
+                      <option value="Setoran Sisa Kasbon & Realisasi LPJ">Setoran Sisa Kasbon &amp; Realisasi LPJ</option>
+                      <option value="Penerimaan Lain-lain Non-Operasional">Penerimaan Lain-lain Non-Operasional</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Diterima Dari (Pihak Ketiga / Sumber) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={receiptClientName}
+                        onChange={(e) => setReceiptClientName(e.target.value)}
+                        placeholder="Misal: Bank Mandiri / CV. Logam Daur Ulang"
+                        className="w-full border border-slate-300 rounded-lg p-2 bg-white text-slate-800"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Nominal Penerimaan (Rp) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        value={receiptAmount}
+                        onChange={(e) => setReceiptAmount(e.target.value)}
+                        placeholder="Contoh: 2500000"
+                        className="w-full border border-slate-300 rounded-lg p-2 font-mono font-bold text-emerald-800"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Keterangan / Uraian Penerimaan <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={receiptForPaymentOf}
+                      onChange={(e) => setReceiptForPaymentOf(e.target.value)}
+                      placeholder="Misal: Pendapatan bunga giro operasional..."
+                      className="w-full border border-slate-300 rounded-lg p-2 bg-white text-slate-800"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Detail Transaksi Keuangan (Shared) */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Tanggal Diterima <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={receiptDate}
+                    onChange={(e) => setReceiptDate(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg p-2 text-slate-800"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Metode Pembayaran <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={receiptPaymentMethod}
+                    onChange={(e) => setReceiptPaymentMethod(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg p-2 bg-white text-slate-800"
+                  >
+                    <option value="Transfer Bank Mandiri">Transfer Bank Mandiri</option>
+                    <option value="Transfer Bank BCA">Transfer Bank BCA</option>
+                    <option value="Kredit Otomatis Bank">Kredit Otomatis Bank / Giro</option>
+                    <option value="Tunai / Kasir">Tunai / Setor Kasir</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Rekening Kas / Bank Penampung <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={receiptBankTarget}
+                    onChange={(e) => setReceiptBankTarget(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg p-2 bg-white text-slate-800"
+                  >
+                    <option value="Bank Mandiri Operasional (A/C: 133-00-981240-8)">Bank Mandiri Operasional (A/C: 133-00-981240-8)</option>
+                    <option value="Bank BCA Operasional (A/C: 731-0982-11)">Bank BCA Operasional (A/C: 731-0982-11)</option>
+                    <option value="Kas Kecil Lapangan (Petty Cash Operasional)">Kas Kecil Lapangan (Petty Cash Operasional)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-semibold text-slate-700">
+                      No. Referensi / ID Transaksi <span className="text-red-500">*</span>
+                    </label>
+                    <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                      Terkunci Otomatis
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={receiptRefNumber}
+                    readOnly
+                    className="w-full border border-slate-200 bg-slate-100 rounded-lg p-2 font-mono text-slate-700 font-semibold cursor-not-allowed select-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsReceiptModalOpen(false)}
+                  className="px-3.5 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition cursor-pointer shadow-xs flex items-center gap-1.5"
+                >
+                  <Receipt className="w-4 h-4" />
+                  <span>Simpan &amp; Terbitkan Kuitansi BKM</span>
                 </button>
               </div>
             </form>
