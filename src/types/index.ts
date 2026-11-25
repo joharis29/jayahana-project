@@ -282,6 +282,7 @@ export interface BudgetRequest {
   purpose: string;
   createdAt: string;
   dueDate?: string; // Tanggal Jatuh Tempo (YYYY-MM-DD)
+  taxDetails?: TaxCalculationDetail;
   disbursedAt?: string;
   settledAt?: string;
   revisionNote?: string;
@@ -410,12 +411,89 @@ export interface OfficialReceiptBKM {
   isNonRevenue?: boolean; // Menandai mutasi internal aset lancar neraca (tidak dihitung omset)
 }
 
-// Accounting & Financial Reporting Models
+// Tax Engine Calculation Detail
+export type TaxType = 'NONE' | 'PPH_21' | 'PPH_23_RENT' | 'PPH_23_SERVICE' | 'PPH_4_2_LAND' | 'PPH_4_2_BUILDING';
+
+export interface TaxCalculationDetail {
+  taxType: TaxType;
+  taxTypeName?: string; // e.g. "PPh 4(2) Final Sewa Tanah 10%", "PPh 23 Sewa Barang 2%", "PPh 23 Jasa 2%", "PPh 21 Tenaga Kerja"
+  taxPercent: number; // e.g. 10 or 2 or 5
+  dppAmount: number;
+  taxAmount: number;
+  hasPpn: boolean;
+  isPpnIncluded: boolean;
+  ppnPercent: number; // e.g. 11
+  ppnAmount: number;
+  grossAmount: number;
+  netPayableToVendor: number;
+  taxWithheldPayable: number;
+  targetTaxAccount: string; // e.g. "2-4007 Hutang Pajak PPH Psl 4 ayat 2" | "2-4004 Hutang Pajak PPH 23"
+}
+
+// Accounting & Financial Reporting Models based on JAYAHANA 2026.xlsm
 export interface AccountCOA {
   code: string;
   name: string;
   type: 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';
+  category: 'ASET_LANCAR' | 'ASET_TETAP' | 'ASET_LAINNYA' | 'KEWAJIBAN_PENDEK' | 'KEWAJIBAN_PANJANG' | 'EKUITAS' | 'PENDAPATAN' | 'HPP_PROYEK' | 'BEBAN_OPERASIONAL' | 'PENDAPATAN_LAIN' | 'BEBAN_LAIN';
+  normalBalance: 'Debit' | 'Kredit';
+  isHeader?: boolean;
+  initialBalance: number;
   balance: number;
+}
+
+export interface JournalLine {
+  id: string;
+  accountCode: string;
+  accountName: string;
+  debit: number;
+  credit: number;
+}
+
+export interface JournalRecord {
+  id: string;
+  voucherNumber: string; // e.g. "001-BO2601" or "JV-2026-11-001"
+  date: string;
+  month: number;
+  referenceNumber: string; // No. Ref Dokumen (BKK, BKM, INV, SPK)
+  description: string;
+  unit: BusinessUnit;
+  lines: JournalLine[];
+  isAdjustment?: boolean; // True jika Jurnal Penyesuaian (AJP)
+  postedAt?: string;
+}
+
+export interface FixedAsset {
+  id: string;
+  assetCode: string;
+  name: string;
+  acquisitionDate: string;
+  usefulLifeMonths: number;
+  acquisitionCost: number;
+  salvageValue?: number;
+  accumulatedDepreciation: number;
+  monthlyDepreciation: number;
+  bookValue: number;
+  depreciationAccount: string; // e.g. "6-4015 Beban Penyusutan Peralatan & Aset"
+  accumulatedAccount: string; // e.g. "1-7005 Akumulasi Penyusutan Peralatan"
+  unitLocation?: string;
+}
+
+export interface WorksheetRow {
+  accountCode: string;
+  accountName: string;
+  normalBalance: 'Debit' | 'Kredit';
+  category: string;
+  trialDebit: number;
+  trialCredit: number;
+  adjDebit: number;
+  adjCredit: number;
+  adjTrialDebit: number;
+  adjTrialCredit: number;
+  incomeDebit: number;
+  incomeCredit: number;
+  balanceDebit: number;
+  balanceCredit: number;
 }
 
 export interface JournalEntry {

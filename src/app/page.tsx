@@ -79,7 +79,8 @@ import {
   type PendingApprovalItem
 } from "@/lib/constants";
 import { formatRupiah, formatDateIndo } from "@/lib/utils";
-import { BusinessUnit, BudgetRequest, RequestType, UserRole, FinancialTransaction, ProcurementItem, SalesInvoice, OfficialReceiptBKM, InvoicePaymentRecord, SITE_DIVISIONS, EXPENSE_CATEGORIES, ExpenseCategory, RequestAttachment, DisbursementRecord, ApprovalStatus, LPJApprovalStatus, RealizationRecord, RealizationItem } from "@/types";
+import { BusinessUnit, BudgetRequest, RequestType, UserRole, FinancialTransaction, ProcurementItem, SalesInvoice, OfficialReceiptBKM, InvoicePaymentRecord, SITE_DIVISIONS, EXPENSE_CATEGORIES, ExpenseCategory, RequestAttachment, DisbursementRecord, ApprovalStatus, LPJApprovalStatus, RealizationRecord, RealizationItem, TaxType, TaxCalculationDetail } from "@/types";
+import { AccountingSuite } from "@/components/AccountingSuite";
 
 const MONTH_NAMES = [
   { num: 1, name: "Januari", short: "Jan" },
@@ -1079,6 +1080,92 @@ export default function DashboardPage() {
   }, [newUnit, newCategory, requesterName, requestDate, dueDate, isRequestItemsValid, requestItemsSubTotal, newPurpose, newType, vendorName, attachments]);
 
   const isFormValid = missingFields.length === 0;
+
+  // Smart Tax Engine State (Perhitungan Pajak Otomatis Jayahana 2026)
+  const [taxType, setTaxType] = useState<TaxType>("NONE");
+  const [hasPpn, setHasPpn] = useState<boolean>(false);
+  const [isPpnIncluded, setIsPpnIncluded] = useState<boolean>(false);
+
+  // Perhitungan Pajak Otomatis (PPh & PPN)
+  const rawGrossAmount = requestItemsSubTotal > 0 ? requestItemsSubTotal : parseFloat(newAmount || "0");
+
+  const computedTaxDetails: TaxCalculationDetail | undefined = useMemo(() => {
+    if (rawGrossAmount <= 0) return undefined;
+    if (!hasPpn && taxType === "NONE") return undefined;
+
+    let dpp = rawGrossAmount;
+    let ppnRate = 0;
+    let ppnAmount = 0;
+
+    if (hasPpn) {
+      ppnRate = 11;
+      if (isPpnIncluded) {
+        dpp = Math.round(rawGrossAmount / 1.11);
+        ppnAmount = rawGrossAmount - dpp;
+      } else {
+        dpp = rawGrossAmount;
+        ppnAmount = Math.round(dpp * 0.11);
+      }
+    }
+
+    let pphRate = 0;
+    let pphTypeLabel = "Bebas PPh";
+    let withholdingAccount = "";
+
+    switch (taxType) {
+      case "PPH_4_2_LAND":
+        pphRate = 10;
+        pphTypeLabel = "PPh Final Ps. 4(2) - Sewa Lahan / Tanah (10%)";
+        withholdingAccount = "2-4007 Hutang Pajak PPH Psl 4 ayat 2";
+        break;
+      case "PPH_4_2_BUILDING":
+        pphRate = 10;
+        pphTypeLabel = "PPh Final Ps. 4(2) - Sewa Bangunan / Gedung / Mess (10%)";
+        withholdingAccount = "2-4007 Hutang Pajak PPH Psl 4 ayat 2";
+        break;
+      case "PPH_23_RENT":
+        pphRate = 2;
+        pphTypeLabel = "PPh Ps. 23 - Sewa Kendaraan / Mobil / Alat (2%)";
+        withholdingAccount = "2-4004 Hutang Pajak PPH 23";
+        break;
+      case "PPH_23_SERVICE":
+        pphRate = 2;
+        pphTypeLabel = "PPh Ps. 23 - Sewa Jasa / Teknik / Subkon (2%)";
+        withholdingAccount = "2-4004 Hutang Pajak PPH 23";
+        break;
+      case "PPH_21":
+        pphRate = 5;
+        pphTypeLabel = "PPh Ps. 21 - Upah Tenaga Kerja Lepas / Tukang / Mandor (5%)";
+        withholdingAccount = "2-4002 Hutang Pajak PPH 21";
+        break;
+      default:
+        pphRate = 0;
+        pphTypeLabel = "Tanpa Potongan PPh";
+        withholdingAccount = "";
+    }
+
+    const taxAmount = Math.round(dpp * (pphRate / 100));
+    const netPayableToVendor = isPpnIncluded 
+      ? (rawGrossAmount - taxAmount)
+      : (dpp + ppnAmount - taxAmount);
+    const grossAmount = isPpnIncluded ? rawGrossAmount : (dpp + ppnAmount);
+
+    return {
+      taxType,
+      taxTypeName: pphTypeLabel,
+      taxPercent: pphRate,
+      taxAmount,
+      hasPpn,
+      isPpnIncluded,
+      dppAmount: dpp,
+      ppnPercent: ppnRate,
+      ppnAmount,
+      grossAmount,
+      netPayableToVendor,
+      taxWithheldPayable: taxAmount,
+      targetTaxAccount: withholdingAccount,
+    };
+  }, [rawGrossAmount, hasPpn, isPpnIncluded, taxType]);
 
   // Multi-tier Approval & Disbursement Custom State
   const [isDisburseModalOpen, setIsDisburseModalOpen] = useState(false);
@@ -2246,8 +2333,14 @@ export default function DashboardPage() {
     }
 
     // Use items table total if items have values, otherwise fall back to newAmount
-    const parsedAmount = requestItemsSubTotal > 0 ? requestItemsSubTotal : parseFloat(newAmount || "0");
-    if (parsedAmount <= 0) return;
+    const rawParsed = requestItemsSubTotal > 0 ? requestItemsSubTotal : parseFloat(newAmount || "0");
+    if (rawParsed <= 0) return;
+    
+    // Sesuaikan total nilai dengan perhitungan pajak (jika exclude PPN, total komitmen = DPP + PPN)
+    const parsedAmount = computedTaxDetails && !computedTaxDetails.isPpnIncluded && computedTaxDetails.hasPpn
+      ? (computedTaxDetails.dppAmount + computedTaxDetails.ppnAmount)
+      : rawParsed;
+
     const newDocNum = `${newType === "CASH_ADVANCE" ? "CA" : "PR"}-2026-${Math.floor(100 + Math.random() * 900)}`;
 
     const firstItemDesc = requestItems.find(i => i.description.trim())?.description;
@@ -2264,6 +2357,7 @@ export default function DashboardPage() {
       requesterRole: newType === "CASH_ADVANCE" ? "FIELD_TECH" : "SITE_SPV",
       requestType: newType,
       totalAmount: parsedAmount,
+      taxDetails: computedTaxDetails,
       status: "PENDING_AUDIT",
       purpose: newPurpose || autoTitle,
       createdAt: requestDate,
@@ -2307,6 +2401,7 @@ export default function DashboardPage() {
           unit: newUnit,
           category: newCategory,
           totalAmount: parsedAmount,
+          taxDetails: computedTaxDetails,
           status: "PENDING_AUDIT",
           purpose: newPurpose || autoTitle,
           createdAt: requestDate,
@@ -2356,6 +2451,9 @@ export default function DashboardPage() {
     setDueDate(nextWeek.toISOString().split("T")[0]);
     setNewUnit("Rajeg & Pasar Kemis");
     setNewCategory("Akomodasi");
+    setTaxType("NONE");
+    setHasPpn(false);
+    setIsPpnIncluded(false);
     setAttachments([]);
     setRequestItems([{ id: "ri-1", description: "", quantity: 1, unit: "Pcs", unitPrice: 0, discount: 0 }]);
   };
@@ -2491,12 +2589,15 @@ export default function DashboardPage() {
             onClick={() => setActiveTab("reports")}
             className={`py-3 px-3.5 border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
               activeTab === "reports"
-                ? "border-blue-600 text-blue-700 font-bold"
+                ? "border-indigo-600 text-indigo-700 font-bold"
                 : "border-transparent text-slate-600 hover:text-slate-900"
             }`}
           >
-            <FileSpreadsheet className="w-4 h-4" />
-            Laporan Keuangan & Laba Rugi
+            <FileSpreadsheet className="w-4 h-4 text-indigo-600" />
+            Buku Besar &amp; Siklus Akuntansi
+            <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-100 text-indigo-800 font-bold">
+              10 Modul Excel 2026
+            </span>
           </button>
         </div>
       </header>
@@ -7210,86 +7311,13 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* TAB 5: REPORTS */}
+        {/* TAB 5: REPORTS & COMPLETE ACCOUNTING SUITE */}
         {activeTab === "reports" && (
-          <div className="space-y-6">
-            <div className="bg-white p-4 rounded-xl border border-slate-200">
-              <h2 className="font-bold text-slate-900 text-base">Laporan Keuangan & Laba Rugi Komprehensif</h2>
-              <p className="text-xs text-slate-500">
-                Penyajian performa finansial per unit usaha (Jasa Mekanik & Elektronik vs Starlite FTTH).
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Laba Rugi Proyek ME */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="w-5 h-5 text-blue-600" />
-                    <h3 className="font-bold text-slate-900 text-sm">Unit Jasa Mekanik & Elektronik</h3>
-                  </div>
-                  <span className="text-xs font-mono text-slate-400">Periode 2026 YTD</span>
-                </div>
-
-                <div className="mt-4 space-y-2.5 text-xs">
-                  <div className="flex justify-between font-semibold text-slate-800">
-                    <span>Pendapatan Termin Kontrak ME</span>
-                    <span className="text-emerald-600 font-bold">Rp 380.000.000</span>
-                  </div>
-                  <div className="pl-3 space-y-1.5 text-slate-600 border-l-2 border-slate-100">
-                    <div className="flex justify-between">
-                      <span>Beban Material & Kabel</span>
-                      <span>(Rp 145.000.000)</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Beban Teknisi & Subkon Lapangan</span>
-                      <span>(Rp 72.500.000)</span>
-                    </div>
-                  </div>
-                  <div className="pt-2 border-t border-slate-200 flex justify-between font-bold text-slate-900 text-sm">
-                    <span>Laba Kotor Operasional ME</span>
-                    <span className="text-blue-700">Rp 162.500.000</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Laba Rugi Starlite FTTH */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <Wifi className="w-5 h-5 text-fuchsia-600" />
-                    <h3 className="font-bold text-slate-900 text-sm">Unit Ekspansi Starlite FTTH</h3>
-                  </div>
-                  <span className="text-xs font-mono text-slate-400">Periode 2026 YTD</span>
-                </div>
-
-                <div className="mt-4 space-y-2.5 text-xs">
-                  <div className="flex justify-between font-semibold text-slate-800">
-                    <span>Pendapatan Langganan Internet & PSB</span>
-                    <span className="text-emerald-600 font-bold">Rp 34.800.000</span>
-                  </div>
-                  <div className="pl-3 space-y-1.5 text-slate-600 border-l-2 border-slate-100">
-                    <div className="flex justify-between">
-                      <span>Beban Bandwidth Upstream</span>
-                      <span>(Rp 8.500.000)</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Operasional Pemeliharaan Jaringan</span>
-                      <span>(Rp 4.200.000)</span>
-                    </div>
-                    <div className="flex justify-between text-slate-400">
-                      <span>Investasi Rollout OLT/ODP (Aset Capex)</span>
-                      <span>Rp 285.000.000 (Aset Neraca)</span>
-                    </div>
-                  </div>
-                  <div className="pt-2 border-t border-slate-200 flex justify-between font-bold text-slate-900 text-sm">
-                    <span>Laba Bersih Operasional Starlite</span>
-                    <span className="text-fuchsia-700">Rp 22.100.000</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <AccountingSuite 
+            salesInvoices={salesInvoices} 
+            requests={requests} 
+            officialReceipts={officialReceipts} 
+          />
         )}
       </main>
 
@@ -7395,6 +7423,15 @@ export default function DashboardPage() {
                       setNewCategory(val);
                       if (val === "Perlengkapan & Peralatan") {
                         setNewType("PURCHASE_REQUISITION");
+                        setHasPpn(true);
+                        setIsPpnIncluded(false);
+                        setTaxType("NONE");
+                      } else if (val === "Sewa") {
+                        setNewType("CASH_ADVANCE");
+                        setTaxType("PPH_4_2_BUILDING");
+                      } else if (val === "Tukang" || val === "Mandor" || val === "Upah") {
+                        setNewType("CASH_ADVANCE");
+                        setTaxType("PPH_21");
                       } else {
                         setNewType("CASH_ADVANCE");
                       }
@@ -7645,6 +7682,139 @@ export default function DashboardPage() {
                 />
               </div>
 
+              {/* PENGATURAN PERPAJAKAN OTOMATIS (SMART TAX ENGINE) */}
+              <div className="p-3.5 bg-gradient-to-br from-slate-50 to-indigo-50/40 border border-indigo-200 rounded-xl space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-indigo-100">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                    <span className="font-bold text-indigo-950 text-xs">Pengaturan Perpajakan (Smart Tax Engine)</span>
+                  </div>
+                  <span className="text-[10px] font-medium text-indigo-700 bg-indigo-100/70 px-2 py-0.5 rounded-full border border-indigo-200">
+                    Otomatisasi PPh &amp; PPN 11%
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Pilihan Potongan PPh */}
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
+                      Potongan Pajak Penghasilan (PPh):
+                    </label>
+                    <select
+                      value={taxType}
+                      onChange={(e) => setTaxType(e.target.value as TaxType)}
+                      className="w-full border border-slate-300 rounded-lg p-2 bg-white text-xs focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="NONE">Bebas PPh / Non-Objek Pemotongan</option>
+                      <option value="PPH_4_2_LAND">Sewa Lahan / Tanah — PPh Final 10% Ps. 4(2)</option>
+                      <option value="PPH_4_2_BUILDING">Sewa Gedung / Bangunan / Mess — PPh Final 10% Ps. 4(2)</option>
+                      <option value="PPH_23_RENT">Sewa Kendaraan / Transportasi / Alat — PPh 23 (2%)</option>
+                      <option value="PPH_23_SERVICE">Sewa Jasa / Jasa Teknik / Konsultan / Subkon — PPh 23 (2%)</option>
+                      <option value="PPH_21">Upah Borongan / Mandor / Tukang Lepas — PPh 21 (5%)</option>
+                    </select>
+                    <span className="text-[10px] text-slate-500 mt-1 block">
+                      Potongan PPh akan disetor oleh kasir ke kas negara (akun 2-400x).
+                    </span>
+                  </div>
+
+                  {/* Pilihan PPN 11% */}
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
+                      Pajak Pertambahan Nilai (PPN 11%):
+                    </label>
+                    <div className="space-y-2 bg-white p-2.5 rounded-lg border border-slate-200">
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-800">
+                        <input
+                          type="checkbox"
+                          checked={hasPpn}
+                          onChange={(e) => {
+                            setHasPpn(e.target.checked);
+                            if (!e.target.checked) setIsPpnIncluded(false);
+                          }}
+                          className="rounded text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer"
+                        />
+                        <span>Kenakan PPN 11% (Faktur Pajak Masukan)</span>
+                      </label>
+
+                      {hasPpn && (
+                        <div className="pl-5 pt-1 border-t border-slate-100 flex items-center gap-4">
+                          <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-700">
+                            <input
+                              type="radio"
+                              name="ppnMode"
+                              checked={!isPpnIncluded}
+                              onChange={() => setIsPpnIncluded(false)}
+                              className="text-indigo-600 focus:ring-indigo-500 h-3 w-3 cursor-pointer"
+                            />
+                            <span>Exclude PPN (DPP + 11%)</span>
+                          </label>
+                          <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-700">
+                            <input
+                              type="radio"
+                              name="ppnMode"
+                              checked={isPpnIncluded}
+                              onChange={() => setIsPpnIncluded(true)}
+                              className="text-indigo-600 focus:ring-indigo-500 h-3 w-3 cursor-pointer"
+                            />
+                            <span>Include PPN (Harga include 11%)</span>
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Live Tax Breakdown Card */}
+                {computedTaxDetails && (
+                  <div className="p-3 bg-white border border-indigo-100 rounded-lg shadow-2xs space-y-2 animate-in fade-in">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-indigo-900 border-b border-indigo-50 pb-1.5">
+                      <span>Rincian Perhitungan Pajak &amp; Alokasi Kas Bersih</span>
+                      <span className="font-mono text-indigo-600">PPN: {computedTaxDetails.hasPpn ? (computedTaxDetails.isPpnIncluded ? 'Include 11%' : 'Exclude 11%') : 'Tidak'} | PPh: {computedTaxDetails.taxPercent}%</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                      <div className="bg-slate-50 p-2 rounded border border-slate-200">
+                        <span className="text-[10px] text-slate-500 block">Dasar Pajak (DPP)</span>
+                        <span className="font-bold text-slate-800 font-mono text-xs">
+                          Rp {computedTaxDetails.dppAmount.toLocaleString("id-ID")}
+                        </span>
+                      </div>
+                      <div className="bg-blue-50 p-2 rounded border border-blue-200">
+                        <span className="text-[10px] text-blue-600 block">PPN Masukan (11%)</span>
+                        <span className="font-bold text-blue-800 font-mono text-xs">
+                          {computedTaxDetails.hasPpn ? `Rp ${computedTaxDetails.ppnAmount.toLocaleString("id-ID")}` : "Rp 0"}
+                        </span>
+                        <span className="text-[9px] text-blue-400 block">Akun 1-8101</span>
+                      </div>
+                      <div className="bg-rose-50 p-2 rounded border border-rose-200">
+                        <span className="text-[10px] text-rose-600 block">Potongan PPh ({computedTaxDetails.taxPercent}%)</span>
+                        <span className="font-bold text-rose-800 font-mono text-xs">
+                          {computedTaxDetails.taxAmount > 0 ? `- Rp ${computedTaxDetails.taxAmount.toLocaleString("id-ID")}` : "Rp 0"}
+                        </span>
+                        <span className="text-[9px] text-rose-400 block">Disetor via Kasir</span>
+                      </div>
+                      <div className="bg-emerald-50 p-2 rounded border border-emerald-200">
+                        <span className="text-[10px] text-emerald-700 font-semibold block">Kas Bersih ke Vendor</span>
+                        <span className="font-bold text-emerald-800 font-mono text-xs">
+                          Rp {computedTaxDetails.netPayableToVendor.toLocaleString("id-ID")}
+                        </span>
+                        <span className="text-[9px] text-emerald-600 block">Transfer ke Rekening</span>
+                      </div>
+                    </div>
+
+                    <div className="text-[10px] text-slate-500 italic bg-indigo-50/50 p-1.5 rounded border border-indigo-100 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>
+                        {computedTaxDetails.hasPpn && `PPN 11% (${computedTaxDetails.isPpnIncluded ? 'Include' : 'Exclude'}): Rp ${computedTaxDetails.ppnAmount.toLocaleString('id-ID')}. `}
+                        {computedTaxDetails.taxPercent > 0
+                          ? `${computedTaxDetails.taxTypeName}: Rp ${computedTaxDetails.taxAmount.toLocaleString('id-ID')}. Potongan disetor via kasir ke kas negara (${computedTaxDetails.targetTaxAccount}).`
+                          : 'Non-objek pemotongan PPh.'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* LAMPIRAN (FILE PDF, GAMBAR, / AMBIL FOTO KAMERA LANGSUNG) */}
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
                 <div className="flex items-center justify-between">
@@ -7802,9 +7972,24 @@ export default function DashboardPage() {
               )}
 
               <div className="pt-3 flex justify-between items-center border-t border-slate-100">
-                <span className="text-slate-500 font-medium">
-                  Total Pengajuan: <span className="font-bold text-slate-800 font-mono">Rp {requestItemsSubTotal.toLocaleString("id-ID")}</span>
-                </span>
+                <div className="flex flex-col">
+                  <span className="text-slate-500 font-medium text-xs">
+                    Total Komitmen Anggaran:{" "}
+                    <span className="font-bold text-slate-800 font-mono text-sm">
+                      Rp {(computedTaxDetails && !computedTaxDetails.isPpnIncluded && computedTaxDetails.hasPpn
+                        ? (computedTaxDetails.dppAmount + computedTaxDetails.ppnAmount)
+                        : requestItemsSubTotal).toLocaleString("id-ID")}
+                    </span>
+                  </span>
+                  {computedTaxDetails && (
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      Net Transfer Vendor: <span className="font-semibold text-emerald-700">Rp {computedTaxDetails.netPayableToVendor.toLocaleString("id-ID")}</span>
+                      {computedTaxDetails.taxAmount > 0 && (
+                        <span> | Potongan PPh: <span className="font-semibold text-rose-700">Rp {computedTaxDetails.taxAmount.toLocaleString("id-ID")}</span></span>
+                      )}
+                    </span>
+                  )}
+                </div>
                 <div className="flex gap-2">
                   <button
                     type="button"
