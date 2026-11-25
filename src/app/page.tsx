@@ -1228,15 +1228,42 @@ export default function DashboardPage() {
   const [incomeCategory, setIncomeCategory] = useState("Termin Kontrak Jasa ME");
   const [incomePayer, setIncomePayer] = useState("");
 
-  // Filtered Financial Calculation based on Period
+  // Filtered Financial Calculation based on Period (Terintegrasi Real-Time dengan Pencairan & Penerimaan)
   const periodData = useMemo(() => {
+    // Dynamic integration of live disbursed expenses
+    const liveDisbursed = requests.filter(r => r.status === "DISBURSED" || r.status === "COMPLETED");
+    const liveDisbursedTotal = liveDisbursed.reduce((acc, r) => acc + (r.taxDetails?.netPayableToVendor || r.totalAmount), 0);
+    const liveDisbursedME = liveDisbursed
+      .filter(r => r.unit === "ME_CORE" || (!r.unit.startsWith("HO") && r.unit !== "STARLITE_FTTH"))
+      .reduce((acc, r) => acc + (r.taxDetails?.dppAmount || r.totalAmount), 0);
+    const liveDisbursedFTTH = liveDisbursed
+      .filter(r => r.unit === "STARLITE_FTTH")
+      .reduce((acc, r) => acc + (r.taxDetails?.dppAmount || r.totalAmount), 0);
+    const liveDisbursedHO = liveDisbursed
+      .filter(r => r.unit.startsWith("HO") || r.unit === "OVERHEAD_OPERASIONAL")
+      .reduce((acc, r) => acc + (r.taxDetails?.dppAmount || r.totalAmount), 0);
+
+    // Dynamic integration of live revenue receipts
+    const livePaidInvoices = salesInvoices.reduce((acc, inv) => acc + (inv.paidAmount || 0), 0);
+    const liveOtherIncome = officialReceipts
+      .filter(r => r.receiptType === "OTHER_INCOME")
+      .reduce((acc, r) => acc + r.amountReceived, 0);
+    const liveIncomeTotal = livePaidInvoices + liveOtherIncome;
+
     if (filterPeriodType === "YEARLY") {
       const yearRows = HISTORICAL_FINANCIAL_DATA.filter((d) => d.year === selectedYear);
-      const totalIncome = yearRows.reduce((acc, row) => acc + row.income, 0);
-      const totalExpense = yearRows.reduce((acc, row) => acc + row.expense, 0);
-      const meExpense = yearRows.reduce((acc, row) => acc + row.meExpense, 0);
-      const ftthExpense = yearRows.reduce((acc, row) => acc + row.ftthExpense, 0);
-      const overheadExpense = yearRows.reduce((acc, row) => acc + row.overheadExpense, 0);
+      const baseIncome = yearRows.reduce((acc, row) => acc + row.income, 0);
+      const baseExpense = yearRows.reduce((acc, row) => acc + row.expense, 0);
+      const baseME = yearRows.reduce((acc, row) => acc + row.meExpense, 0);
+      const baseFTTH = yearRows.reduce((acc, row) => acc + row.ftthExpense, 0);
+      const baseHO = yearRows.reduce((acc, row) => acc + row.overheadExpense, 0);
+
+      const totalIncome = baseIncome + liveIncomeTotal;
+      const totalExpense = baseExpense + liveDisbursedTotal;
+      const meExpense = baseME + liveDisbursedME;
+      const ftthExpense = baseFTTH + liveDisbursedFTTH;
+      const overheadExpense = baseHO + liveDisbursedHO;
+
       const netCashFlow = totalIncome - totalExpense;
       const profitMargin = totalIncome > 0 ? (netCashFlow / totalIncome) * 100 : 0;
 
@@ -1266,8 +1293,13 @@ export default function DashboardPage() {
         overheadExpense: 16000000,
       };
 
-      const totalIncome = monthRow.income;
-      const totalExpense = monthRow.expense;
+      // Jika bulan yang dipilih adalah bulan aktif berjalan (November 2026), masukkan transaksi live
+      const isCurrentMonth = selectedYear === 2026 && selectedMonth === 11;
+      const totalIncome = monthRow.income + (isCurrentMonth ? liveIncomeTotal : 0);
+      const totalExpense = monthRow.expense + (isCurrentMonth ? liveDisbursedTotal : 0);
+      const meExpense = monthRow.meExpense + (isCurrentMonth ? liveDisbursedME : 0);
+      const ftthExpense = monthRow.ftthExpense + (isCurrentMonth ? liveDisbursedFTTH : 0);
+      const overheadExpense = monthRow.overheadExpense + (isCurrentMonth ? liveDisbursedHO : 0);
       const netCashFlow = totalIncome - totalExpense;
       const profitMargin = totalIncome > 0 ? (netCashFlow / totalIncome) * 100 : 0;
       const monthName = MONTH_NAMES.find((m) => m.num === selectedMonth)?.name || "November";
@@ -1275,16 +1307,16 @@ export default function DashboardPage() {
       return {
         totalIncome,
         totalExpense,
-        meExpense: monthRow.meExpense,
-        ftthExpense: monthRow.ftthExpense,
-        overheadExpense: monthRow.overheadExpense,
+        meExpense,
+        ftthExpense,
+        overheadExpense,
         netCashFlow,
         profitMargin,
         monthlySeries: [monthRow],
         periodLabel: `${monthName} ${selectedYear}`,
       };
     }
-  }, [filterPeriodType, selectedYear, selectedMonth]);
+  }, [filterPeriodType, selectedYear, selectedMonth, requests, salesInvoices, officialReceipts]);
 
   // Days in selected month & month name
   const daysInMonth = useMemo(() => {

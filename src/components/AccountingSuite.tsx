@@ -26,7 +26,11 @@ import {
   Info,
   ShieldCheck,
   Package,
-  Clock
+  Clock,
+  ChevronDown,
+  ChevronUp,
+  RotateCcw,
+  X
 } from "lucide-react";
 import { formatRupiah, formatDateIndo } from "@/lib/utils";
 import { 
@@ -66,18 +70,387 @@ export function AccountingSuite({ salesInvoices, requests, officialReceipts }: A
   const [coaSearch, setCoaSearch] = useState("");
   const [coaCategoryFilter, setCoaCategoryFilter] = useState("ALL");
 
-  // State for Buku Besar (Ledger)
+  // ==========================================
+  // STATE FILTER & SORT BUKU BESAR (LEDGER)
+  // ==========================================
+  type LedgerSortField = "date" | "reference" | "description" | "counterAccount" | "debit" | "credit" | "balance";
   const [selectedLedgerAccount, setSelectedLedgerAccount] = useState("1-1003"); // Default Bank BCA-1
-  const [ledgerMonthFilter, setLedgerMonthFilter] = useState("ALL");
+  const [ledgerStartDate, setLedgerStartDate] = useState("");
+  const [ledgerEndDate, setLedgerEndDate] = useState("");
+  const [ledgerCounterFilter, setLedgerCounterFilter] = useState("ALL");
+  const [ledgerRefFilter, setLedgerRefFilter] = useState("");
+  const [ledgerMinAmount, setLedgerMinAmount] = useState("");
+  const [ledgerMaxAmount, setLedgerMaxAmount] = useState("");
+  const [ledgerSearch, setLedgerSearch] = useState("");
+  const [ledgerSortField, setLedgerSortField] = useState<LedgerSortField | null>(null);
+  const [ledgerSortOrder, setLedgerSortOrder] = useState<"ASC" | "DESC" | null>(null);
 
-  // State for Jurnal
+  const handleToggleLedgerSort = (field: LedgerSortField) => {
+    if (ledgerSortField !== field) {
+      setLedgerSortField(field);
+      setLedgerSortOrder("ASC");
+    } else if (ledgerSortOrder === "ASC") {
+      setLedgerSortOrder("DESC");
+    } else {
+      setLedgerSortField(null);
+      setLedgerSortOrder(null);
+    }
+  };
+
+  const handleResetLedgerFilter = () => {
+    setLedgerStartDate("");
+    setLedgerEndDate("");
+    setLedgerCounterFilter("ALL");
+    setLedgerRefFilter("");
+    setLedgerMinAmount("");
+    setLedgerMaxAmount("");
+    setLedgerSearch("");
+    setLedgerSortField(null);
+    setLedgerSortOrder(null);
+  };
+
+  // ==========================================
+  // STATE FILTER & SORT JURNAL UMUM & AJP
+  // ==========================================
+  type JournalSortField = "date" | "voucherNumber" | "referenceNumber" | "description" | "totalDebit";
   const [journalTypeFilter, setJournalTypeFilter] = useState<"ALL" | "GENERAL" | "ADJUSTMENT">("ALL");
+  const [journalStartDate, setJournalStartDate] = useState("");
+  const [journalEndDate, setJournalEndDate] = useState("");
+  const [journalAccountFilter, setJournalAccountFilter] = useState("ALL");
+  const [journalRefFilter, setJournalRefFilter] = useState("");
+  const [journalMinAmount, setJournalMinAmount] = useState("");
+  const [journalMaxAmount, setJournalMaxAmount] = useState("");
   const [journalSearch, setJournalSearch] = useState("");
+  const [journalSortField, setJournalSortField] = useState<JournalSortField | null>(null);
+  const [journalSortOrder, setJournalSortOrder] = useState<"ASC" | "DESC" | null>(null);
+
+  const handleToggleJournalSort = (field: JournalSortField) => {
+    if (journalSortField !== field) {
+      setJournalSortField(field);
+      setJournalSortOrder("ASC");
+    } else if (journalSortOrder === "ASC") {
+      setJournalSortOrder("DESC");
+    } else {
+      setJournalSortField(null);
+      setJournalSortOrder(null);
+    }
+  };
+
+  const handleResetJournalFilter = () => {
+    setJournalTypeFilter("ALL");
+    setJournalStartDate("");
+    setJournalEndDate("");
+    setJournalAccountFilter("ALL");
+    setJournalRefFilter("");
+    setJournalMinAmount("");
+    setJournalMaxAmount("");
+    setJournalSearch("");
+    setJournalSortField(null);
+    setJournalSortOrder(null);
+  };
+
+  // ==========================================
+  // STATE FILTER & SORT ASET TETAP (ASSETS)
+  // ==========================================
+  type AssetSortField = "assetCode" | "name" | "acquisitionDate" | "usefulLifeMonths" | "acquisitionCost" | "monthlyDepreciation" | "accumulatedDepreciation" | "bookValue";
+  const [assetSearch, setAssetSearch] = useState("");
+  const [assetUsefulLifeFilter, setAssetUsefulLifeFilter] = useState("ALL");
+  const [assetStartDate, setAssetStartDate] = useState("");
+  const [assetEndDate, setAssetEndDate] = useState("");
+  const [assetMinCost, setAssetMinCost] = useState("");
+  const [assetMaxCost, setAssetMaxCost] = useState("");
+  const [assetSortField, setAssetSortField] = useState<AssetSortField | null>(null);
+  const [assetSortOrder, setAssetSortOrder] = useState<"ASC" | "DESC" | null>(null);
+
+  const handleToggleAssetSort = (field: AssetSortField) => {
+    if (assetSortField !== field) {
+      setAssetSortField(field);
+      setAssetSortOrder("ASC");
+    } else if (assetSortOrder === "ASC") {
+      setAssetSortOrder("DESC");
+    } else {
+      setAssetSortField(null);
+      setAssetSortOrder(null);
+    }
+  };
+
+  const handleResetAssetFilter = () => {
+    setAssetSearch("");
+    setAssetUsefulLifeFilter("ALL");
+    setAssetStartDate("");
+    setAssetEndDate("");
+    setAssetMinCost("");
+    setAssetMaxCost("");
+    setAssetSortField(null);
+    setAssetSortOrder(null);
+  };
 
   // Master Data State
   const [coaList] = useState<AccountCOA[]>(JAYAHANA_COA);
   const [fixedAssets, setFixedAssets] = useState<FixedAsset[]>(JAYAHANA_FIXED_ASSETS);
-  const [journalEntries, setJournalEntries] = useState<JournalRecord[]>(JAYAHANA_JOURNAL_ENTRIES);
+
+  // =========================================================================
+  // JURNAL DINAMIS DARI TRANSAKSI RIIL (PENCAIRAN PENGELUARAN & PENERIMAAN)
+  // =========================================================================
+  const dynamicJournalEntries = useMemo<JournalRecord[]>(() => {
+    const list: JournalRecord[] = [];
+
+    // 1. Integrasi Pengeluaran (Pencairan Pengajuan Dana Kasbon & PO)
+    requests.forEach(r => {
+      if (r.status !== "DISBURSED" && r.status !== "COMPLETED") return;
+      
+      const vDate = r.disbursedAt || r.disbursement?.disbursedAt || r.createdAt;
+      const vNum = r.disbursement?.voucherNumber || `BKK-${r.requestNumber}`;
+      const vRef = r.disbursement?.transferReference || r.requestNumber;
+      
+      // Tentukan Akun Beban berdasarkan kategori & divisi
+      let expenseCode = "6-4015";
+      let expenseName = "Biaya Operasional Lapangan & Lain-lain";
+      
+      if (r.category === "Sewa") {
+        if (r.unit.startsWith("HO") || r.unit === "OVERHEAD_OPERASIONAL") {
+          expenseCode = "6-4005";
+          expenseName = "Biaya Sewa Kantor, Gedung Office & Posko";
+        } else {
+          expenseCode = "5-4005";
+          expenseName = "Biaya Sewa Alat & Site Proyek";
+        }
+      } else if (r.category === "Gaji" || r.category === "Upah" || r.category === "Tukang" || r.category === "Mandor") {
+        if (r.unit.startsWith("HO")) {
+          expenseCode = "6-3001";
+          expenseName = "Biaya Gaji Office, HR & Management";
+        } else {
+          expenseCode = "5-3001";
+          expenseName = "Biaya Gaji & Upah Teknisi Proyek";
+        }
+      } else if (r.category === "Perlengkapan & Peralatan") {
+        if (r.unit === "STARLITE_FTTH" || r.unit === "ME_CORE" || !r.unit.startsWith("HO")) {
+          expenseCode = "5-4006";
+          expenseName = "Biaya Material, Spare Part & Perlengkapan Site";
+        } else {
+          expenseCode = "6-4006";
+          expenseName = "Biaya ATK, Komputer & Perlengkapan Kantor";
+        }
+      } else if (r.category === "Akomodasi" || r.category === "Operasional Mess") {
+        expenseCode = "6-4007";
+        expenseName = "Biaya Akomodasi, Mess & Konsumsi Lapangan";
+      } else if (r.category === "Permit" || r.category === "Operasional Permit") {
+        expenseCode = "5-4008";
+        expenseName = "Biaya Perijinan, ROW & Koordinasi Lapangan";
+      }
+
+      // Tentukan Akun Kas/Bank Sumber Pencairan
+      let bankCode = "1-1003";
+      let bankName = "Bank BCA-1 No.Rek: 5726088817";
+      const src = r.disbursement?.sourceAccount || "";
+      if (src.toLowerCase().includes("mandiri")) {
+        bankCode = "1-1005";
+        bankName = "Bank Mandiri Operasional";
+      } else if (src.toLowerCase().includes("kecil") || src.toLowerCase().includes("petty")) {
+        bankCode = "1-1001";
+        bankName = "Kas Kecil Lapangan (Petty Cash)";
+      }
+
+      const dppAmount = r.taxDetails?.dppAmount || r.totalAmount;
+      const ppnAmount = r.taxDetails?.hasPpn ? r.taxDetails.ppnAmount : 0;
+      const pphAmount = r.taxDetails?.taxPercent ? r.taxDetails.taxAmount : 0;
+      const netPaid = r.taxDetails?.netPayableToVendor || r.totalAmount;
+
+      const lines: JournalLine[] = [];
+
+      // Line 1: Debit Beban (DPP)
+      lines.push({
+        id: `jl-deb-${r.id}`,
+        accountCode: expenseCode,
+        accountName: expenseName,
+        debit: dppAmount,
+        credit: 0
+      });
+
+      // Line 2: Debit PPN Masukan (jika ada)
+      if (ppnAmount > 0) {
+        lines.push({
+          id: `jl-ppn-${r.id}`,
+          accountCode: "1-8101",
+          accountName: "PPN Masukan (Pajak Masukan Dibayar)",
+          debit: ppnAmount,
+          credit: 0
+        });
+      }
+
+      // Line 3: Kredit Hutang Pajak PPh (Withholding Tax jika ada potongan)
+      if (pphAmount > 0 && r.taxDetails) {
+        let pphAccCode = "2-4004";
+        let pphAccName = "Hutang Pajak PPH 23";
+        if (r.taxDetails.taxType === "PPH_4_2_LAND" || r.taxDetails.taxType === "PPH_4_2_BUILDING") {
+          pphAccCode = "2-4007";
+          pphAccName = "Hutang Pajak PPH Psl 4 ayat 2";
+        } else if (r.taxDetails.taxType === "PPH_21") {
+          pphAccCode = "2-4002";
+          pphAccName = "Hutang Pajak PPH 21";
+        }
+        lines.push({
+          id: `jl-pph-${r.id}`,
+          accountCode: pphAccCode,
+          accountName: pphAccName,
+          debit: 0,
+          credit: pphAmount
+        });
+      }
+
+      // Line 4: Kredit Kas/Bank (Net Dibayarkan ke Vendor/Pemohon)
+      lines.push({
+        id: `jl-crd-${r.id}`,
+        accountCode: bankCode,
+        accountName: bankName,
+        debit: 0,
+        credit: netPaid
+      });
+
+      list.push({
+        id: `jrn-req-${r.id}`,
+        date: vDate,
+        month: parseInt(vDate.split("-")[1]) || 11,
+        voucherNumber: vNum,
+        referenceNumber: vRef,
+        unit: r.unit,
+        description: `Pencairan ${r.requestType === "CASH_ADVANCE" ? "Kas Bon" : "PO"}: ${r.title} (${r.unit})`,
+        lines,
+        isAdjustment: false,
+      });
+    });
+
+    // 2. Integrasi Penerimaan Pendapatan (BKM / Official Receipts)
+    officialReceipts.forEach(rec => {
+      let bankCode = "1-1003";
+      let bankName = "Bank BCA-1 No.Rek: 5726088817";
+      if (rec.bankTarget?.toLowerCase().includes("mandiri")) {
+        bankCode = "1-1005";
+        bankName = "Bank Mandiri Operasional";
+      } else if (rec.bankTarget?.toLowerCase().includes("kecil") || rec.bankTarget?.toLowerCase().includes("petty")) {
+        bankCode = "1-1001";
+        bankName = "Kas Kecil Lapangan";
+      }
+
+      const lines: JournalLine[] = [
+        {
+          id: `jl-rec-deb-${rec.id}`,
+          accountCode: bankCode,
+          accountName: bankName,
+          debit: rec.amountReceived,
+          credit: 0
+        }
+      ];
+
+      if (rec.receiptType === "SALES_INVOICE") {
+        lines.push({
+          id: `jl-rec-crd-${rec.id}`,
+          accountCode: "1-2001",
+          accountName: "Piutang Usaha Proyek & Klien",
+          debit: 0,
+          credit: rec.amountReceived
+        });
+      } else if (rec.receiptType === "INTERNAL_TRANSFER") {
+        let srcCode = "1-1001";
+        let srcName = "Kas Kecil Lapangan (Petty Cash)";
+        if (rec.sourceAccount?.toLowerCase().includes("bca")) {
+          srcCode = "1-1003";
+          srcName = "Bank BCA-1";
+        } else if (rec.sourceAccount?.toLowerCase().includes("mandiri")) {
+          srcCode = "1-1005";
+          srcName = "Bank Mandiri Operasional";
+        }
+        lines.push({
+          id: `jl-rec-crd-${rec.id}`,
+          accountCode: srcCode,
+          accountName: srcName,
+          debit: 0,
+          credit: rec.amountReceived
+        });
+      } else {
+        lines.push({
+          id: `jl-rec-crd-${rec.id}`,
+          accountCode: "4-2005",
+          accountName: "Pendapatan Lain-lain & Jasa Giro",
+          debit: 0,
+          credit: rec.amountReceived
+        });
+      }
+
+      list.push({
+        id: `jrn-rec-${rec.id}`,
+        date: rec.receivedDate,
+        month: parseInt(rec.receivedDate.split("-")[1]) || 11,
+        voucherNumber: rec.receiptNumber,
+        referenceNumber: rec.referenceNumber || rec.receiptNumber,
+        unit: "ME_CORE",
+        description: `Penerimaan Kas/Bank: ${rec.forPaymentOf || rec.clientName} (${rec.paymentMethod})`,
+        lines,
+        isAdjustment: false,
+      });
+    });
+
+    // 3. Integrasi Faktur Penjualan (Sales Invoices yang diterbitkan)
+    salesInvoices.forEach(inv => {
+      const piutangCode = inv.unit === "STARLITE_FTTH" ? "1-2002" : "1-2001";
+      const piutangName = inv.unit === "STARLITE_FTTH" ? "Piutang Usaha Starlite FTTH" : "Piutang Usaha Jasa ME";
+      const revCode = inv.unit === "STARLITE_FTTH" ? "4-2002" : "4-2001";
+      const revName = inv.unit === "STARLITE_FTTH" ? "Pendapatan Internet & PSB Starlite" : "Pendapatan Kontrak Termin ME";
+
+      const lines: JournalLine[] = [];
+      lines.push({
+        id: `jl-inv-ar-${inv.id}`,
+        accountCode: piutangCode,
+        accountName: piutangName,
+        debit: inv.totalAmount,
+        credit: 0
+      });
+      if (inv.pph23Amount && inv.pph23Amount > 0) {
+        lines.push({
+          id: `jl-inv-pph-${inv.id}`,
+          accountCode: "1-8104",
+          accountName: "PPh 23 Dibayar Dimuka (Prepaid Tax)",
+          debit: inv.pph23Amount,
+          credit: 0
+        });
+      }
+      lines.push({
+        id: `jl-inv-rev-${inv.id}`,
+        accountCode: revCode,
+        accountName: revName,
+        debit: 0,
+        credit: inv.dppAmount
+      });
+      if (inv.ppnAmount > 0) {
+        lines.push({
+          id: `jl-inv-ppn-${inv.id}`,
+          accountCode: "2-4001",
+          accountName: "PPN Keluaran (Pajak Keluaran Terutang)",
+          debit: 0,
+          credit: inv.ppnAmount
+        });
+      }
+
+      list.push({
+        id: `jrn-inv-${inv.id}`,
+        date: inv.invoiceDate,
+        month: parseInt(inv.invoiceDate.split("-")[1]) || 11,
+        voucherNumber: inv.invoiceNumber,
+        referenceNumber: inv.contractNumber,
+        unit: inv.unit,
+        description: `Faktur Penjualan: ${inv.title} (${inv.clientName})`,
+        lines,
+        isAdjustment: false,
+      });
+    });
+
+    return list;
+  }, [requests, officialReceipts, salesInvoices]);
+
+  // Gabungkan semua jurnal (Dinamis dari sistem + Master JAYAHANA 2026.xlsm)
+  const allJournalEntries = useMemo<JournalRecord[]>(() => {
+    return [...dynamicJournalEntries, ...JAYAHANA_JOURNAL_ENTRIES];
+  }, [dynamicJournalEntries]);
 
   // Perhitungan Dinamis Pendapatan, HPP, dan Beban Operasional dari Transaksi
   const metrics = useMemo(() => {
@@ -262,8 +635,26 @@ export function AccountingSuite({ salesInvoices, requests, officialReceipts }: A
     return coaList.find(c => c.code === selectedLedgerAccount) || coaList[0];
   }, [coaList, selectedLedgerAccount]);
 
-  const ledgerMutations = useMemo(() => {
+  // List lawan akun yang pernah bertransaksi dengan akun ini (untuk dropdown filter lawan akun)
+  const availableCounterAccounts = useMemo(() => {
+    const set = new Set<string>();
+    allJournalEntries.forEach(jrn => {
+      const hasThisAcc = jrn.lines.some(l => l.accountCode === selectedLedgerAccount);
+      if (hasThisAcc) {
+        jrn.lines.forEach(l => {
+          if (l.accountCode !== selectedLedgerAccount) {
+            set.add(l.accountName);
+          }
+        });
+      }
+    });
+    return Array.from(set);
+  }, [allJournalEntries, selectedLedgerAccount]);
+
+  // Seluruh mutasi kronologis untuk menghitung saldo berjalan akun buku besar yang dipilih
+  const baseLedgerMutations = useMemo(() => {
     const records: Array<{
+      id: string;
       date: string;
       reference: string;
       description: string;
@@ -275,8 +666,11 @@ export function AccountingSuite({ salesInvoices, requests, officialReceipts }: A
 
     let currentBalance = currentLedgerCOA.initialBalance || 0;
 
-    journalEntries.forEach(jrn => {
-      jrn.lines.forEach(line => {
+    // Urutkan jurnal secara kronologis dari tanggal terlama ke terbaru untuk saldo berjalan yang akurat
+    const chronologicalJournals = [...allJournalEntries].sort((a, b) => a.date.localeCompare(b.date));
+
+    chronologicalJournals.forEach(jrn => {
+      jrn.lines.forEach((line, lIdx) => {
         if (line.accountCode === selectedLedgerAccount) {
           const counter = jrn.lines.find(l => l.accountCode !== selectedLedgerAccount)?.accountName || "Kas & Bank";
           if (currentLedgerCOA.normalBalance === "Debit") {
@@ -285,8 +679,9 @@ export function AccountingSuite({ salesInvoices, requests, officialReceipts }: A
             currentBalance += (line.credit - line.debit);
           }
           records.push({
+            id: `${jrn.id}-${lIdx}`,
             date: jrn.date,
-            reference: jrn.voucherNumber || jrn.referenceNumber,
+            reference: jrn.voucherNumber || jrn.referenceNumber || "-",
             description: jrn.description,
             counterAccount: counter,
             debit: line.debit,
@@ -298,7 +693,162 @@ export function AccountingSuite({ salesInvoices, requests, officialReceipts }: A
     });
 
     return records;
-  }, [journalEntries, selectedLedgerAccount, currentLedgerCOA]);
+  }, [allJournalEntries, selectedLedgerAccount, currentLedgerCOA]);
+
+  // Filter & Sort Mutasi Buku Besar (General Ledger)
+  const filteredAndSortedLedgerMutations = useMemo(() => {
+    let result = baseLedgerMutations.filter(m => {
+      if (ledgerStartDate && m.date < ledgerStartDate) return false;
+      if (ledgerEndDate && m.date > ledgerEndDate) return false;
+      if (ledgerCounterFilter !== "ALL" && !m.counterAccount.toLowerCase().includes(ledgerCounterFilter.toLowerCase())) return false;
+      if (ledgerRefFilter.trim() && !m.reference.toLowerCase().includes(ledgerRefFilter.toLowerCase())) return false;
+      
+      const minVal = parseFloat(ledgerMinAmount);
+      const rowMax = Math.max(m.debit, m.credit);
+      if (!isNaN(minVal) && rowMax < minVal) return false;
+      const maxVal = parseFloat(ledgerMaxAmount);
+      if (!isNaN(maxVal) && rowMax > maxVal) return false;
+
+      if (ledgerSearch.trim()) {
+        const q = ledgerSearch.toLowerCase();
+        const matchDesc = m.description.toLowerCase().includes(q);
+        const matchRef = m.reference.toLowerCase().includes(q);
+        const matchCounter = m.counterAccount.toLowerCase().includes(q);
+        if (!matchDesc && !matchRef && !matchCounter) return false;
+      }
+      return true;
+    });
+
+    if (ledgerSortField && ledgerSortOrder) {
+      result = [...result].sort((a, b) => {
+        const valA = a[ledgerSortField];
+        const valB = b[ledgerSortField];
+        if (typeof valA === "number" && typeof valB === "number") {
+          return ledgerSortOrder === "ASC" ? valA - valB : valB - valA;
+        }
+        const strA = String(valA || "").toLowerCase();
+        const strB = String(valB || "").toLowerCase();
+        if (strA < strB) return ledgerSortOrder === "ASC" ? -1 : 1;
+        if (strA > strB) return ledgerSortOrder === "ASC" ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [baseLedgerMutations, ledgerStartDate, ledgerEndDate, ledgerCounterFilter, ledgerRefFilter, ledgerMinAmount, ledgerMaxAmount, ledgerSearch, ledgerSortField, ledgerSortOrder]);
+
+  // Filter & Sort Jurnal Transaksi (Umum & AJP)
+  const filteredAndSortedJournals = useMemo(() => {
+    let result = allJournalEntries.filter((jrn) => {
+      if (journalTypeFilter === "GENERAL" && jrn.isAdjustment) return false;
+      if (journalTypeFilter === "ADJUSTMENT" && !jrn.isAdjustment) return false;
+      if (journalStartDate && jrn.date < journalStartDate) return false;
+      if (journalEndDate && jrn.date > journalEndDate) return false;
+      
+      if (journalAccountFilter !== "ALL") {
+        const hasAcc = jrn.lines.some(l => 
+          l.accountCode === journalAccountFilter || 
+          l.accountName.toLowerCase().includes(journalAccountFilter.toLowerCase())
+        );
+        if (!hasAcc) return false;
+      }
+
+      if (journalRefFilter.trim()) {
+        const qRef = journalRefFilter.toLowerCase();
+        const matchVoucher = jrn.voucherNumber?.toLowerCase().includes(qRef);
+        const matchRef = jrn.referenceNumber?.toLowerCase().includes(qRef);
+        if (!matchVoucher && !matchRef) return false;
+      }
+
+      const jrnDebit = jrn.lines.reduce((s, l) => s + l.debit, 0);
+      const minVal = parseFloat(journalMinAmount);
+      if (!isNaN(minVal) && jrnDebit < minVal) return false;
+      const maxVal = parseFloat(journalMaxAmount);
+      if (!isNaN(maxVal) && jrnDebit > maxVal) return false;
+
+      if (journalSearch.trim()) {
+        const q = journalSearch.toLowerCase();
+        const matchDesc = jrn.description.toLowerCase().includes(q);
+        const matchVoucher = jrn.voucherNumber?.toLowerCase().includes(q);
+        const matchRef = jrn.referenceNumber?.toLowerCase().includes(q);
+        const matchLines = jrn.lines.some(l => 
+          l.accountCode.toLowerCase().includes(q) || 
+          l.accountName.toLowerCase().includes(q)
+        );
+        if (!matchDesc && !matchVoucher && !matchRef && !matchLines) return false;
+      }
+      return true;
+    });
+
+    if (journalSortField && journalSortOrder) {
+      result = [...result].sort((a, b) => {
+        let valA: any;
+        let valB: any;
+        if (journalSortField === "totalDebit") {
+          valA = a.lines.reduce((s, l) => s + l.debit, 0);
+          valB = b.lines.reduce((s, l) => s + l.debit, 0);
+        } else {
+          valA = a[journalSortField];
+          valB = b[journalSortField];
+        }
+
+        if (typeof valA === "number" && typeof valB === "number") {
+          return journalSortOrder === "ASC" ? valA - valB : valB - valA;
+        }
+        valA = String(valA || "").toLowerCase();
+        valB = String(valB || "").toLowerCase();
+        if (valA < valB) return journalSortOrder === "ASC" ? -1 : 1;
+        if (valA > valB) return journalSortOrder === "ASC" ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [allJournalEntries, journalTypeFilter, journalStartDate, journalEndDate, journalAccountFilter, journalRefFilter, journalMinAmount, journalMaxAmount, journalSearch, journalSortField, journalSortOrder]);
+
+  // Filter & Sort Aset Tetap
+  const filteredAndSortedAssets = useMemo(() => {
+    let result = fixedAssets.filter(ast => {
+      if (assetSearch.trim()) {
+        const q = assetSearch.toLowerCase();
+        const matchCode = ast.assetCode.toLowerCase().includes(q);
+        const matchName = ast.name.toLowerCase().includes(q);
+        if (!matchCode && !matchName) return false;
+      }
+
+      if (assetUsefulLifeFilter === "LE_12" && ast.usefulLifeMonths > 12) return false;
+      if (assetUsefulLifeFilter === "13_36" && (ast.usefulLifeMonths <= 12 || ast.usefulLifeMonths > 36)) return false;
+      if (assetUsefulLifeFilter === "37_48" && (ast.usefulLifeMonths <= 36 || ast.usefulLifeMonths > 48)) return false;
+      if (assetUsefulLifeFilter === "GT_48" && ast.usefulLifeMonths <= 48) return false;
+
+      if (assetStartDate && ast.acquisitionDate < assetStartDate) return false;
+      if (assetEndDate && ast.acquisitionDate > assetEndDate) return false;
+
+      const minCost = parseFloat(assetMinCost);
+      if (!isNaN(minCost) && ast.acquisitionCost < minCost) return false;
+      const maxCost = parseFloat(assetMaxCost);
+      if (!isNaN(maxCost) && ast.acquisitionCost > maxCost) return false;
+
+      return true;
+    });
+
+    if (assetSortField && assetSortOrder) {
+      result = [...result].sort((a, b) => {
+        const valA = a[assetSortField];
+        const valB = b[assetSortField];
+        if (typeof valA === "number" && typeof valB === "number") {
+          return assetSortOrder === "ASC" ? valA - valB : valB - valA;
+        }
+        const strA = String(valA || "").toLowerCase();
+        const strB = String(valB || "").toLowerCase();
+        if (strA < strB) return assetSortOrder === "ASC" ? -1 : 1;
+        if (strA > strB) return assetSortOrder === "ASC" ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [fixedAssets, assetSearch, assetUsefulLifeFilter, assetStartDate, assetEndDate, assetMinCost, assetMaxCost, assetSortField, assetSortOrder]);
 
   return (
     <div className="space-y-5">
@@ -921,13 +1471,17 @@ export function AccountingSuite({ salesInvoices, requests, officialReceipts }: A
       {/* ============================================================== */}
       {activeSubTab === "LEDGER" && (
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+          {/* Header & Account Selection */}
           <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <label className="text-xs font-bold text-slate-700">Pilih Akun Buku Besar:</label>
               <select
                 value={selectedLedgerAccount}
-                onChange={(e) => setSelectedLedgerAccount(e.target.value)}
-                className="border border-slate-300 rounded-xl p-2 text-xs font-bold text-blue-900 bg-blue-50/50 min-w-[280px]"
+                onChange={(e) => {
+                  setSelectedLedgerAccount(e.target.value);
+                  setLedgerCounterFilter("ALL");
+                }}
+                className="border border-slate-300 rounded-xl p-2 text-xs font-bold text-blue-900 bg-blue-50/50 min-w-[280px] focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {coaList.filter(c => !c.isHeader).map(c => (
                   <option key={c.code} value={c.code}>
@@ -937,24 +1491,244 @@ export function AccountingSuite({ salesInvoices, requests, officialReceipts }: A
               </select>
             </div>
 
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-500">Saldo Normal: <strong>{currentLedgerCOA.normalBalance}</strong></span>
+            <div className="flex items-center gap-3 text-xs">
+              <span className="text-slate-500">Saldo Normal: <strong className="text-slate-800">{currentLedgerCOA.normalBalance}</strong></span>
               <span className="text-slate-300">&bull;</span>
-              <span className="text-slate-500">Saldo Awal: <strong className="font-mono">{formatRupiah(currentLedgerCOA.initialBalance || 0)}</strong></span>
+              <span className="text-slate-500">Saldo Awal: <strong className="font-mono text-slate-900">{formatRupiah(currentLedgerCOA.initialBalance || 0)}</strong></span>
             </div>
           </div>
 
+          {/* Quick Summary Cards Buku Besar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+              <span className="text-[10px] text-slate-500 block">Saldo Awal Akun</span>
+              <span className="font-bold font-mono text-slate-800 text-xs">
+                {formatRupiah(currentLedgerCOA.initialBalance || 0)}
+              </span>
+            </div>
+            <div className="bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200">
+              <span className="text-[10px] text-emerald-700 block">Total Mutasi Debit</span>
+              <span className="font-bold font-mono text-emerald-800 text-xs">
+                {formatRupiah(filteredAndSortedLedgerMutations.reduce((acc, m) => acc + m.debit, 0))}
+              </span>
+            </div>
+            <div className="bg-rose-50/70 p-2.5 rounded-xl border border-rose-200">
+              <span className="text-[10px] text-rose-700 block">Total Mutasi Kredit</span>
+              <span className="font-bold font-mono text-rose-800 text-xs">
+                {formatRupiah(filteredAndSortedLedgerMutations.reduce((acc, m) => acc + m.credit, 0))}
+              </span>
+            </div>
+            <div className="bg-blue-50/70 p-2.5 rounded-xl border border-blue-200">
+              <span className="text-[10px] text-blue-700 block">Saldo Akhir Terfilter</span>
+              <span className="font-bold font-mono text-blue-900 text-xs">
+                {filteredAndSortedLedgerMutations.length > 0
+                  ? formatRupiah(filteredAndSortedLedgerMutations[filteredAndSortedLedgerMutations.length - 1].balance)
+                  : formatRupiah(currentLedgerCOA.initialBalance || 0)}
+              </span>
+            </div>
+          </div>
+
+          {/* PANEL FILTER BUKU BESAR */}
+          <div className="p-3 bg-slate-50/70 border border-slate-200 rounded-xl space-y-2.5 text-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 font-bold text-slate-700 text-[11px] uppercase tracking-wide">
+                <Filter className="w-3.5 h-3.5 text-blue-600" />
+                <span>Filter Transaksi Buku Besar</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleResetLedgerFilter}
+                className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 cursor-pointer"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Reset Filter</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+              {/* Range Tanggal */}
+              <div>
+                <label className="block text-[10px] font-medium text-slate-500 mb-0.5">Dari Tanggal</label>
+                <input
+                  type="date"
+                  value={ledgerStartDate}
+                  onChange={(e) => setLedgerStartDate(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-1.5 bg-white text-xs font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-medium text-slate-500 mb-0.5">Sampai Tanggal</label>
+                <input
+                  type="date"
+                  value={ledgerEndDate}
+                  onChange={(e) => setLedgerEndDate(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-1.5 bg-white text-xs font-mono"
+                />
+              </div>
+
+              {/* Lawan Akun */}
+              <div>
+                <label className="block text-[10px] font-medium text-slate-500 mb-0.5">Lawan Akun</label>
+                <select
+                  value={ledgerCounterFilter}
+                  onChange={(e) => setLedgerCounterFilter(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-1.5 bg-white text-xs"
+                >
+                  <option value="ALL">Semua Lawan Akun</option>
+                  {availableCounterAccounts.map((cName, idx) => (
+                    <option key={idx} value={cName}>{cName}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* No Bukti / Ref */}
+              <div>
+                <label className="block text-[10px] font-medium text-slate-500 mb-0.5">No. Bukti / Ref</label>
+                <input
+                  type="text"
+                  value={ledgerRefFilter}
+                  onChange={(e) => setLedgerRefFilter(e.target.value)}
+                  placeholder="Misal: BKK, JV, TRF..."
+                  className="w-full border border-slate-300 rounded-lg p-1.5 bg-white text-xs font-mono"
+                />
+              </div>
+
+              {/* Pencarian Keterangan */}
+              <div>
+                <label className="block text-[10px] font-medium text-slate-500 mb-0.5">Cari Keterangan</label>
+                <div className="relative">
+                  <Search className="w-3 h-3 text-slate-400 absolute left-2 top-2.5" />
+                  <input
+                    type="text"
+                    value={ledgerSearch}
+                    onChange={(e) => setLedgerSearch(e.target.value)}
+                    placeholder="Kata kunci..."
+                    className="w-full border border-slate-300 rounded-lg pl-7 pr-2 py-1.5 bg-white text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Filter Rentang Nominal */}
+            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-200/60 text-[11px]">
+              <span className="text-slate-500 font-medium">Rentang Nominal:</span>
+              <input
+                type="number"
+                value={ledgerMinAmount}
+                onChange={(e) => setLedgerMinAmount(e.target.value)}
+                placeholder="Min Rp..."
+                className="w-28 border border-slate-300 rounded-lg px-2 py-1 bg-white text-xs font-mono"
+              />
+              <span className="text-slate-400">-</span>
+              <input
+                type="number"
+                value={ledgerMaxAmount}
+                onChange={(e) => setLedgerMaxAmount(e.target.value)}
+                placeholder="Max Rp..."
+                className="w-28 border border-slate-300 rounded-lg px-2 py-1 bg-white text-xs font-mono"
+              />
+              <span className="ml-auto text-slate-400 text-[10px]">
+                Menampilkan <strong>{filteredAndSortedLedgerMutations.length}</strong> dari {baseLedgerMutations.length} mutasi
+              </span>
+            </div>
+          </div>
+
+          {/* TABEL BUKU BESAR DENGAN SORTABLE HEADER */}
           <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
             <table className="min-w-full divide-y divide-slate-200 text-left">
-              <thead className="bg-slate-50 font-bold text-slate-700">
+              <thead className="bg-slate-100 font-bold text-slate-700">
                 <tr>
-                  <th className="px-3 py-2.5">Tanggal</th>
-                  <th className="px-3 py-2.5">No. Bukti / Ref</th>
-                  <th className="px-3 py-2.5">Keterangan Transaksi</th>
-                  <th className="px-3 py-2.5">Lawan Akun</th>
-                  <th className="px-3 py-2.5 text-right font-mono">Debit (Rp)</th>
-                  <th className="px-3 py-2.5 text-right font-mono">Kredit (Rp)</th>
-                  <th className="px-3 py-2.5 text-right font-mono">Saldo Berjalan (Rp)</th>
+                  <th 
+                    onClick={() => handleToggleLedgerSort("date")}
+                    className="px-3 py-2.5 cursor-pointer hover:bg-slate-200 transition select-none"
+                    title="Klik untuk urutkan Tanggal"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Tanggal</span>
+                      <ArrowUpDown className={`w-3 h-3 ${ledgerSortField === "date" ? "text-blue-600 font-bold" : "text-slate-400"}`} />
+                      {ledgerSortField === "date" && (
+                        <span className="text-[10px] text-blue-600 font-mono">{ledgerSortOrder === "ASC" ? "▲" : "▼"}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleToggleLedgerSort("reference")}
+                    className="px-3 py-2.5 cursor-pointer hover:bg-slate-200 transition select-none"
+                    title="Klik untuk urutkan No. Bukti"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>No. Bukti / Ref</span>
+                      <ArrowUpDown className={`w-3 h-3 ${ledgerSortField === "reference" ? "text-blue-600 font-bold" : "text-slate-400"}`} />
+                      {ledgerSortField === "reference" && (
+                        <span className="text-[10px] text-blue-600 font-mono">{ledgerSortOrder === "ASC" ? "▲" : "▼"}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleToggleLedgerSort("description")}
+                    className="px-3 py-2.5 cursor-pointer hover:bg-slate-200 transition select-none"
+                    title="Klik untuk urutkan Keterangan"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Keterangan Transaksi</span>
+                      <ArrowUpDown className={`w-3 h-3 ${ledgerSortField === "description" ? "text-blue-600 font-bold" : "text-slate-400"}`} />
+                      {ledgerSortField === "description" && (
+                        <span className="text-[10px] text-blue-600 font-mono">{ledgerSortOrder === "ASC" ? "▲" : "▼"}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleToggleLedgerSort("counterAccount")}
+                    className="px-3 py-2.5 cursor-pointer hover:bg-slate-200 transition select-none"
+                    title="Klik untuk urutkan Lawan Akun"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Lawan Akun</span>
+                      <ArrowUpDown className={`w-3 h-3 ${ledgerSortField === "counterAccount" ? "text-blue-600 font-bold" : "text-slate-400"}`} />
+                      {ledgerSortField === "counterAccount" && (
+                        <span className="text-[10px] text-blue-600 font-mono">{ledgerSortOrder === "ASC" ? "▲" : "▼"}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleToggleLedgerSort("debit")}
+                    className="px-3 py-2.5 text-right font-mono cursor-pointer hover:bg-slate-200 transition select-none"
+                    title="Klik untuk urutkan Debit"
+                  >
+                    <div className="flex items-center justify-end gap-1">
+                      <span>Debit (Rp)</span>
+                      <ArrowUpDown className={`w-3 h-3 ${ledgerSortField === "debit" ? "text-blue-600 font-bold" : "text-slate-400"}`} />
+                      {ledgerSortField === "debit" && (
+                        <span className="text-[10px] text-blue-600 font-mono">{ledgerSortOrder === "ASC" ? "▲" : "▼"}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleToggleLedgerSort("credit")}
+                    className="px-3 py-2.5 text-right font-mono cursor-pointer hover:bg-slate-200 transition select-none"
+                    title="Klik untuk urutkan Kredit"
+                  >
+                    <div className="flex items-center justify-end gap-1">
+                      <span>Kredit (Rp)</span>
+                      <ArrowUpDown className={`w-3 h-3 ${ledgerSortField === "credit" ? "text-blue-600 font-bold" : "text-slate-400"}`} />
+                      {ledgerSortField === "credit" && (
+                        <span className="text-[10px] text-blue-600 font-mono">{ledgerSortOrder === "ASC" ? "▲" : "▼"}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleToggleLedgerSort("balance")}
+                    className="px-3 py-2.5 text-right font-mono cursor-pointer hover:bg-slate-200 transition select-none"
+                    title="Klik untuk urutkan Saldo Berjalan"
+                  >
+                    <div className="flex items-center justify-end gap-1">
+                      <span>Saldo Berjalan (Rp)</span>
+                      <ArrowUpDown className={`w-3 h-3 ${ledgerSortField === "balance" ? "text-blue-600 font-bold" : "text-slate-400"}`} />
+                      {ledgerSortField === "balance" && (
+                        <span className="text-[10px] text-blue-600 font-mono">{ledgerSortOrder === "ASC" ? "▲" : "▼"}</span>
+                      )}
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -966,8 +1740,8 @@ export function AccountingSuite({ salesInvoices, requests, officialReceipts }: A
                   <td className="px-3 py-2 text-right font-mono">-</td>
                   <td className="px-3 py-2 text-right font-mono font-bold text-slate-900">{formatRupiah(currentLedgerCOA.initialBalance || 0)}</td>
                 </tr>
-                {ledgerMutations.map((m, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50">
+                {filteredAndSortedLedgerMutations.map((m) => (
+                  <tr key={m.id} className="hover:bg-slate-50">
                     <td className="px-3 py-2 font-mono text-[11px]">{m.date}</td>
                     <td className="px-3 py-2 font-mono text-[11px] text-blue-700 font-bold">{m.reference}</td>
                     <td className="px-3 py-2 font-medium">{m.description}</td>
@@ -983,6 +1757,13 @@ export function AccountingSuite({ salesInvoices, requests, officialReceipts }: A
                     </td>
                   </tr>
                 ))}
+                {filteredAndSortedLedgerMutations.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="px-3 py-6 text-center text-slate-400 italic">
+                      Tidak ada mutasi yang sesuai dengan kriteria filter. Silakan ubah filter atau klik Reset Filter.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -1000,43 +1781,231 @@ export function AccountingSuite({ salesInvoices, requests, officialReceipts }: A
                 Buku Jurnal Transaksi (General Journal &amp; AJP)
               </h3>
               <p className="text-xs text-slate-500">
-                Pencatatan double-entry otomatis untuk setiap pengeluaran, penerimaan, dan penyesuaian akhir bulan.
+                Pencatatan double-entry otomatis untuk setiap pengeluaran kasbon/PO, penerimaan piutang/BKM, dan penyesuaian akhir periode.
               </p>
             </div>
 
             <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={journalSearch}
-                onChange={(e) => setJournalSearch(e.target.value)}
-                placeholder="Cari voucher, no ref, akun..."
-                className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs bg-white"
-              />
+              <span className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full font-bold text-xs flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Double-Entry Terintegrasi</span>
+              </span>
             </div>
           </div>
 
+          {/* Quick Summary Cards Jurnal */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+              <span className="text-[10px] text-slate-500 block">Total Transaksi Jurnal</span>
+              <span className="font-bold font-mono text-slate-800 text-xs">
+                {filteredAndSortedJournals.length} Entri ({allJournalEntries.length} Total)
+              </span>
+            </div>
+            <div className="bg-blue-50/70 p-2.5 rounded-xl border border-blue-200">
+              <span className="text-[10px] text-blue-700 block">Total Akumulasi Debit</span>
+              <span className="font-bold font-mono text-blue-900 text-xs">
+                {formatRupiah(filteredAndSortedJournals.reduce((acc, j) => acc + j.lines.reduce((s, l) => s + l.debit, 0), 0))}
+              </span>
+            </div>
+            <div className="bg-purple-50/70 p-2.5 rounded-xl border border-purple-200">
+              <span className="text-[10px] text-purple-700 block">Total Akumulasi Kredit</span>
+              <span className="font-bold font-mono text-purple-900 text-xs">
+                {formatRupiah(filteredAndSortedJournals.reduce((acc, j) => acc + j.lines.reduce((s, l) => s + l.credit, 0), 0))}
+              </span>
+            </div>
+            <div className="bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200">
+              <span className="text-[10px] text-emerald-700 block">Status Keseimbangan</span>
+              <span className="font-bold text-emerald-800 text-xs flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>100% Balanced</span>
+              </span>
+            </div>
+          </div>
+
+          {/* PANEL FILTER JURNAL */}
+          <div className="p-3 bg-slate-50/70 border border-slate-200 rounded-xl space-y-2.5 text-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 font-bold text-slate-700 text-[11px] uppercase tracking-wide">
+                <Filter className="w-3.5 h-3.5 text-blue-600" />
+                <span>Filter Transaksi Jurnal Umum &amp; AJP</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleResetJournalFilter}
+                className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 cursor-pointer"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Reset Filter</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+              {/* Tipe Jurnal */}
+              <div>
+                <label className="block text-[10px] font-medium text-slate-500 mb-0.5">Tipe Jurnal</label>
+                <select
+                  value={journalTypeFilter}
+                  onChange={(e) => setJournalTypeFilter(e.target.value as any)}
+                  className="w-full border border-slate-300 rounded-lg p-1.5 bg-white text-xs"
+                >
+                  <option value="ALL">Semua Jurnal</option>
+                  <option value="GENERAL">Jurnal Umum (Transaksi Operasional)</option>
+                  <option value="ADJUSTMENT">AJP (Penyesuaian Akhir Periode)</option>
+                </select>
+              </div>
+
+              {/* Range Tanggal */}
+              <div>
+                <label className="block text-[10px] font-medium text-slate-500 mb-0.5">Dari Tanggal</label>
+                <input
+                  type="date"
+                  value={journalStartDate}
+                  onChange={(e) => setJournalStartDate(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-1.5 bg-white text-xs font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-medium text-slate-500 mb-0.5">Sampai Tanggal</label>
+                <input
+                  type="date"
+                  value={journalEndDate}
+                  onChange={(e) => setJournalEndDate(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-1.5 bg-white text-xs font-mono"
+                />
+              </div>
+
+              {/* No Voucher / Ref */}
+              <div>
+                <label className="block text-[10px] font-medium text-slate-500 mb-0.5">No. Voucher / Ref</label>
+                <input
+                  type="text"
+                  value={journalRefFilter}
+                  onChange={(e) => setJournalRefFilter(e.target.value)}
+                  placeholder="BKK, JV, BKM, INV..."
+                  className="w-full border border-slate-300 rounded-lg p-1.5 bg-white text-xs font-mono"
+                />
+              </div>
+
+              {/* Cari Akun */}
+              <div>
+                <label className="block text-[10px] font-medium text-slate-500 mb-0.5">Filter Akun Terlibat</label>
+                <input
+                  type="text"
+                  value={journalAccountFilter === "ALL" ? "" : journalAccountFilter}
+                  onChange={(e) => setJournalAccountFilter(e.target.value || "ALL")}
+                  placeholder="Kode / nama akun..."
+                  className="w-full border border-slate-300 rounded-lg p-1.5 bg-white text-xs"
+                />
+              </div>
+            </div>
+
+            {/* Filter Rentang Nominal & Search Keterangan */}
+            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-200/60 text-[11px]">
+              <span className="text-slate-500 font-medium">Rentang Nominal:</span>
+              <input
+                type="number"
+                value={journalMinAmount}
+                onChange={(e) => setJournalMinAmount(e.target.value)}
+                placeholder="Min Rp..."
+                className="w-28 border border-slate-300 rounded-lg px-2 py-1 bg-white text-xs font-mono"
+              />
+              <span className="text-slate-400">-</span>
+              <input
+                type="number"
+                value={journalMaxAmount}
+                onChange={(e) => setJournalMaxAmount(e.target.value)}
+                placeholder="Max Rp..."
+                className="w-28 border border-slate-300 rounded-lg px-2 py-1 bg-white text-xs font-mono"
+              />
+              
+              <div className="flex-1 min-w-[200px] relative">
+                <Search className="w-3 h-3 text-slate-400 absolute left-2 top-2" />
+                <input
+                  type="text"
+                  value={journalSearch}
+                  onChange={(e) => setJournalSearch(e.target.value)}
+                  placeholder="Pencarian bebas keterangan transaksi..."
+                  className="w-full border border-slate-300 rounded-lg pl-7 pr-2 py-1 bg-white text-xs"
+                />
+              </div>
+
+              <span className="text-slate-400 text-[10px]">
+                Menampilkan <strong>{filteredAndSortedJournals.length}</strong> transaksi
+              </span>
+            </div>
+          </div>
+
+          {/* TABEL JURNAL DENGAN SORTABLE HEADER */}
           <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
             <table className="min-w-full divide-y divide-slate-200 text-left">
-              <thead className="bg-slate-50 font-bold text-slate-700">
+              <thead className="bg-slate-100 font-bold text-slate-700">
                 <tr>
-                  <th className="px-3 py-2.5">Tanggal &amp; No. Voucher</th>
-                  <th className="px-3 py-2.5">No. Referensi</th>
-                  <th className="px-3 py-2.5">Keterangan Transaksi</th>
+                  <th 
+                    onClick={() => handleToggleJournalSort("date")}
+                    className="px-3 py-2.5 cursor-pointer hover:bg-slate-200 transition select-none w-36"
+                    title="Klik untuk urutkan Tanggal"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Tanggal &amp; Voucher</span>
+                      <ArrowUpDown className={`w-3 h-3 ${journalSortField === "date" ? "text-blue-600 font-bold" : "text-slate-400"}`} />
+                      {journalSortField === "date" && (
+                        <span className="text-[10px] text-blue-600 font-mono">{journalSortOrder === "ASC" ? "▲" : "▼"}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleToggleJournalSort("referenceNumber")}
+                    className="px-3 py-2.5 cursor-pointer hover:bg-slate-200 transition select-none w-32"
+                    title="Klik untuk urutkan No. Referensi"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>No. Referensi</span>
+                      <ArrowUpDown className={`w-3 h-3 ${journalSortField === "referenceNumber" ? "text-blue-600 font-bold" : "text-slate-400"}`} />
+                      {journalSortField === "referenceNumber" && (
+                        <span className="text-[10px] text-blue-600 font-mono">{journalSortOrder === "ASC" ? "▲" : "▼"}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleToggleJournalSort("description")}
+                    className="px-3 py-2.5 cursor-pointer hover:bg-slate-200 transition select-none"
+                    title="Klik untuk urutkan Keterangan"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Keterangan Transaksi</span>
+                      <ArrowUpDown className={`w-3 h-3 ${journalSortField === "description" ? "text-blue-600 font-bold" : "text-slate-400"}`} />
+                      {journalSortField === "description" && (
+                        <span className="text-[10px] text-blue-600 font-mono">{journalSortOrder === "ASC" ? "▲" : "▼"}</span>
+                      )}
+                    </div>
+                  </th>
                   <th className="px-3 py-2.5">Kode &amp; Nama Akun</th>
-                  <th className="px-3 py-2.5 text-right font-mono">Debit (Rp)</th>
-                  <th className="px-3 py-2.5 text-right font-mono">Kredit (Rp)</th>
+                  <th 
+                    onClick={() => handleToggleJournalSort("totalDebit")}
+                    className="px-3 py-2.5 text-right font-mono cursor-pointer hover:bg-slate-200 transition select-none w-28"
+                    title="Klik untuk urutkan Nominal Debit"
+                  >
+                    <div className="flex items-center justify-end gap-1">
+                      <span>Debit (Rp)</span>
+                      <ArrowUpDown className={`w-3 h-3 ${journalSortField === "totalDebit" ? "text-blue-600 font-bold" : "text-slate-400"}`} />
+                      {journalSortField === "totalDebit" && (
+                        <span className="text-[10px] text-blue-600 font-mono">{journalSortOrder === "ASC" ? "▲" : "▼"}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th className="px-3 py-2.5 text-right font-mono w-28">Kredit (Rp)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {journalEntries.slice(0, 30).map(jrn => (
+                {filteredAndSortedJournals.map(jrn => (
                   <React.Fragment key={jrn.id}>
                     {jrn.lines.map((line, lIdx) => (
-                      <tr key={line.id} className={lIdx === 0 ? "border-t border-slate-200 bg-slate-50/30" : ""}>
+                      <tr key={line.id} className={lIdx === 0 ? "border-t border-slate-200 bg-slate-50/40" : "hover:bg-slate-50"}>
                         <td className="px-3 py-1.5 font-mono text-[11px]">
                           {lIdx === 0 && (
                             <>
                               <span className="font-bold text-slate-900 block">{jrn.date}</span>
-                              <span className="text-blue-700 text-[10px] block">{jrn.voucherNumber}</span>
+                              <span className="text-blue-700 text-[10px] block font-semibold">{jrn.voucherNumber}</span>
                             </>
                           )}
                         </td>
@@ -1044,10 +2013,19 @@ export function AccountingSuite({ salesInvoices, requests, officialReceipts }: A
                           {lIdx === 0 && jrn.referenceNumber}
                         </td>
                         <td className="px-3 py-1.5 font-medium">
-                          {lIdx === 0 && jrn.description}
+                          {lIdx === 0 && (
+                            <div>
+                              <span>{jrn.description}</span>
+                              {jrn.isAdjustment && (
+                                <span className="ml-1.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                                  AJP
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="px-3 py-1.5">
-                          <span className={line.credit > 0 ? "pl-4 text-slate-600 block" : "font-bold text-slate-900 block"}>
+                          <span className={line.credit > 0 ? "pl-5 text-slate-600 block" : "font-bold text-slate-900 block"}>
                             {line.accountCode} - {line.accountName}
                           </span>
                         </td>
@@ -1061,6 +2039,13 @@ export function AccountingSuite({ salesInvoices, requests, officialReceipts }: A
                     ))}
                   </React.Fragment>
                 ))}
+                {filteredAndSortedJournals.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-6 text-center text-slate-400 italic">
+                      Tidak ada entri jurnal yang cocok dengan filter yang ditentukan.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -1157,43 +2142,276 @@ export function AccountingSuite({ salesInvoices, requests, officialReceipts }: A
                 Daftar Aset Tetap &amp; Jadwal Penyusutan (Fixed Assets)
               </h3>
               <p className="text-xs text-slate-500">
-                Pengelolaan aktiva tetap, metode garis lurus (*Straight-Line Method*), dan posting akumulasi penyusutan.
+                Pengelolaan aktiva tetap, metode garis lurus (*Straight-Line Method*), dan posting akumulasi penyusutan Jayahana 2026.
               </p>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 font-medium">Total Nilai Perolehan:</span>
-              <strong className="text-sm font-mono text-slate-900">{formatRupiah(metrics.totalAssetCost)}</strong>
+              <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full font-bold text-xs flex items-center gap-1">
+                <Package className="w-3.5 h-3.5" />
+                <span>Metode Garis Lurus (Straight-Line)</span>
+              </span>
             </div>
           </div>
 
+          {/* Quick Summary Cards Aset Tetap */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+              <span className="text-[10px] text-slate-500 block">Jumlah Unit Aset Terfilter</span>
+              <span className="font-bold font-mono text-slate-800 text-xs">
+                {filteredAndSortedAssets.length} Unit ({fixedAssets.length} Total)
+              </span>
+            </div>
+            <div className="bg-blue-50/70 p-2.5 rounded-xl border border-blue-200">
+              <span className="text-[10px] text-blue-700 block">Total Nilai Perolehan</span>
+              <span className="font-bold font-mono text-blue-900 text-xs">
+                {formatRupiah(filteredAndSortedAssets.reduce((acc, a) => acc + a.acquisitionCost, 0))}
+              </span>
+            </div>
+            <div className="bg-rose-50/70 p-2.5 rounded-xl border border-rose-200">
+              <span className="text-[10px] text-rose-700 block">Akumulasi Penyusutan</span>
+              <span className="font-bold font-mono text-rose-800 text-xs">
+                ({formatRupiah(filteredAndSortedAssets.reduce((acc, a) => acc + a.accumulatedDepreciation, 0))})
+              </span>
+            </div>
+            <div className="bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200">
+              <span className="text-[10px] text-emerald-700 block">Total Nilai Buku Bersih</span>
+              <span className="font-bold font-mono text-emerald-900 text-xs">
+                {formatRupiah(filteredAndSortedAssets.reduce((acc, a) => acc + a.bookValue, 0))}
+              </span>
+            </div>
+          </div>
+
+          {/* PANEL FILTER ASET TETAP */}
+          <div className="p-3 bg-slate-50/70 border border-slate-200 rounded-xl space-y-2.5 text-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 font-bold text-slate-700 text-[11px] uppercase tracking-wide">
+                <Filter className="w-3.5 h-3.5 text-blue-600" />
+                <span>Filter Inventaris &amp; Jadwal Penyusutan Aset</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleResetAssetFilter}
+                className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 cursor-pointer"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Reset Filter</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+              {/* Cari Nama / Kode */}
+              <div>
+                <label className="block text-[10px] font-medium text-slate-500 mb-0.5">Cari Nama / Kode Aset</label>
+                <div className="relative">
+                  <Search className="w-3 h-3 text-slate-400 absolute left-2 top-2.5" />
+                  <input
+                    type="text"
+                    value={assetSearch}
+                    onChange={(e) => setAssetSearch(e.target.value)}
+                    placeholder="Misal: Truk, Laptop, OLT..."
+                    className="w-full border border-slate-300 rounded-lg pl-7 pr-2 py-1.5 bg-white text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Filter Umur Aset (Useful Life) */}
+              <div>
+                <label className="block text-[10px] font-medium text-slate-500 mb-0.5">Klasifikasi Umur Aset</label>
+                <select
+                  value={assetUsefulLifeFilter}
+                  onChange={(e) => setAssetUsefulLifeFilter(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-1.5 bg-white text-xs font-medium"
+                >
+                  <option value="ALL">Semua Umur Manfaat</option>
+                  <option value="LE_12">≤ 12 Bulan (1 Tahun)</option>
+                  <option value="13_36">13 - 36 Bulan (2 - 3 Tahun)</option>
+                  <option value="37_48">37 - 48 Bulan (4 Tahun - Komputer/IT)</option>
+                  <option value="GT_48">&gt; 48 Bulan (5+ Tahun - Kendaraan/Mobil)</option>
+                </select>
+              </div>
+
+              {/* Tgl Perolehan */}
+              <div>
+                <label className="block text-[10px] font-medium text-slate-500 mb-0.5">Dari Tgl Perolehan</label>
+                <input
+                  type="date"
+                  value={assetStartDate}
+                  onChange={(e) => setAssetStartDate(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-1.5 bg-white text-xs font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-medium text-slate-500 mb-0.5">Sampai Tgl Perolehan</label>
+                <input
+                  type="date"
+                  value={assetEndDate}
+                  onChange={(e) => setAssetEndDate(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-1.5 bg-white text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            {/* Filter Rentang Harga Perolehan */}
+            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-200/60 text-[11px]">
+              <span className="text-slate-500 font-medium">Rentang Harga Perolehan:</span>
+              <input
+                type="number"
+                value={assetMinCost}
+                onChange={(e) => setAssetMinCost(e.target.value)}
+                placeholder="Min Rp..."
+                className="w-32 border border-slate-300 rounded-lg px-2 py-1 bg-white text-xs font-mono"
+              />
+              <span className="text-slate-400">-</span>
+              <input
+                type="number"
+                value={assetMaxCost}
+                onChange={(e) => setAssetMaxCost(e.target.value)}
+                placeholder="Max Rp..."
+                className="w-32 border border-slate-300 rounded-lg px-2 py-1 bg-white text-xs font-mono"
+              />
+              
+              <span className="ml-auto text-slate-400 text-[10px]">
+                Menampilkan <strong>{filteredAndSortedAssets.length}</strong> aset tetap
+              </span>
+            </div>
+          </div>
+
+          {/* TABEL ASET TETAP DENGAN SORTABLE HEADER */}
           <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
             <table className="min-w-full divide-y divide-slate-200 text-left">
-              <thead className="bg-slate-50 font-bold text-slate-700">
+              <thead className="bg-slate-100 font-bold text-slate-700">
                 <tr>
-                  <th className="px-3 py-2.5">Kode Aset</th>
-                  <th className="px-3 py-2.5">Nama Aset Tetap</th>
-                  <th className="px-3 py-2.5">Tgl Perolehan</th>
-                  <th className="px-3 py-2.5 text-center">Umur (Bln)</th>
-                  <th className="px-3 py-2.5 text-right font-mono">Harga Perolehan</th>
-                  <th className="px-3 py-2.5 text-right font-mono">Penyusutan/Bln</th>
-                  <th className="px-3 py-2.5 text-right font-mono">Akum. Penyusutan</th>
-                  <th className="px-3 py-2.5 text-right font-mono">Nilai Buku</th>
+                  <th 
+                    onClick={() => handleToggleAssetSort("assetCode")}
+                    className="px-3 py-2.5 cursor-pointer hover:bg-slate-200 transition select-none w-28"
+                    title="Klik untuk urutkan Kode Aset"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Kode Aset</span>
+                      <ArrowUpDown className={`w-3 h-3 ${assetSortField === "assetCode" ? "text-blue-600 font-bold" : "text-slate-400"}`} />
+                      {assetSortField === "assetCode" && (
+                        <span className="text-[10px] text-blue-600 font-mono">{assetSortOrder === "ASC" ? "▲" : "▼"}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleToggleAssetSort("name")}
+                    className="px-3 py-2.5 cursor-pointer hover:bg-slate-200 transition select-none"
+                    title="Klik untuk urutkan Nama Aset"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Nama Aset Tetap</span>
+                      <ArrowUpDown className={`w-3 h-3 ${assetSortField === "name" ? "text-blue-600 font-bold" : "text-slate-400"}`} />
+                      {assetSortField === "name" && (
+                        <span className="text-[10px] text-blue-600 font-mono">{assetSortOrder === "ASC" ? "▲" : "▼"}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleToggleAssetSort("acquisitionDate")}
+                    className="px-3 py-2.5 cursor-pointer hover:bg-slate-200 transition select-none w-28"
+                    title="Klik untuk urutkan Tgl Perolehan"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Tgl Perolehan</span>
+                      <ArrowUpDown className={`w-3 h-3 ${assetSortField === "acquisitionDate" ? "text-blue-600 font-bold" : "text-slate-400"}`} />
+                      {assetSortField === "acquisitionDate" && (
+                        <span className="text-[10px] text-blue-600 font-mono">{assetSortOrder === "ASC" ? "▲" : "▼"}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleToggleAssetSort("usefulLifeMonths")}
+                    className="px-3 py-2.5 text-center cursor-pointer hover:bg-slate-200 transition select-none w-24"
+                    title="Klik untuk urutkan Umur Aset"
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <span>Umur (Bln)</span>
+                      <ArrowUpDown className={`w-3 h-3 ${assetSortField === "usefulLifeMonths" ? "text-blue-600 font-bold" : "text-slate-400"}`} />
+                      {assetSortField === "usefulLifeMonths" && (
+                        <span className="text-[10px] text-blue-600 font-mono">{assetSortOrder === "ASC" ? "▲" : "▼"}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleToggleAssetSort("acquisitionCost")}
+                    className="px-3 py-2.5 text-right font-mono cursor-pointer hover:bg-slate-200 transition select-none"
+                    title="Klik untuk urutkan Harga Perolehan"
+                  >
+                    <div className="flex items-center justify-end gap-1">
+                      <span>Harga Perolehan</span>
+                      <ArrowUpDown className={`w-3 h-3 ${assetSortField === "acquisitionCost" ? "text-blue-600 font-bold" : "text-slate-400"}`} />
+                      {assetSortField === "acquisitionCost" && (
+                        <span className="text-[10px] text-blue-600 font-mono">{assetSortOrder === "ASC" ? "▲" : "▼"}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleToggleAssetSort("monthlyDepreciation")}
+                    className="px-3 py-2.5 text-right font-mono cursor-pointer hover:bg-slate-200 transition select-none"
+                    title="Klik untuk urutkan Penyusutan/Bln"
+                  >
+                    <div className="flex items-center justify-end gap-1">
+                      <span>Penyusutan/Bln</span>
+                      <ArrowUpDown className={`w-3 h-3 ${assetSortField === "monthlyDepreciation" ? "text-blue-600 font-bold" : "text-slate-400"}`} />
+                      {assetSortField === "monthlyDepreciation" && (
+                        <span className="text-[10px] text-blue-600 font-mono">{assetSortOrder === "ASC" ? "▲" : "▼"}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleToggleAssetSort("accumulatedDepreciation")}
+                    className="px-3 py-2.5 text-right font-mono cursor-pointer hover:bg-slate-200 transition select-none"
+                    title="Klik untuk urutkan Akum. Penyusutan"
+                  >
+                    <div className="flex items-center justify-end gap-1">
+                      <span>Akum. Penyusutan</span>
+                      <ArrowUpDown className={`w-3 h-3 ${assetSortField === "accumulatedDepreciation" ? "text-blue-600 font-bold" : "text-slate-400"}`} />
+                      {assetSortField === "accumulatedDepreciation" && (
+                        <span className="text-[10px] text-blue-600 font-mono">{assetSortOrder === "ASC" ? "▲" : "▼"}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleToggleAssetSort("bookValue")}
+                    className="px-3 py-2.5 text-right font-mono cursor-pointer hover:bg-slate-200 transition select-none"
+                    title="Klik untuk urutkan Nilai Buku"
+                  >
+                    <div className="flex items-center justify-end gap-1">
+                      <span>Nilai Buku</span>
+                      <ArrowUpDown className={`w-3 h-3 ${assetSortField === "bookValue" ? "text-blue-600 font-bold" : "text-slate-400"}`} />
+                      {assetSortField === "bookValue" && (
+                        <span className="text-[10px] text-blue-600 font-mono">{assetSortOrder === "ASC" ? "▲" : "▼"}</span>
+                      )}
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {fixedAssets.map(ast => (
+                {filteredAndSortedAssets.map(ast => (
                   <tr key={ast.id} className="hover:bg-slate-50">
                     <td className="px-3 py-2 font-mono font-bold text-blue-900">{ast.assetCode}</td>
                     <td className="px-3 py-2 font-bold text-slate-900">{ast.name}</td>
                     <td className="px-3 py-2 font-mono text-[11px] text-slate-600">{ast.acquisitionDate}</td>
-                    <td className="px-3 py-2 text-center font-mono">{ast.usefulLifeMonths}</td>
+                    <td className="px-3 py-2 text-center font-mono">
+                      <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 font-bold text-slate-700">
+                        {ast.usefulLifeMonths} bln
+                      </span>
+                    </td>
                     <td className="px-3 py-2 text-right font-mono font-semibold text-slate-900">{formatRupiah(ast.acquisitionCost)}</td>
                     <td className="px-3 py-2 text-right font-mono text-purple-700 font-medium">{formatRupiah(ast.monthlyDepreciation)}</td>
                     <td className="px-3 py-2 text-right font-mono text-rose-700">({formatRupiah(ast.accumulatedDepreciation)})</td>
                     <td className="px-3 py-2 text-right font-mono font-black text-emerald-800">{formatRupiah(ast.bookValue)}</td>
                   </tr>
                 ))}
+                {filteredAndSortedAssets.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-3 py-6 text-center text-slate-400 italic">
+                      Tidak ada aset yang cocok dengan kriteria filter.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
