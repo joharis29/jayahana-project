@@ -365,6 +365,7 @@ export interface SalesInvoice {
   clientPhone?: string;
   contractNumber: string; // "SPK-2026-ME-01" / "SUB-2026-STL-01"
   unit: BusinessUnit;
+  category?: string; // "Jasa & Kontrak ME", "Starlite FTTH", "Pengadaan Barang", dll.
   title: string;
   description: string;
   invoiceDate: string;
@@ -373,6 +374,8 @@ export interface SalesInvoice {
   dppAmount: number; // Dasar Pengenaan Pajak
   ppnPercent: number; // 11%
   ppnAmount: number;
+  isPpnIncluded?: boolean;
+  taxType?: TaxType;
   pph23Percent?: number; // 2%
   pph23Amount?: number;
   totalAmount: number;
@@ -382,6 +385,16 @@ export interface SalesInvoice {
   auditProgressNote?: string;
   financeTaxNote?: string;
   directorApprovalDate?: string;
+  items?: Array<{
+    id: string;
+    description: string;
+    quantity: number;
+    unit: string;
+    unitPrice: number;
+    discount: number;
+    total: number;
+  }>;
+  attachments?: RequestAttachment[];
   payments?: InvoicePaymentRecord[];
 }
 

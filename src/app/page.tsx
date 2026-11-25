@@ -669,8 +669,12 @@ export default function DashboardPage() {
   const [newInvProgress, setNewInvProgress] = useState("30");
   const [newInvIncludePph23, setNewInvIncludePph23] = useState(true);
   // --- Extended Invoice Form State ---
-  const [invItems, setInvItems] = useState<Array<{id: string; description: string; qty: number; unit: string; unitPrice: number; discount: number}>>([{id: 'ii-1', description: '', qty: 1, unit: 'Jasa', unitPrice: 0, discount: 0}]);
-  const [invTaxType, setInvTaxType] = useState<TaxType>('NONE');
+  const [newInvCategory, setNewInvCategory] = useState("Jasa Konstruksi & Instalasi ME");
+  const [newInvDate, setNewInvDate] = useState(new Date().toISOString().split("T")[0]);
+  const [invItems, setInvItems] = useState<Array<{id: string; description: string; qty: number; unit: string; unitPrice: number; discount: number}>>([
+    {id: 'ii-1', description: '', qty: 1, unit: 'Jasa', unitPrice: 0, discount: 0}
+  ]);
+  const [invTaxType, setInvTaxType] = useState<TaxType>('PPH_23_SERVICE');
   const [invHasPpn, setInvHasPpn] = useState(true);
   const [invIsPpnIncluded, setInvIsPpnIncluded] = useState(false);
   const [invNotes, setInvNotes] = useState('');
@@ -2355,14 +2359,17 @@ export default function DashboardPage() {
       clientNPWP: newInvNPWP || "01.xxx.xxx.x-xxx.000",
       contractNumber: newInvContract || `SPK-2026-${Math.floor(10 + Math.random() * 90)}`,
       unit: newInvUnit,
+      category: newInvCategory,
       title: newInvTitle,
-      description: invNotes || `Penagihan termin/layanan untuk ${newInvClient}`,
-      invoiceDate: new Date().toISOString().split("T")[0],
+      description: invNotes || `Penagihan ${newInvCategory} untuk ${newInvClient}`,
+      invoiceDate: newInvDate || new Date().toISOString().split("T")[0],
       dueDate: newInvDueDate || "2026-11-30",
       progressPercent: parseInt(newInvProgress) || 30,
       dppAmount: dppBase,
       ppnPercent: invHasPpn ? 11 : 0,
       ppnAmount: ppnAmount,
+      isPpnIncluded: invHasPpn ? invIsPpnIncluded : false,
+      taxType: invTaxType,
       pph23Percent: pphRate > 0 ? Math.round(pphRate * 100) : undefined,
       pph23Amount: pphAmount || undefined,
       totalAmount: totalAmount,
@@ -2370,7 +2377,17 @@ export default function DashboardPage() {
       status: "UNPAID",
       targetBankAccount: invBankTarget,
       auditProgressNote: "Faktur penjualan aktif ditagihkan.",
-      financeTaxNote: `${ppnNote}${pphRate > 0 ? ` | PPh ${Math.round(pphRate*100)}%: ${formatRupiah(pphAmount)}` : ''}`.trim() || "Tanpa Pajak."
+      financeTaxNote: `${ppnNote}${pphRate > 0 ? ` | PPh ${Math.round(pphRate*100)}%: ${formatRupiah(pphAmount)}` : ''}`.trim() || "Tanpa Pajak.",
+      items: invItems.filter(it => it.description.trim()).map(it => ({
+        id: it.id,
+        description: it.description,
+        quantity: it.qty,
+        unit: it.unit,
+        unitPrice: it.unitPrice,
+        discount: it.discount,
+        total: it.qty * it.unitPrice * (1 - it.discount / 100)
+      })),
+      attachments: invAttachments
     };
 
     setSalesInvoices([newInvoice, ...salesInvoices]);
@@ -2378,8 +2395,10 @@ export default function DashboardPage() {
     // Reset form
     setNewInvClient(""); setNewInvAddress(""); setNewInvNPWP(""); setNewInvContract("");
     setNewInvTitle(""); setNewInvDpp(""); setNewInvProgress("30"); setInvNotes("");
+    setNewInvCategory("Jasa Konstruksi & Instalasi ME");
+    setNewInvDate(new Date().toISOString().split("T")[0]);
     setInvItems([{id: 'ii-1', description: '', qty: 1, unit: 'Jasa', unitPrice: 0, discount: 0}]);
-    setInvTaxType('NONE'); setInvHasPpn(true); setInvIsPpnIncluded(false); setInvAttachments([]);
+    setInvTaxType('PPH_23_SERVICE'); setInvHasPpn(true); setInvIsPpnIncluded(false); setInvAttachments([]);
     setApprovalNotification(`Faktur Penjualan ${invNum} berhasil diterbitkan.`);
     setTimeout(() => setApprovalNotification(null), 3500);
   };
@@ -8217,58 +8236,188 @@ export default function DashboardPage() {
             </div>
 
             <form onSubmit={handleCreateSalesInvoice} className="space-y-3.5 text-xs">
-              {/* Row 1: Unit Usaha & No. Kontrak/SPK */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Row 1: Unit Usaha & Kategori */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Unit Usaha Penghasil <span className="text-red-500">*</span></label>
-                  <select value={newInvUnit} onChange={(e) => setNewInvUnit(e.target.value as BusinessUnit)} className="w-full border border-slate-300 rounded-lg p-2 bg-white">
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Unit Usaha Penghasil <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={newInvUnit}
+                    onChange={(e) => {
+                      const val = e.target.value as BusinessUnit;
+                      setNewInvUnit(val);
+                      if (val === "STARLITE_FTTH") {
+                        setNewInvCategory("Langganan Internet & Bandwidth Starlite FTTH");
+                        setInvTaxType("NONE");
+                        setInvHasPpn(true);
+                      } else {
+                        setNewInvCategory("Jasa Konstruksi & Instalasi ME");
+                        setInvTaxType("PPH_23_SERVICE");
+                        setInvHasPpn(true);
+                      }
+                    }}
+                    className="w-full border border-slate-300 rounded-lg p-2 bg-white"
+                  >
                     <option value="ME_CORE">Jasa ME Core (Termin Kontrak Proyek)</option>
                     <option value="STARLITE_FTTH">Starlite FTTH (Langganan Internet &amp; PSB)</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">No. Kontrak / SPK / ID Pelanggan <span className="text-red-500">*</span></label>
-                  <input type="text" value={newInvContract} onChange={(e) => setNewInvContract(e.target.value)} placeholder="Misal: SPK-2026-ME-02 / STL-004" className="w-full border border-slate-300 rounded-lg p-2 font-mono" required />
-                </div>
-              </div>
-              {/* Row 2: Klien & NPWP */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Nama Klien / Perusahaan Pembayar <span className="text-red-500">*</span></label>
-                  <input type="text" value={newInvClient} onChange={(e) => setNewInvClient(e.target.value)} placeholder="Contoh: PT. Astra Otoparts Tbk" className="w-full border border-slate-300 rounded-lg p-2" required />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">NPWP Klien (Opsional)</label>
-                  <input type="text" value={newInvNPWP} onChange={(e) => setNewInvNPWP(e.target.value)} placeholder="Contoh: 01.342.891.4-054.000" className="w-full border border-slate-300 rounded-lg p-2 font-mono" />
-                </div>
-              </div>
-              {/* Row 3: Alamat */}
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Alamat Lengkap Klien / Lokasi Proyek</label>
-                <input type="text" value={newInvAddress} onChange={(e) => setNewInvAddress(e.target.value)} placeholder="Misal: Kawasan Industri KIIC Karawang Barat Lot B-02" className="w-full border border-slate-300 rounded-lg p-2" />
-              </div>
-              {/* Row 4: Judul */}
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Judul / Uraian Termin Tagihan <span className="text-red-500">*</span></label>
-                <input type="text" value={newInvTitle} onChange={(e) => setNewInvTitle(e.target.value)} placeholder="Contoh: Termin I (30%) - Pekerjaan Instalasi Panel Listrik & Kabel Feeder" className="w-full border border-slate-300 rounded-lg p-2" required />
-              </div>
-              {/* Row 5: Progres & Jatuh Tempo */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Progres Fisik (%)</label>
-                  <input type="number" min={0} max={100} value={newInvProgress} onChange={(e) => setNewInvProgress(e.target.value)} placeholder="30" className="w-full border border-slate-300 rounded-lg p-2 font-mono" />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Tgl Jatuh Tempo <span className="text-red-500">*</span></label>
-                  <input type="date" value={newInvDueDate} onChange={(e) => setNewInvDueDate(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2" required />
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Kategori Penjualan / Tagihan <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={newInvCategory}
+                    onChange={(e) => {
+                      const cat = e.target.value;
+                      setNewInvCategory(cat);
+                      if (cat.includes("Sewa Gedung") || cat.includes("Sewa Kantor") || cat.includes("Lahan")) {
+                        setInvTaxType("PPH_4_2_BUILDING");
+                      } else if (cat.includes("Sewa Alat") || cat.includes("Sewa Mesin") || cat.includes("Kendaraan")) {
+                        setInvTaxType("PPH_23_RENT");
+                      } else if (cat.includes("Jasa") || cat.includes("Instalasi") || cat.includes("Engineering")) {
+                        setInvTaxType("PPH_23_SERVICE");
+                      } else if (cat.includes("Pengadaan") || cat.includes("Material")) {
+                        setInvTaxType("NONE");
+                      } else if (cat.includes("Upah") || cat.includes("Tenaga Kerja")) {
+                        setInvTaxType("PPH_21");
+                      }
+                    }}
+                    className="w-full border border-slate-300 rounded-lg p-2 bg-white font-medium text-slate-800"
+                  >
+                    <option value="Jasa Konstruksi & Instalasi ME">Jasa Konstruksi &amp; Instalasi ME</option>
+                    <option value="Langganan Internet & Bandwidth Starlite FTTH">Langganan Internet &amp; Bandwidth Starlite FTTH</option>
+                    <option value="Pengadaan Barang & Material Proyek">Pengadaan Barang &amp; Material Proyek</option>
+                    <option value="Sewa Peralatan & Mesin Proyek">Sewa Peralatan &amp; Mesin Proyek (PPh 23)</option>
+                    <option value="Sewa Gedung / Kantor / Lahan">Sewa Gedung / Kantor / Lahan (PPh Final 4(2))</option>
+                    <option value="Jasa Pemeliharaan & Maintenance">Jasa Pemeliharaan &amp; Maintenance</option>
+                    <option value="Jasa Konsultasi & Engineering">Jasa Konsultasi &amp; Engineering</option>
+                    <option value="Pendapatan Jasa / Operasional Lainnya">Pendapatan Jasa / Operasional Lainnya</option>
+                  </select>
                 </div>
               </div>
 
-              {/* TABEL RINCIAN ITEM TAGIHAN */}
+              {/* Row 2: No Kontrak & Nama Klien */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    No. Kontrak / SPK / ID Pelanggan <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newInvContract}
+                    onChange={(e) => setNewInvContract(e.target.value)}
+                    placeholder="Misal: SPK-2026-ME-02 / STL-004"
+                    className="w-full border border-slate-300 rounded-lg p-2 font-mono"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Nama Klien / Perusahaan Pembayar <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newInvClient}
+                    onChange={(e) => setNewInvClient(e.target.value)}
+                    placeholder="Contoh: PT. Astra Otoparts Tbk"
+                    className="w-full border border-slate-300 rounded-lg p-2"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Row 3: NPWP & Alamat */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">NPWP Klien (Opsional)</label>
+                  <input
+                    type="text"
+                    value={newInvNPWP}
+                    onChange={(e) => setNewInvNPWP(e.target.value)}
+                    placeholder="Contoh: 01.342.891.4-054.000"
+                    className="w-full border border-slate-300 rounded-lg p-2 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Alamat Lengkap Klien / Lokasi Proyek</label>
+                  <input
+                    type="text"
+                    value={newInvAddress}
+                    onChange={(e) => setNewInvAddress(e.target.value)}
+                    placeholder="Misal: Kawasan Industri KIIC Karawang Barat Lot B-02"
+                    className="w-full border border-slate-300 rounded-lg p-2"
+                  />
+                </div>
+              </div>
+
+              {/* Row 4: Judul Termin Tagihan */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Judul / Uraian Termin Tagihan <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newInvTitle}
+                  onChange={(e) => setNewInvTitle(e.target.value)}
+                  placeholder="Contoh: Termin I (30%) - Pekerjaan Instalasi Panel Listrik & Kabel Feeder"
+                  className="w-full border border-slate-300 rounded-lg p-2"
+                  required
+                />
+              </div>
+
+              {/* Row 5: Tanggal Faktur, Tanggal Jatuh Tempo, & Progres Fisik */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Tanggal Faktur (Invoice Date) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={newInvDate}
+                    onChange={(e) => setNewInvDate(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg p-2 bg-white"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Tanggal Jatuh Tempo <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={newInvDueDate}
+                    onChange={(e) => setNewInvDueDate(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg p-2 bg-white"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Progres Fisik (%)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={newInvProgress}
+                    onChange={(e) => setNewInvProgress(e.target.value)}
+                    placeholder="30"
+                    className="w-full border border-slate-300 rounded-lg p-2 font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* TABEL RINCIAN BARANG / JASA (ITEM TAGIHAN) */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="font-semibold text-slate-700">Rincian Item Tagihan <span className="text-red-500">*</span></label>
-                  <button type="button" onClick={() => setInvItems(prev => [...prev, {id: `ii-${Date.now()}`, description: '', qty: 1, unit: 'Jasa', unitPrice: 0, discount: 0}])} className="flex items-center gap-1 text-blue-600 hover:text-blue-800 font-semibold text-xs border border-blue-200 rounded-lg px-2 py-1 hover:bg-blue-50 transition cursor-pointer">
+                  <label className="font-semibold text-slate-700">
+                    Rincian Barang / Jasa <span className="text-red-500">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setInvItems(prev => [...prev, {id: `ii-${Date.now()}`, description: '', qty: 1, unit: 'Jasa', unitPrice: 0, discount: 0}])}
+                    className="flex items-center gap-1 text-blue-600 hover:text-blue-800 font-semibold text-xs border border-blue-200 rounded-lg px-2 py-1 hover:bg-blue-50 transition cursor-pointer"
+                  >
                     <span className="text-base leading-none">+</span> Tambah Baris
                   </button>
                 </div>
@@ -8276,7 +8425,7 @@ export default function DashboardPage() {
                   <table className="w-full text-xs">
                     <thead className="bg-slate-100 text-slate-600">
                       <tr>
-                        <th className="text-left px-2 py-2 font-semibold w-[34%]">Uraian Pekerjaan / Jasa</th>
+                        <th className="text-left px-2 py-2 font-semibold w-[34%]">Nama Barang / Jasa</th>
                         <th className="text-center px-2 py-2 font-semibold w-[8%]">Qty</th>
                         <th className="text-center px-2 py-2 font-semibold w-[10%]">Satuan</th>
                         <th className="text-right px-2 py-2 font-semibold w-[20%]">@Harga (Rp)</th>
@@ -8290,13 +8439,83 @@ export default function DashboardPage() {
                         const lineTotal = item.qty * item.unitPrice * (1 - item.discount / 100);
                         return (
                           <tr key={item.id} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
-                            <td className="px-1.5 py-1"><input type="text" value={item.description} onChange={(e) => setInvItems(prev => prev.map(it => it.id === item.id ? {...it, description: e.target.value} : it))} placeholder="Uraian pekerjaan/jasa..." className={`w-full border rounded px-1.5 py-1 focus:outline-none ${!item.description.trim() ? 'border-amber-300 bg-amber-50/20' : 'border-slate-200 focus:border-blue-400'}`} /></td>
-                            <td className="px-1 py-1"><input type="number" min={1} value={item.qty} onChange={(e) => setInvItems(prev => prev.map(it => it.id === item.id ? {...it, qty: parseFloat(e.target.value) || 1} : it))} className="w-full border border-slate-200 rounded px-1 py-1 text-center focus:outline-none focus:border-blue-400" /></td>
-                            <td className="px-1 py-1"><select value={item.unit} onChange={(e) => setInvItems(prev => prev.map(it => it.id === item.id ? {...it, unit: e.target.value} : it))} className="w-full border border-slate-200 rounded px-1 py-1 bg-white focus:outline-none"><option>Jasa</option><option>Pcs</option><option>Unit</option><option>Paket</option><option>Meter</option><option>Box</option><option>Set</option><option>Ls</option></select></td>
-                            <td className="px-1 py-1"><input type="number" min={0} value={item.unitPrice || ""} onChange={(e) => setInvItems(prev => prev.map(it => it.id === item.id ? {...it, unitPrice: parseFloat(e.target.value) || 0} : it))} placeholder="0" className={`w-full border rounded px-1 py-1 text-right font-mono focus:outline-none ${item.unitPrice <= 0 ? 'border-amber-300 bg-amber-50/20' : 'border-slate-200 focus:border-blue-400'}`} /></td>
-                            <td className="px-1 py-1"><input type="number" min={0} max={100} value={item.discount || ""} onChange={(e) => setInvItems(prev => prev.map(it => it.id === item.id ? {...it, discount: parseFloat(e.target.value) || 0} : it))} placeholder="0" className="w-full border border-slate-200 rounded px-1 py-1 text-center focus:outline-none" /></td>
-                            <td className="px-1.5 py-1 text-right font-mono font-semibold text-slate-800">{lineTotal > 0 ? lineTotal.toLocaleString("id-ID") : "-"}</td>
-                            <td className="px-1 py-1 text-center">{invItems.length > 1 && (<button type="button" onClick={() => setInvItems(prev => prev.filter(it => it.id !== item.id))} className="text-red-400 hover:text-red-600 cursor-pointer">x</button>)}</td>
+                            <td className="px-1.5 py-1">
+                              <input
+                                type="text"
+                                value={item.description}
+                                onChange={(e) => setInvItems(prev => prev.map(it => it.id === item.id ? {...it, description: e.target.value} : it))}
+                                placeholder="Nama barang/jasa (wajib)..."
+                                className={`w-full border rounded px-1.5 py-1 focus:outline-none ${!item.description.trim() ? 'border-amber-300 bg-amber-50/20' : 'border-slate-200 focus:border-blue-400'}`}
+                                required
+                              />
+                            </td>
+                            <td className="px-1 py-1">
+                              <input
+                                type="number"
+                                min={1}
+                                value={item.qty}
+                                onChange={(e) => setInvItems(prev => prev.map(it => it.id === item.id ? {...it, qty: parseFloat(e.target.value) || 1} : it))}
+                                className="w-full border border-slate-200 rounded px-1 py-1 text-center focus:outline-none focus:border-blue-400"
+                                required
+                              />
+                            </td>
+                            <td className="px-1 py-1">
+                              <select
+                                value={item.unit}
+                                onChange={(e) => setInvItems(prev => prev.map(it => it.id === item.id ? {...it, unit: e.target.value} : it))}
+                                className="w-full border border-slate-200 rounded px-1 py-1 bg-white focus:outline-none"
+                              >
+                                <option>Jasa</option>
+                                <option>Pcs</option>
+                                <option>Unit</option>
+                                <option>Paket</option>
+                                <option>Meter</option>
+                                <option>Roll</option>
+                                <option>Box</option>
+                                <option>Set</option>
+                                <option>Ls</option>
+                                <option>Bulan</option>
+                                <option>Kg</option>
+                                <option>Liter</option>
+                              </select>
+                            </td>
+                            <td className="px-1 py-1">
+                              <input
+                                type="number"
+                                min={0}
+                                value={item.unitPrice || ""}
+                                onChange={(e) => setInvItems(prev => prev.map(it => it.id === item.id ? {...it, unitPrice: parseFloat(e.target.value) || 0} : it))}
+                                placeholder="0"
+                                className={`w-full border rounded px-1 py-1 text-right font-mono focus:outline-none ${item.unitPrice <= 0 ? 'border-amber-300 bg-amber-50/20' : 'border-slate-200 focus:border-blue-400'}`}
+                                required
+                              />
+                            </td>
+                            <td className="px-1 py-1">
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={item.discount || ""}
+                                onChange={(e) => setInvItems(prev => prev.map(it => it.id === item.id ? {...it, discount: parseFloat(e.target.value) || 0} : it))}
+                                placeholder="0"
+                                className="w-full border border-slate-200 rounded px-1 py-1 text-center focus:outline-none"
+                              />
+                            </td>
+                            <td className="px-1.5 py-1 text-right font-mono font-semibold text-slate-800">
+                              {lineTotal > 0 ? lineTotal.toLocaleString("id-ID") : "-"}
+                            </td>
+                            <td className="px-1 py-1 text-center">
+                              {invItems.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setInvItems(prev => prev.filter(it => it.id !== item.id))}
+                                  className="text-red-400 hover:text-red-600 cursor-pointer"
+                                  title="Hapus baris"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </td>
                           </tr>
                         );
                       })}
@@ -8304,64 +8523,136 @@ export default function DashboardPage() {
                   </table>
                   <div className="flex justify-between items-center px-3 py-2 bg-blue-50 border-t border-blue-100">
                     <span className="text-slate-500 font-medium">Sub Total (DPP)</span>
-                    <span className="font-bold text-blue-700 font-mono text-sm">Rp {invItems.reduce((sum, it) => sum + it.qty * it.unitPrice * (1 - it.discount / 100), 0).toLocaleString("id-ID")}</span>
+                    <span className="font-bold text-blue-700 font-mono text-sm">
+                      Rp {invItems.reduce((sum, it) => sum + it.qty * it.unitPrice * (1 - it.discount / 100), 0).toLocaleString("id-ID")}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              {/* Catatan */}
+              {/* Catatan / Keterangan */}
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Catatan / Keterangan Faktur</label>
-                <textarea value={invNotes} onChange={(e) => setInvNotes(e.target.value)} placeholder="Tambahkan catatan, syarat pembayaran, atau keterangan khusus..." rows={2} className="w-full border border-slate-300 rounded-lg p-2" />
+                <textarea
+                  value={invNotes}
+                  onChange={(e) => setInvNotes(e.target.value)}
+                  placeholder="Tambahkan catatan, syarat pembayaran, jadwal serah terima, atau keterangan khusus..."
+                  rows={2}
+                  className="w-full border border-slate-300 rounded-lg p-2"
+                />
               </div>
 
-              {/* Bank Tujuan */}
+              {/* Rekening Bank Tujuan */}
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Rekening Bank Tujuan Pembayaran Klien</label>
-                <input type="text" value={invBankTarget} onChange={(e) => setInvBankTarget(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2 font-mono text-xs" />
+                <input
+                  type="text"
+                  value={invBankTarget}
+                  onChange={(e) => setInvBankTarget(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-2 font-mono text-xs"
+                />
               </div>
 
-              {/* SMART TAX ENGINE */}
+              {/* PENGATURAN PERPAJAKAN FAKTUR (SMART TAX ENGINE) */}
               <div className="p-3.5 bg-gradient-to-br from-slate-50 to-emerald-50/40 border border-emerald-200 rounded-xl space-y-3">
                 <div className="flex items-center justify-between pb-2 border-b border-emerald-100">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-emerald-600" />
                     <span className="font-bold text-emerald-950 text-xs">Pengaturan Perpajakan Faktur (Smart Tax Engine)</span>
                   </div>
-                  <span className="text-[10px] font-medium text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full border border-emerald-200">Otomatisasi PPh &amp; PPN 11%</span>
+                  <span className="text-[10px] font-medium text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full border border-emerald-200">
+                    Otomatisasi PPh &amp; PPN 11%
+                  </span>
                 </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Potongan PPh */}
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1 text-[11px]">Potongan PPh (dipotong oleh klien):</label>
-                    <select value={invTaxType} onChange={(e) => setInvTaxType(e.target.value as TaxType)} className="w-full border border-slate-300 rounded-lg p-2 bg-white text-xs focus:border-emerald-500">
-                      <option value="NONE">Tanpa Potongan PPh / Non-Objek</option>
-                      <option value="PPH_4_2_LAND">Sewa Lahan / Tanah - PPh Final 10% Ps. 4(2)</option>
-                      <option value="PPH_4_2_BUILDING">Sewa Gedung / Bangunan - PPh Final 10% Ps. 4(2)</option>
-                      <option value="PPH_23_RENT">Sewa Kendaraan / Alat - PPh 23 (2%)</option>
-                      <option value="PPH_23_SERVICE">Jasa Teknik / Konsultan / Subkon - PPh 23 (2%)</option>
-                      <option value="PPH_21">Upah / Honorarium - PPh 21 (5%)</option>
+                    <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
+                      Potongan PPh (dipotong oleh klien):
+                    </label>
+                    <select
+                      value={invTaxType}
+                      onChange={(e) => setInvTaxType(e.target.value as TaxType)}
+                      className="w-full border border-slate-300 rounded-lg p-2 bg-white text-xs focus:border-emerald-500"
+                    >
+                      <option value="NONE">Bebas PPh / Non-Objek Pemotongan</option>
+                      <option value="PPH_4_2_LAND">Sewa Lahan / Tanah — PPh Final 10% Ps. 4(2)</option>
+                      <option value="PPH_4_2_BUILDING">Sewa Gedung / Bangunan / Ruangan — PPh Final 10% Ps. 4(2)</option>
+                      <option value="PPH_23_RENT">Sewa Kendaraan / Transportasi / Alat — PPh 23 (2%)</option>
+                      <option value="PPH_23_SERVICE">Sewa Jasa / Jasa Teknik / Konsultan / Subkon — PPh 23 (2%)</option>
+                      <option value="PPH_21">Upah Tenaga Kerja / Mandor / Honor — PPh 21 (5%)</option>
                     </select>
-                    <span className="text-[10px] text-slate-500 mt-1 block">PPh dipotong oleh klien saat pembayaran (SSP/Bukti Potong).</span>
+                    <span className="text-[10px] text-slate-500 mt-1 block">
+                      PPh dipotong oleh klien saat pembayaran faktur (SSP/Bukti Potong).
+                    </span>
                   </div>
+
+                  {/* PPN 11% */}
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1 text-[11px]">Pajak Pertambahan Nilai (PPN 11%):</label>
+                    <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
+                      Pajak Pertambahan Nilai (PPN 11%):
+                    </label>
                     <div className="space-y-2 bg-white p-2.5 rounded-lg border border-slate-200">
                       <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-800">
-                        <input type="checkbox" checked={invHasPpn} onChange={(e) => { setInvHasPpn(e.target.checked); if (!e.target.checked) setInvIsPpnIncluded(false); }} className="rounded text-emerald-600 h-3.5 w-3.5 cursor-pointer" />
+                        <input
+                          type="checkbox"
+                          checked={invHasPpn}
+                          onChange={(e) => {
+                            setInvHasPpn(e.target.checked);
+                            if (!e.target.checked) setInvIsPpnIncluded(false);
+                          }}
+                          className="rounded text-emerald-600 h-3.5 w-3.5 cursor-pointer"
+                        />
                         <span>Kenakan PPN 11% (Faktur Pajak Keluaran)</span>
                       </label>
+
                       {invHasPpn && (
                         <div className="pl-5 pt-1 border-t border-slate-100 flex items-center gap-4">
-                          <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-700"><input type="radio" name="invPpnMode" checked={!invIsPpnIncluded} onChange={() => setInvIsPpnIncluded(false)} className="text-emerald-600 h-3 w-3 cursor-pointer" /><span>Exclude PPN (DPP + 11%)</span></label>
-                          <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-700"><input type="radio" name="invPpnMode" checked={invIsPpnIncluded} onChange={() => setInvIsPpnIncluded(true)} className="text-emerald-600 h-3 w-3 cursor-pointer" /><span>Include PPN (Harga sdh include 11%)</span></label>
+                          <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-700">
+                            <input
+                              type="radio"
+                              name="invPpnMode"
+                              checked={!invIsPpnIncluded}
+                              onChange={() => setInvIsPpnIncluded(false)}
+                              className="text-emerald-600 h-3 w-3 cursor-pointer"
+                            />
+                            <span>Exclude PPN (DPP + 11%)</span>
+                          </label>
+                          <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-700">
+                            <input
+                              type="radio"
+                              name="invPpnMode"
+                              checked={invIsPpnIncluded}
+                              onChange={() => setInvIsPpnIncluded(true)}
+                              className="text-emerald-600 h-3 w-3 cursor-pointer"
+                            />
+                            <span>Include PPN (Harga sudah include 11%)</span>
+                          </label>
                         </div>
                       )}
                     </div>
                   </div>
                 </div>
+
+                {/* Live Tax Breakdown Card */}
                 {(() => {
-                  const TAX_RATES: Record<string, number> = { NONE:0, PPH_4_2_LAND:0.10, PPH_4_2_BUILDING:0.10, PPH_23_RENT:0.02, PPH_23_SERVICE:0.02, PPH_21:0.05 };
-                  const TAX_NAMES: Record<string, string> = { NONE:'Non-Objek', PPH_4_2_LAND:'PPh Final 10% Ps.4(2)', PPH_4_2_BUILDING:'PPh Final 10% Ps.4(2)', PPH_23_RENT:'PPh 23 Sewa (2%)', PPH_23_SERVICE:'PPh 23 Jasa (2%)', PPH_21:'PPh 21 (5%)' };
+                  const TAX_RATES: Record<string, number> = {
+                    NONE: 0,
+                    PPH_4_2_LAND: 0.10,
+                    PPH_4_2_BUILDING: 0.10,
+                    PPH_23_RENT: 0.02,
+                    PPH_23_SERVICE: 0.02,
+                    PPH_21: 0.05
+                  };
+                  const TAX_NAMES: Record<string, string> = {
+                    NONE: 'Non-Objek',
+                    PPH_4_2_LAND: 'PPh Final 10% Ps.4(2)',
+                    PPH_4_2_BUILDING: 'PPh Final 10% Ps.4(2)',
+                    PPH_23_RENT: 'PPh 23 Sewa (2%)',
+                    PPH_23_SERVICE: 'PPh 23 Jasa (2%)',
+                    PPH_21: 'PPh 21 (5%)'
+                  };
                   const subTotal = invItems.reduce((sum, it) => sum + it.qty * it.unitPrice * (1 - it.discount / 100), 0);
                   if (subTotal <= 0) return null;
                   const pphRate = TAX_RATES[invTaxType] || 0;
@@ -8372,47 +8663,162 @@ export default function DashboardPage() {
                   return (
                     <div className="p-3 bg-white border border-emerald-100 rounded-lg shadow-2xs space-y-2 animate-in fade-in">
                       <div className="flex items-center justify-between text-[11px] font-bold text-emerald-900 border-b border-emerald-50 pb-1.5">
-                        <span>Rincian Kalkulasi Pajak Faktur</span>
-                        <span className="font-mono text-emerald-600">PPN: {invHasPpn ? (invIsPpnIncluded ? 'Include 11%' : 'Exclude 11%') : 'Tidak'} | PPh: {Math.round(pphRate*100)}%</span>
+                        <span>Rincian Kalkulasi Pajak Faktur &amp; Total Tagihan Bersih</span>
+                        <span className="font-mono text-emerald-600">
+                          PPN: {invHasPpn ? (invIsPpnIncluded ? 'Include 11%' : 'Exclude 11%') : 'Tidak'} | PPh: {Math.round(pphRate * 100)}%
+                        </span>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
-                        <div className="bg-slate-50 p-2 rounded border border-slate-200"><span className="text-[10px] text-slate-500 block">DPP (Neto)</span><span className="font-bold text-slate-800 font-mono">Rp {dppBase.toLocaleString("id-ID")}</span></div>
-                        <div className="bg-emerald-50 p-2 rounded border border-emerald-200"><span className="text-[10px] text-emerald-600 block">PPN 11%</span><span className="font-bold text-emerald-800 font-mono">{invHasPpn ? `Rp ${ppnAmt.toLocaleString("id-ID")}` : 'Rp 0'}</span><span className="text-[9px] text-emerald-400 block">Akun 2-120x</span></div>
-                        <div className="bg-rose-50 p-2 rounded border border-rose-200"><span className="text-[10px] text-rose-600 block">PPh ({Math.round(pphRate*100)}%)</span><span className="font-bold text-rose-800 font-mono">{pphAmt > 0 ? `- Rp ${pphAmt.toLocaleString("id-ID")}` : 'Rp 0'}</span><span className="text-[9px] text-rose-400 block">Dipotong klien</span></div>
-                        <div className="bg-blue-50 p-2 rounded border border-blue-200"><span className="text-[10px] text-blue-700 font-semibold block">Total Tagihan Bersih</span><span className="font-bold text-blue-900 font-mono">Rp {netTotal.toLocaleString("id-ID")}</span><span className="text-[9px] text-blue-400 block">Diterima perusahaan</span></div>
+                        <div className="bg-slate-50 p-2 rounded border border-slate-200">
+                          <span className="text-[10px] text-slate-500 block">Dasar Pajak (DPP)</span>
+                          <span className="font-bold text-slate-800 font-mono">Rp {dppBase.toLocaleString("id-ID")}</span>
+                        </div>
+                        <div className="bg-emerald-50 p-2 rounded border border-emerald-200">
+                          <span className="text-[10px] text-emerald-600 block">PPN Keluaran 11%</span>
+                          <span className="font-bold text-emerald-800 font-mono">
+                            {invHasPpn ? `Rp ${ppnAmt.toLocaleString("id-ID")}` : 'Rp 0'}
+                          </span>
+                          <span className="text-[9px] text-emerald-400 block">Akun 2-120x</span>
+                        </div>
+                        <div className="bg-rose-50 p-2 rounded border border-rose-200">
+                          <span className="text-[10px] text-rose-600 block">Potongan PPh ({Math.round(pphRate * 100)}%)</span>
+                          <span className="font-bold text-rose-800 font-mono">
+                            {pphAmt > 0 ? `- Rp ${pphAmt.toLocaleString("id-ID")}` : 'Rp 0'}
+                          </span>
+                          <span className="text-[9px] text-rose-400 block">Dipotong Klien</span>
+                        </div>
+                        <div className="bg-blue-50 p-2 rounded border border-blue-200">
+                          <span className="text-[10px] text-blue-700 font-semibold block">Total Tagihan Bersih</span>
+                          <span className="font-bold text-blue-900 font-mono text-xs">Rp {netTotal.toLocaleString("id-ID")}</span>
+                          <span className="text-[9px] text-blue-400 block">Kas Riil Diterima</span>
+                        </div>
                       </div>
                       <div className="text-[10px] text-slate-500 italic bg-emerald-50/50 p-1.5 rounded border border-emerald-100 flex items-center gap-1.5">
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>{invHasPpn && `PPN 11% (${invIsPpnIncluded ? 'Include' : 'Exclude'}): Rp ${ppnAmt.toLocaleString('id-ID')}. `}{pphRate > 0 ? `${TAX_NAMES[invTaxType]}: Rp ${pphAmt.toLocaleString('id-ID')} dipotong oleh klien saat pelunasan.` : 'Tanpa potongan PPh.'}</span>
+                        <span>
+                          {invHasPpn && `PPN 11% (${invIsPpnIncluded ? 'Include' : 'Exclude'}): Rp ${ppnAmt.toLocaleString('id-ID')}. `}
+                          {pphRate > 0 ? `${TAX_NAMES[invTaxType]}: Rp ${pphAmt.toLocaleString('id-ID')} dipotong oleh klien saat pelunasan.` : 'Tanpa potongan PPh.'}
+                        </span>
                       </div>
                     </div>
                   );
                 })()}
               </div>
 
-              {/* LAMPIRAN DOKUMEN */}
+              {/* LAMPIRAN DOKUMEN / BUKTI PENDUKUNG */}
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
                 <div className="flex items-center justify-between">
                   <label className="font-semibold text-slate-700 flex items-center gap-1.5 text-xs">
                     <Paperclip className="w-3.5 h-3.5 text-blue-600" />
                     <span>Lampiran Dokumen / Bukti Pendukung</span>
-                    <span className="text-[10px] font-normal text-slate-400">(Kontrak, SPK, BA, Foto)</span>
+                    <span className="text-[10px] font-normal text-slate-400">(PDF, Gambar, atau Foto Kamera)</span>
                   </label>
-                  {invAttachments.length > 0 && (<span className="text-[10px] font-mono font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">checkmark {invAttachments.length} berkas terlampir</span>)}
+                  {invAttachments.length > 0 && (
+                    <span className="text-[10px] font-mono font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      ✓ {invAttachments.length} berkas terlampir
+                    </span>
+                  )}
                 </div>
-                <input type="file" multiple accept="image/*,application/pdf" className="hidden" id="inv-file-input" onChange={(e) => { Array.from(e.target.files || []).forEach(file => { const reader = new FileReader(); reader.onload = (ev) => setInvAttachments(prev => [...prev, {id: `inv-att-${Date.now()}-${Math.random()}`, name: file.name, type: file.type, size: file.size, dataUrl: ev.target?.result as string, uploadedAt: new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})}]); reader.readAsDataURL(file); }); e.target.value = ''; }} />
-                <input type="file" accept="image/*" capture="environment" className="hidden" id="inv-camera-input" onChange={(e) => { Array.from(e.target.files || []).forEach(file => { const reader = new FileReader(); reader.onload = (ev) => setInvAttachments(prev => [...prev, {id: `inv-cam-${Date.now()}`, name: file.name, type: file.type, size: file.size, dataUrl: ev.target?.result as string, uploadedAt: new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})}]); reader.readAsDataURL(file); }); e.target.value = ''; }} />
+
+                {/* Input berkas tersembunyi */}
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,application/pdf"
+                  className="hidden"
+                  id="inv-file-input"
+                  onChange={(e) => {
+                    Array.from(e.target.files || []).forEach(file => {
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        setInvAttachments(prev => [
+                          ...prev,
+                          {
+                            id: `inv-att-${Date.now()}-${Math.random()}`,
+                            name: file.name,
+                            type: file.type,
+                            size: file.size,
+                            dataUrl: ev.target?.result as string,
+                            uploadedAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+                          }
+                        ]);
+                      };
+                      reader.readAsDataURL(file);
+                    });
+                    e.target.value = '';
+                  }}
+                />
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  id="inv-camera-input"
+                  onChange={(e) => {
+                    Array.from(e.target.files || []).forEach(file => {
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        setInvAttachments(prev => [
+                          ...prev,
+                          {
+                            id: `inv-cam-${Date.now()}`,
+                            name: file.name,
+                            type: file.type,
+                            size: file.size,
+                            dataUrl: ev.target?.result as string,
+                            uploadedAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+                          }
+                        ]);
+                      };
+                      reader.readAsDataURL(file);
+                    });
+                    e.target.value = '';
+                  }}
+                />
+
                 <div className="grid grid-cols-2 gap-2">
-                  <label htmlFor="inv-file-input" className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100 font-medium transition cursor-pointer text-xs shadow-2xs"><Paperclip className="w-3.5 h-3.5 text-blue-600" /><span>Pilih Berkas (PDF / Foto)</span></label>
-                  <label htmlFor="inv-camera-input" className="flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 hover:bg-blue-100 font-semibold transition cursor-pointer text-xs shadow-2xs"><Camera className="w-3.5 h-3.5 text-blue-600" /><span>Ambil Foto Kamera</span></label>
+                  <label
+                    htmlFor="inv-file-input"
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100 font-medium transition cursor-pointer text-xs shadow-2xs"
+                  >
+                    <Paperclip className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Pilih Berkas (PDF / Foto)</span>
+                  </label>
+                  <label
+                    htmlFor="inv-camera-input"
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 hover:bg-blue-100 font-semibold transition cursor-pointer text-xs shadow-2xs"
+                  >
+                    <Camera className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Ambil Foto Kamera</span>
+                  </label>
                 </div>
+
                 {invAttachments.length > 0 && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 pt-2 border-t border-slate-200 max-h-40 overflow-y-auto">
                     {invAttachments.map((att) => (
-                      <div key={att.id} className="flex items-center gap-2 p-1.5 bg-white border border-slate-200 rounded-lg group hover:border-blue-300 transition relative">
-                        <div className="w-9 h-9 rounded overflow-hidden shrink-0 bg-slate-100 flex items-center justify-center border border-slate-200">{att.type.startsWith("image/") ? <img src={att.dataUrl} alt={att.name} className="w-full h-full object-cover" /> : <FileText className="w-4 h-4 text-red-500" />}</div>
-                        <div className="flex-1 min-w-0 pr-7"><p className="text-[11px] font-semibold text-slate-800 truncate">{att.name}</p><p className="text-[9px] text-slate-400 font-mono">{(att.size / 1024).toFixed(1)} KB</p></div>
-                        <button type="button" onClick={() => setInvAttachments(prev => prev.filter(a => a.id !== att.id))} className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded cursor-pointer opacity-0 group-hover:opacity-100 transition"><X className="w-3 h-3" /></button>
+                      <div
+                        key={att.id}
+                        className="flex items-center gap-2 p-1.5 bg-white border border-slate-200 rounded-lg group hover:border-blue-300 transition relative"
+                      >
+                        <div className="w-9 h-9 rounded overflow-hidden shrink-0 bg-slate-100 flex items-center justify-center border border-slate-200">
+                          {att.type.startsWith("image/") ? (
+                            <img src={att.dataUrl} alt={att.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <FileText className="w-4 h-4 text-red-500" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0 pr-7">
+                          <p className="text-[11px] font-semibold text-slate-800 truncate">{att.name}</p>
+                          <p className="text-[9px] text-slate-400 font-mono">{(att.size / 1024).toFixed(1)} KB</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setInvAttachments(prev => prev.filter(a => a.id !== att.id))}
+                          className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded cursor-pointer opacity-0 group-hover:opacity-100 transition"
+                          title="Hapus lampiran"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -8420,8 +8826,19 @@ export default function DashboardPage() {
               </div>
 
               <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
-                <button type="button" onClick={() => setIsInvoiceModalOpen(false)} className="px-3.5 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition cursor-pointer">Batal</button>
-                <button type="submit" className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition cursor-pointer shadow-xs">Terbitkan Faktur Penjualan</button>
+                <button
+                  type="button"
+                  onClick={() => setIsInvoiceModalOpen(false)}
+                  className="px-3.5 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition cursor-pointer shadow-xs"
+                >
+                  Terbitkan Faktur Penjualan
+                </button>
               </div>
             </form>
           </div>
