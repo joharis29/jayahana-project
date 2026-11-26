@@ -80,6 +80,21 @@ export type UserRole =
   | 'DIRECTOR'
   | 'SUPERADMIN';
 
+// ── App User (RBAC) ──────────────────────────────────────────
+export interface AppUser {
+  id: string;
+  name: string;
+  email: string;
+  username: string;
+  password: string;
+  role: UserRole;
+  unit: string;
+  avatar?: string;
+  isActive: boolean;
+  createdAt: string;
+  lastLogin?: string;
+}
+
 export type RequestType = 'CASH_ADVANCE' | 'PURCHASE_REQUISITION' | 'REIMBURSEMENT';
 
 export type ApprovalStatus = 

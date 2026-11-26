@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useMemo, useRef } from "react";
 import { 
@@ -79,8 +79,10 @@ import {
   type PendingApprovalItem
 } from "@/lib/constants";
 import { formatRupiah, formatDateIndo } from "@/lib/utils";
-import { BusinessUnit, BudgetRequest, RequestType, UserRole, FinancialTransaction, ProcurementItem, SalesInvoice, OfficialReceiptBKM, InvoicePaymentRecord, SITE_DIVISIONS, EXPENSE_CATEGORIES, ExpenseCategory, RequestAttachment, DisbursementRecord, ApprovalStatus, LPJApprovalStatus, RealizationRecord, RealizationItem, TaxType, TaxCalculationDetail } from "@/types";
+import { BusinessUnit, BudgetRequest, RequestType, UserRole, FinancialTransaction, ProcurementItem, SalesInvoice, OfficialReceiptBKM, InvoicePaymentRecord, SITE_DIVISIONS, EXPENSE_CATEGORIES, ExpenseCategory, RequestAttachment, DisbursementRecord, ApprovalStatus, LPJApprovalStatus, RealizationRecord, RealizationItem, TaxType, TaxCalculationDetail, AppUser } from "@/types";
 import { AccountingSuite } from "@/components/AccountingSuite";
+import { hasPermission, ROLE_LABELS, ROLE_COLORS, SEED_USERS, ROLE_PERMISSIONS } from "@/lib/rbac";
+import type { AppModule, AppAction } from "@/lib/rbac";
 
 const MONTH_NAMES = [
   { num: 1, name: "Januari", short: "Jan" },
@@ -99,6 +101,50 @@ const MONTH_NAMES = [
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<"overview" | "requests" | "starlite" | "reports">("overview");
+
+  // ══════════════════════════════════════════════════════════
+  // AUTH & RBAC STATE
+  // ══════════════════════════════════════════════════════════
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [isLoginOpen, setIsLoginOpen] = useState(true);
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [appUsers, setAppUsers] = useState<AppUser[]>(SEED_USERS);
+  const [isUserMgmtOpen, setIsUserMgmtOpen] = useState(false);
+  // User Management form state
+  const [umSearch, setUmSearch] = useState("");
+  const [umEditUser, setUmEditUser] = useState<AppUser | null>(null);
+  const [umIsAddOpen, setUmIsAddOpen] = useState(false);
+  const [umForm, setUmForm] = useState<Partial<AppUser & {passwordConfirm:string}>>({});
+
+  // Permission helper (curried on currentUser)
+  const can = (module: AppModule, action: AppAction): boolean => {
+    if (!currentUser) return false;
+    return hasPermission(currentUser.role, module, action);
+  };
+
+  const handleLogin = () => {
+    const user = appUsers.find(
+      (u) => u.username === loginUsername.trim() && u.password === loginPassword && u.isActive
+    );
+    if (user) {
+      setCurrentUser({ ...user, lastLogin: new Date().toISOString().split("T")[0] });
+      setAppUsers(prev => prev.map(u => u.id === user.id ? { ...u, lastLogin: new Date().toISOString().split("T")[0] } : u));
+      setIsLoginOpen(false);
+      setLoginError("");
+      setLoginPassword("");
+    } else {
+      setLoginError("Username atau password salah, atau akun tidak aktif.");
+    }
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setIsLoginOpen(true);
+    setLoginUsername("");
+    setLoginPassword("");
+  };
   const [selectedUnit, setSelectedUnit] = useState<BusinessUnit | "ALL">("ALL");
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>("ALL");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>("ALL");
@@ -2684,6 +2730,16 @@ export default function DashboardPage() {
               10 Modul Excel 2026
             </span>
           </button>
+
+          {can("USER_MANAGEMENT","VIEW") && (
+            <button
+              onClick={() => setIsUserMgmtOpen(true)}
+              className="py-3 px-3.5 border-b-2 border-transparent flex items-center gap-2 whitespace-nowrap transition-colors text-slate-600 hover:text-slate-900"
+            >
+              <Users className="w-4 h-4 text-pink-600" />
+              User Management
+            </button>
+          )}
         </div>
       </header>
 
@@ -8214,6 +8270,303 @@ export default function DashboardPage() {
           receipt={selectedPrintReceipt || undefined}
           docType={printDocType}
         />
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════
+          USER MANAGEMENT MODAL
+      ══════════════════════════════════════════════════════════════ */}
+      {isUserMgmtOpen && (
+        <div className="fixed inset-0 z-[200] flex items-start justify-center bg-black/40 backdrop-blur-sm pt-10 pb-6 px-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-pink-100 flex items-center justify-center">
+                  <Users className="w-5 h-5 text-pink-600" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">User Management & RBAC</h2>
+                  <p className="text-xs text-slate-500">Kelola pengguna dan hak akses sistem</p>
+                </div>
+              </div>
+              <button onClick={() => setIsUserMgmtOpen(false)} className="p-2 hover:bg-slate-100 rounded-lg transition">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Search & Add */}
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={umSearch}
+                    onChange={e => setUmSearch(e.target.value)}
+                    placeholder="Cari nama, username, role..."
+                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-400"
+                  />
+                </div>
+                <button
+                  onClick={() => { setUmForm({ isActive: true }); setUmEditUser(null); setUmIsAddOpen(true); }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg text-white bg-pink-600 hover:bg-pink-700 transition"
+                >
+                  <Plus className="w-4 h-4" /> Tambah User
+                </button>
+              </div>
+
+              {/* User Table */}
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold">No</th>
+                      <th className="px-4 py-3 text-left font-semibold">Nama</th>
+                      <th className="px-4 py-3 text-left font-semibold">Username</th>
+                      <th className="px-4 py-3 text-left font-semibold">Role</th>
+                      <th className="px-4 py-3 text-left font-semibold">Unit / Site</th>
+                      <th className="px-4 py-3 text-left font-semibold">Status</th>
+                      <th className="px-4 py-3 text-left font-semibold">Login Terakhir</th>
+                      <th className="px-4 py-3 text-center font-semibold">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {appUsers
+                      .filter(u => {
+                        if (!umSearch.trim()) return true;
+                        const q = umSearch.toLowerCase();
+                        return u.name.toLowerCase().includes(q) || u.username.toLowerCase().includes(q) || ROLE_LABELS[u.role].toLowerCase().includes(q) || u.unit.toLowerCase().includes(q);
+                      })
+                      .map((user, idx) => {
+                        const rc = ROLE_COLORS[user.role];
+                        return (
+                          <tr key={user.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-3 text-slate-500">{idx + 1}</td>
+                            <td className="px-4 py-3 font-semibold text-slate-900">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-xs">
+                                  {user.name.charAt(0)}
+                                </div>
+                                <div>
+                                  <p className="font-semibold text-slate-900">{user.name}</p>
+                                  <p className="text-slate-400 text-[10px]">{user.email}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 font-mono text-slate-700">{user.username}</td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${rc.bg} ${rc.text} ${rc.border}`}>
+                                {ROLE_LABELS[user.role]}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-slate-600">{user.unit}</td>
+                            <td className="px-4 py-3">
+                              <button
+                                onClick={() => setAppUsers(prev => prev.map(u => u.id === user.id ? { ...u, isActive: !u.isActive } : u))}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border transition ${user.isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'}`}
+                              >
+                                <CircleDot className="w-2.5 h-2.5" />
+                                {user.isActive ? 'Aktif' : 'Nonaktif'}
+                              </button>
+                            </td>
+                            <td className="px-4 py-3 text-slate-500">{user.lastLogin ?? '-'}</td>
+                            <td className="px-4 py-3 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  onClick={() => { setUmEditUser(user); setUmForm({ ...user, passwordConfirm: user.password }); setUmIsAddOpen(true); }}
+                                  className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition"
+                                  title="Edit"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => { if (window.confirm(`Hapus user ${user.name}?`)) setAppUsers(prev => prev.filter(u => u.id !== user.id)); }}
+                                  className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition"
+                                  title="Hapus"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    {appUsers.filter(u => !umSearch.trim() || u.name.toLowerCase().includes(umSearch.toLowerCase()) || u.username.toLowerCase().includes(umSearch.toLowerCase())).length === 0 && (
+                      <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">Tidak ada pengguna ditemukan.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* RBAC Permission Matrix */}
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-pink-600" />
+                  Matriks Hak Akses (RBAC)
+                </h3>
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full text-[10px]">
+                    <thead className="bg-slate-50 text-slate-500">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold">Modul</th>
+                        {(["FIELD_TECH","SITE_SPV","PROCUREMENT","DIVISION_HEAD","INTERNAL_AUDIT","FINANCE_CASHIER","FINANCE_MANAGER","ACCOUNTING_TAX","DIRECTOR","SUPERADMIN"] as UserRole[]).map(role => {
+                          const rc = ROLE_COLORS[role];
+                          return (
+                            <th key={role} className="px-2 py-2 text-center font-semibold">
+                              <span className={`inline-block px-1.5 py-0.5 rounded-full border ${rc.bg} ${rc.text} ${rc.border}`}>{ROLE_LABELS[role]}</span>
+                            </th>
+                          );
+                        })}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {(["DASHBOARD","PENGAJUAN","PENCAIRAN","REALISASI","PENERIMAAN_BARANG","PENDAPATAN_AR","BUKU_BESAR","USER_MANAGEMENT"] as AppModule[]).map(mod => (
+                        <tr key={mod} className="hover:bg-slate-50">
+                          <td className="px-3 py-2 font-semibold text-slate-700 whitespace-nowrap">{mod.replace(/_/g,' ')}</td>
+                          {(["FIELD_TECH","SITE_SPV","PROCUREMENT","DIVISION_HEAD","INTERNAL_AUDIT","FINANCE_CASHIER","FINANCE_MANAGER","ACCOUNTING_TAX","DIRECTOR","SUPERADMIN"] as UserRole[]).map(role => {
+                            const perms = ROLE_PERMISSIONS[role].find((p: {module: string; actions: string[]}) => p.module === mod);
+                            return (
+                              <td key={role} className="px-2 py-2 text-center">
+                                {perms ? (
+                                  <span className="text-emerald-600 font-semibold text-[10px]">{perms.actions.join(' · ')}</span>
+                                ) : (
+                                  <span className="text-slate-300">—</span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════ ADD / EDIT USER MODAL ══════ */}
+      {umIsAddOpen && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white z-10">
+              <h3 className="text-base font-bold text-slate-900">{umEditUser ? 'Edit Pengguna' : 'Tambah Pengguna Baru'}</h3>
+              <button onClick={() => { setUmIsAddOpen(false); setUmEditUser(null); setUmForm({}); }} className="p-2 hover:bg-slate-100 rounded-lg transition">
+                <X className="w-4 h-4 text-slate-500" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {[
+                { label: 'Nama Lengkap', key: 'name', placeholder: 'Contoh: Ahmad Fauzi', type: 'text' },
+                { label: 'Email', key: 'email', placeholder: 'nama@jayahana.co.id', type: 'email' },
+                { label: 'Username', key: 'username', placeholder: 'nama.pengguna', type: 'text' },
+              ].map(({ label, key, placeholder, type }) => (
+                <div key={key}>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">{label}</label>
+                  <input
+                    type={type}
+                    value={(umForm as Record<string, string>)[key] ?? ''}
+                    onChange={e => setUmForm(f => ({ ...f, [key]: e.target.value }))}
+                    placeholder={placeholder}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400"
+                  />
+                </div>
+              ))}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Role</label>
+                <select
+                  value={umForm.role ?? ''}
+                  onChange={e => setUmForm(f => ({ ...f, role: e.target.value as UserRole }))}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400"
+                >
+                  <option value="">— Pilih Role —</option>
+                  {(Object.keys(ROLE_LABELS) as UserRole[]).map(r => (
+                    <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Unit / Site</label>
+                <select
+                  value={umForm.unit ?? ''}
+                  onChange={e => setUmForm(f => ({ ...f, unit: e.target.value }))}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400"
+                >
+                  <option value="">— Pilih Unit —</option>
+                  {SITE_DIVISIONS.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Password</label>
+                <input
+                  type="password"
+                  value={umForm.password ?? ''}
+                  onChange={e => setUmForm(f => ({ ...f, password: e.target.value }))}
+                  placeholder={umEditUser ? 'Kosongkan jika tidak diubah' : 'Password baru'}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="umActive"
+                  checked={umForm.isActive ?? true}
+                  onChange={e => setUmForm(f => ({ ...f, isActive: e.target.checked }))}
+                  className="w-4 h-4 accent-pink-600"
+                />
+                <label htmlFor="umActive" className="text-sm text-slate-700">Akun Aktif</label>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => { setUmIsAddOpen(false); setUmEditUser(null); setUmForm({}); }}
+                  className="flex-1 py-2 text-sm font-semibold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={() => {
+                    if (!umForm.name || !umForm.username || !umForm.role || !umForm.unit) {
+                      alert('Nama, Username, Role, dan Unit wajib diisi!');
+                      return;
+                    }
+                    if (umEditUser) {
+                      setAppUsers(prev => prev.map(u => u.id === umEditUser.id ? {
+                        ...u,
+                        name: umForm.name ?? u.name,
+                        email: umForm.email ?? u.email,
+                        username: umForm.username ?? u.username,
+                        role: (umForm.role ?? u.role) as UserRole,
+                        unit: umForm.unit ?? u.unit,
+                        isActive: umForm.isActive ?? u.isActive,
+                        ...(umForm.password ? { password: umForm.password } : {}),
+                      } : u));
+                    } else {
+                      const newUser: AppUser = {
+                        id: `u-${Date.now()}`,
+                        name: umForm.name ?? '',
+                        email: umForm.email ?? '',
+                        username: umForm.username ?? '',
+                        password: umForm.password ?? 'jayahana123',
+                        role: (umForm.role ?? 'FIELD_TECH') as UserRole,
+                        unit: umForm.unit ?? '',
+                        isActive: umForm.isActive ?? true,
+                        createdAt: new Date().toISOString().split('T')[0],
+                      };
+                      setAppUsers(prev => [...prev, newUser]);
+                    }
+                    setUmIsAddOpen(false);
+                    setUmEditUser(null);
+                    setUmForm({});
+                  }}
+                  className="flex-1 py-2 text-sm font-semibold rounded-lg bg-pink-600 text-white hover:bg-pink-700 transition"
+                >
+                  {umEditUser ? 'Simpan Perubahan' : 'Tambah Pengguna'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* MODAL 4: BUAT FAKTUR TAGIHAN / SALES INVOICE BARU (B2B & B2C) */}
